@@ -49,6 +49,18 @@
       transition: background .15s;
     }
     #load-lbl:hover, #load-folder-lbl:hover { background: rgba(255,255,255,.12); }
+    #changes-btn {
+      cursor: pointer; border: 1px solid rgba(255,193,7,.55);
+      background: rgba(255,193,7,.15); color: #fff;
+      padding: .3rem .8rem; border-radius: 6px; font-size: .8rem;
+      display: flex; align-items: center; gap: .35rem;
+      transition: background .15s;
+    }
+    #changes-btn:hover { background: rgba(255,193,7,.35); }
+    #changes-count {
+      background: rgba(255,193,7,.85); color: #333;
+      border-radius: 8px; padding: 0 .4rem; font-size: .67rem; font-weight: 700;
+    }
     /* Global search */
     #search-wrap {
       display: flex; align-items: center; gap: .4rem;
@@ -150,6 +162,7 @@
       color: var(--navy); font-weight: 600;
     }
     .fp-item.fp-zero { display: none; }
+    .fp-item.fp-new { border-left: 2px solid var(--accent); }
     .fp-name {
       flex: 1; overflow: hidden;
       text-overflow: ellipsis; white-space: nowrap;
@@ -370,20 +383,41 @@
     }
     .mode-btn.active { background: var(--navy); border-color: var(--navy); color: #fff; }
     .mode-btn:hover:not(.active) { background: #f0f4f8; border-color: #bbb; color: #333; }
+    #btn-create { color: var(--accent); border-color: rgba(0,173,237,.45); }
+    #btn-create:hover { background: rgba(0,173,237,.1); border-color: var(--accent); }
+    .create-type-btn { border: 1px solid #dee2e6; color: #555; background: #fff; border-radius: 6px;
+      padding: .28rem .7rem; font-size: .8rem; cursor: pointer; transition: all .12s; }
+    .create-type-btn:hover { background: #f0f4f8; }
+    .create-type-btn.active { background: var(--navy); border-color: var(--navy); color: #fff; }
   </style>
 </head>
 <body>
 
 <!-- HEADER -->
 <header id="hdr">
-  <i class="bi bi-building" style="font-size:1.2rem;color:var(--accent)"></i>
-  <span class="title">Guerrilla Ops</span>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1.2rem;height:1.2rem;vertical-align:middle">
+    <circle cx="256" cy="256" r="248" fill="#fff"/>
+    <g transform="translate(256 256) scale(0.6) translate(-250 -315)">
+      <path d="M40 300V40h140s139.6.6 210 70 70 190 70 190"
+            fill="none"
+            stroke="#323232"
+            stroke-width="75"/>
+      <path d="M275.5 370h184.5v188.2s-134.5 61.2-277 14.9S40 330 40 330"
+            fill="none"
+            stroke="#0ad"
+            stroke-width="75"/>
+    </g>
+  </svg><span class="title">Guerrilla Ops</span>
   <span class="file-lbl d-none" id="file-lbl"></span>
   <div id="search-wrap" class="d-none">
     <i class="bi bi-search" style="opacity:.5;font-size:.8rem;flex-shrink:0"></i>
     <input type="search" id="search-input" placeholder="Search all fields…" oninput="onSearch(this.value)" autocomplete="off">
     <button id="s-clear" onclick="clearSearch()" style="display:none" title="Clear search"><i class="bi bi-x-lg"></i></button>
   </div>
+  <button id="changes-btn" class="d-none" onclick="openChangesModal()">
+    <i class="bi bi-pencil-square"></i>
+    <span id="changes-count">0</span> unsaved
+  </button>
   <label id="load-lbl" for="fileInput">
     <i class="bi bi-file-earmark-excel"></i> Load Files
   </label>
@@ -397,8 +431,8 @@
 <!-- UPLOAD -->
 <div id="upload">
   <div class="up-card" id="drop-zone">
-    <div class="ico"><i class="bi bi-folder2-open"></i></div>
-    <h4>Open COBie Files</h4>
+    <div class="ico"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 630" width="100" height="100"><path d="M40 300V40h140s139.6.6 210 70 70 190 70 190" fill="none" stroke="#323232" stroke-width="75"/><path d="M275.5 370h184.5v188.2s-134.5 61.2-277 14.9S40 330 40 330" fill="none" stroke="#0ad" stroke-width="75"/></svg></i></div>
+    <h4>Guerrilla Ops</h4>
     <p>Select individual files, open a whole folder, or drag &amp; drop Excel files here.</p>
     <div class="d-flex gap-2 justify-content-center flex-wrap">
       <label class="btn btn-primary" for="fileInput" style="background:var(--navy);border-color:var(--navy);cursor:pointer">
@@ -455,6 +489,9 @@
       </button>
       <button class="mode-btn" id="btn-document" onclick="setMode('document')">
         <i class="bi bi-folder2-open me-1"></i>Document View
+      </button>
+      <button class="mode-btn" id="btn-create" onclick="openCreateModal()">
+        <i class="bi bi-plus-circle me-1"></i>Create
       </button>
     </div>
 
@@ -524,10 +561,100 @@
   </div>
 </div>
 
-<script>
-'use strict';
+<!-- CREATE MODAL -->
+<div class="modal fade" id="create-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title">
+          <i class="bi bi-plus-circle me-2" id="create-modal-icon"></i>
+          <span id="create-modal-title">Create New</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex gap-2 flex-wrap mb-3" id="create-type-picker">
+          <button class="create-type-btn" data-etype="space" onclick="switchCreateType('space')">
+            <i class="bi bi-grid-fill me-1"></i>Room / Space
+          </button>
+          <button class="create-type-btn" data-etype="type" onclick="switchCreateType('type')">
+            <i class="bi bi-tag-fill me-1"></i>Type
+          </button>
+          <button class="create-type-btn" data-etype="component" onclick="switchCreateType('component')">
+            <i class="bi bi-tools me-1"></i>Component
+          </button>
+          <button class="create-type-btn" data-etype="system" onclick="switchCreateType('system')">
+            <i class="bi bi-diagram-3-fill me-1"></i>System
+          </button>
+          <button class="create-type-btn" data-etype="contact" onclick="switchCreateType('contact')">
+            <i class="bi bi-person-fill me-1"></i>Contact
+          </button>
+        </div>
+        <hr class="mt-0 mb-3">
+        <div id="create-fac-row" class="mb-3 d-none">
+          <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">Facility</label>
+          <select class="form-select form-select-sm" id="create-fac-sel"></select>
+        </div>
+        <div id="create-form-body"></div>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fa">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-primary" onclick="saveCreate()" style="background:var(--navy);border-color:var(--navy)">
+          <i class="bi bi-plus-circle me-1"></i>Create
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
-const db  = { types:[], components:[], spaces:[], floors:[], systems:[], documents:[], facilities:[], facility:null };
+<!-- CHANGES MODAL -->
+<div class="modal fade" id="changes-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Unsaved Changes</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="changes-modal-body"></div>
+      <div class="modal-footer" style="background:#f8f9fa">
+        <small class="text-muted me-auto">Browsers download files — replace originals by saving to the same folder.</small>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="discardChanges()">
+          <i class="bi bi-trash me-1"></i>Discard All
+        </button>
+        <button class="btn btn-sm btn-outline-primary" onclick="saveToNewFiles()">
+          <i class="bi bi-file-earmark-plus me-1"></i>Save as New Files
+        </button>
+        <button class="btn btn-sm btn-primary" onclick="saveToExistingFiles()" style="background:var(--navy);border-color:var(--navy)">
+          <i class="bi bi-floppy me-1"></i>Save to Original Files
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal fade" id="edit-modal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i id="edit-modal-icon" class="bi bi-pencil me-2"></i><span id="edit-modal-label">Edit</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3" id="edit-modal-body"></div>
+      <div class="modal-footer" style="background:#f8f9fa">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="saveEdit()" style="background:var(--navy);border-color:var(--navy)">
+          <i class="bi bi-check2 me-1"></i>Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+
+const db  = { types:[], components:[], spaces:[], floors:[], systems:[], documents:[], facilities:[], contacts:[], facility:null };
 const idx = {};
 let docStore = [];
 let cardCtr  = 0;
@@ -587,7 +714,8 @@ async function loadFiles(fileList) {
 function resetDb() {
   db.types=[]; db.components=[]; db.spaces=[];
   db.floors=[]; db.systems=[]; db.documents=[];
-  db.facilities=[]; db.facility=null;
+  db.facilities=[]; db.contacts=[]; db.facility=null;
+  _justCreated.clear();
 }
 
 // ── Parsing ─────────────────────────────────────────────────
@@ -615,6 +743,7 @@ function parseCOBieInto(wb, fileName) {
   db.floors     .push(...readSheet(wb,'Floor')    .map(tag));
   db.systems    .push(...readSheet(wb,'System')   .map(tag));
   db.documents  .push(...readSheet(wb,'Document') .map(tag));
+  db.contacts   .push(...readSheet(wb,'Contact')  .map(tag));
   db.facilities .push({ ...facRow, _facility: facName, _fileName: fileName });
   if (!db.facility) db.facility = facRow; // backward compat
 }
@@ -942,11 +1071,13 @@ function renderPanel(listId, badgeId, names, dim, counts) {
     const k    = name.toLowerCase();
     const act  = sel[dim].has(k);
     const cnt  = counts[k] || 0;
-    const z    = !act && cnt === 0;
+    const nw   = _justCreated.has(dim+'::'+k);
+    const z    = !act && cnt === 0 && !nw;
     const disp = withDesc(name, dim);
-    return `<div class="fp-item${act?' fp-sel':''}${z?' fp-zero':''}" data-dim="${dim}" data-key="${esc(k)}">
-      <span class="fp-name" title="${esc(disp)}">${esc(disp)}</span>
-      <span class="fp-cnt">${cnt}</span>
+    const badge = (nw && !act && !cnt) ? '<small style="color:var(--accent);font-size:.62rem;margin-left:.25rem">new</small>' : '';
+    return `<div class="fp-item${act?' fp-sel':''}${z?' fp-zero':''}${nw&&!act&&!cnt?' fp-new':''}" data-dim="${dim}" data-key="${esc(k)}">
+      <span class="fp-name" title="${esc(disp)}">${esc(disp)}${badge}</span>
+      <span class="fp-cnt">${cnt||''}</span>
     </div>`;
   }).join('');
 }
@@ -968,7 +1099,7 @@ function renderPanelCat(listId, badgeId, dim, counts) {
     let selInCat = 0, visCount = 0;
     names.forEach(name => {
       const k = name.toLowerCase();
-      if (sel[dim].has(k) || (counts[k]||0) > 0) visCount++;
+      if (sel[dim].has(k) || (counts[k]||0) > 0 || _justCreated.has(dim+'::'+k)) visCount++;
       if (sel[dim].has(k)) selInCat++;
     });
     if (visCount === 0) return;
@@ -987,11 +1118,13 @@ function renderPanelCat(listId, badgeId, dim, counts) {
       const k    = name.toLowerCase();
       const act  = sel[dim].has(k);
       const cnt  = counts[k] || 0;
-      const z    = !act && cnt === 0;
+      const nw   = _justCreated.has(dim+'::'+k);
+      const z    = !act && cnt === 0 && !nw;
       const disp = withDesc(name, dim);
-      html += `<div class="fp-item${act?' fp-sel':''}${z?' fp-zero':''}" data-dim="${dim}" data-key="${esc(k)}">
-        <span class="fp-name" title="${esc(disp)}">${esc(disp)}</span>
-        <span class="fp-cnt">${cnt}</span>
+      const badge = (nw && !act && !cnt) ? '<small style="color:var(--accent);font-size:.62rem;margin-left:.25rem">new</small>' : '';
+      html += `<div class="fp-item${act?' fp-sel':''}${z?' fp-zero':''}${nw&&!act&&!cnt?' fp-new':''}" data-dim="${dim}" data-key="${esc(k)}">
+        <span class="fp-name" title="${esc(disp)}">${esc(disp)}${badge}</span>
+        <span class="fp-cnt">${cnt||''}</span>
       </div>`;
     });
   });
@@ -1660,6 +1793,7 @@ function card(c) {
       </div>
       ${details.length?`<button class="xbtn" data-bs-toggle="collapse" data-bs-target="#${id}">
         <i class="bi bi-chevron-expand"></i> Details</button>`:''}
+      <button class="xbtn" data-edit-entity="component" data-edit-key="${esc(name)}" title="Edit component"><i class="bi bi-pencil"></i></button>
     </div>
     ${badges?`<div class="mt-2">${badges}</div>`:''}
     ${details.length?`<div class="collapse mt-2" id="${id}"><hr class="my-2">
@@ -1698,6 +1832,9 @@ document.getElementById('comp-list').addEventListener('click', e => {
     if (entry) openGroupInfo(entry.dim, entry.name);
     return;
   }
+  // Edit entity button (component cards + doc view)
+  const eb = e.target.closest('[data-edit-entity]');
+  if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey); return; }
   // Doc badge
   const docBtn = e.target.closest('[data-doc]');
   if (docBtn) { const d=docStore[+docBtn.dataset.doc]; if(d) openDoc(d); return; }
@@ -1837,19 +1974,22 @@ function openGroupInfo(dim, name) {
 }
 
 function buildTypeBody(t) {
+  const nm = f(t,'Name');
   const rows = TYPE_FIELDS.map(([label, fields]) => {
     const val = f(t, ...fields);
     return val ? `<tr><td style="width:170px;color:#888;white-space:nowrap;font-size:.81rem">${esc(label)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>` : '';
   }).filter(Boolean).join('');
-  return (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
-    : '<p class="text-muted small mb-0">No additional type data.</p>') + buildDocSection(docsFor('Type', f(t,'Name')));
+  return `<button class="btn btn-sm btn-outline-secondary mb-2 py-1" data-edit-entity="type" data-edit-key="${esc(nm)}" style="font-size:.77rem"><i class="bi bi-pencil me-1"></i>Edit Type</button>` +
+    (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
+    : '<p class="text-muted small mb-0">No additional type data.</p>') + buildDocSection(docsFor('Type', nm));
 }
 
 function buildSystemBody(name) {
   const s = db.systems.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
   const rows = s ? [['Category',f(s,'Category')],['Description',f(s,'Description')]]
     .filter(([,v])=>v).map(([k,v])=>`<tr><td style="width:130px;color:#888;font-size:.81rem">${esc(k)}</td><td style="font-size:.83rem">${esc(v)}</td></tr>`).join('') : '';
-  return (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
+  return `<button class="btn btn-sm btn-outline-secondary mb-2 py-1" data-edit-entity="system" data-edit-key="${esc(name)}" style="font-size:.77rem"><i class="bi bi-pencil me-1"></i>Edit System</button>` +
+    (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
     : '<p class="text-muted small mb-0">No additional system data.</p>') + buildDocSection(docsFor('System', name));
 }
 
@@ -1867,7 +2007,8 @@ function buildSpaceBody(name) {
   ];
   const s = db.spaces.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
   const rows = s ? FIELDS.map(([l,fs])=>{const val=f(s,...fs);return val?`<tr><td style="width:150px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
-  return (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
+  return `<button class="btn btn-sm btn-outline-secondary mb-2 py-1" data-edit-entity="space" data-edit-key="${esc(name)}" style="font-size:.77rem"><i class="bi bi-pencil me-1"></i>Edit Space</button>` +
+    (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
     : '<p class="text-muted small mb-0">No additional space data.</p>') + buildDocSection(docsFor('Space', name));
 }
 
@@ -1881,7 +2022,8 @@ function buildFloorBody(name) {
   ];
   const fl = db.floors.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
   const rows = fl ? FIELDS.map(([l,fs])=>{const val=f(fl,...fs);return val?`<tr><td style="width:130px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
-  return (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
+  return `<button class="btn btn-sm btn-outline-secondary mb-2 py-1" data-edit-entity="floor" data-edit-key="${esc(name)}" style="font-size:.77rem"><i class="bi bi-pencil me-1"></i>Edit Floor</button>` +
+    (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
     : '<p class="text-muted small mb-0">No additional floor data.</p>') + buildDocSection(docsFor('Floor', name));
 }
 
@@ -1903,11 +2045,14 @@ function buildFacilityBody(name) {
   const rows = fac ? FIELDS.map(([l,fs])=>{const val=f(fac,...fs);return val?`<tr><td style="width:140px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
   const fileRow = fac?._fileName ? `<tr><td style="width:140px;color:#888;font-size:.81rem">Source file</td><td style="font-size:.83rem"><code>${esc(fac._fileName)}</code></td></tr>` : '';
   const allRows = fileRow + rows;
-  return (allRows ? `<table class="table table-sm mb-0"><tbody>${allRows}</tbody></table>`
+  return `<button class="btn btn-sm btn-outline-secondary mb-2 py-1" data-edit-entity="facility" data-edit-key="${esc(name)}" style="font-size:.77rem"><i class="bi bi-pencil me-1"></i>Edit Facility</button>` +
+    (allRows ? `<table class="table table-sm mb-0"><tbody>${allRows}</tbody></table>`
     : '<p class="text-muted small mb-0">No additional facility data.</p>') + buildDocSection(docsFor('Facility', name));
 }
 
 document.getElementById('type-modal').addEventListener('click', e => {
+  const eb = e.target.closest('[data-edit-entity]');
+  if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey); return; }
   const b = e.target.closest('[data-doc]');
   if (!b) return;
   const d = docStore[+b.dataset.doc];
@@ -2007,6 +2152,671 @@ _gList && _gList.addEventListener('click', e => {
   chip.classList.toggle('gchip-active', groupState.active.has(dim));
   applyFilters();
 });
+
+// ── Edit / CRUD Engine ────────────────────────────────────────
+let _editState = null;
+let _editDocRemovals = [];
+let _changeLog = []; // { entityType, entityName, facNames, timestamp }
+let _pendingNewType = null; // { name, facility } — queued when a component edit introduces a new TypeName
+const _justCreated = new Set(); // "dim::name" items created this session, visible in filter even at 0 count
+
+function openEditModal(entityType, entityName) {
+  _editState = { entityType, entityName };
+  _editDocRemovals = [];
+  const typeModalEl = document.getElementById('type-modal');
+  const tm = bootstrap.Modal.getInstance(typeModalEl);
+  // Only wait for hide if the modal is actually visible right now
+  if (tm && typeModalEl.classList.contains('show')) {
+    tm.hide();
+    typeModalEl.addEventListener('hidden.bs.modal', _showEditModal, { once: true });
+  } else {
+    _showEditModal();
+  }
+}
+
+function _showEditModal() {
+  if (!_editState) return;
+  const { entityType, entityName } = _editState;
+  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building'};
+  const labels = {component:'Component',type:'Type',space:'Space / Room',system:'System',floor:'Floor',facility:'Facility'};
+  document.getElementById('edit-modal-icon').className  = `bi ${icons[entityType]||'bi-pencil'} me-2`;
+  document.getElementById('edit-modal-label').textContent = `${labels[entityType]||entityType}: ${entityName}`;
+  document.getElementById('edit-modal-body').innerHTML = _buildEditBody(entityType, entityName);
+  new bootstrap.Modal(document.getElementById('edit-modal')).show();
+}
+
+// ── edit form helpers ─────────────────────────────────────────
+function _ef(label, fieldName, value) {
+  return `<div class="mb-2">
+    <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">${esc(label)}</label>
+    <input type="text" class="form-control form-control-sm edit-field" data-field="${esc(fieldName)}" value="${esc(String(value===undefined||value===null?'':value))}">
+  </div>`;
+}
+function _esel(label, fieldName, currentVal, options) {
+  const opts = options.map(o=>`<option value="${esc(o)}"${o===currentVal?' selected':''}>${esc(o)}</option>`).join('');
+  return `<div class="mb-2">
+    <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">${esc(label)}</label>
+    <select class="form-select form-select-sm edit-field" data-field="${esc(fieldName)}"><option value="">— none —</option>${opts}</select>
+  </div>`;
+}
+function _eauto(label, fieldName, currentVal, options, maxOpts=400) {
+  // Accepts plain strings OR {name, desc} objects.
+  // For objects: value=name (written on select), text content=desc (searchable in dropdown).
+  const lid = 'dl_' + fieldName.replace(/[^a-z0-9]/gi,'_');
+  const limited = options.slice(0, maxOpts);
+  const opts = limited.map(o => typeof o === 'string'
+    ? `<option value="${esc(o)}">`
+    : `<option value="${esc(o.name)}">${esc(o.desc||'')}</option>`
+  ).join('');
+  const hint = options.length > maxOpts ? ` (${options.length} total — type to filter)` : '';
+  return `<div class="mb-2">
+    <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">${esc(label)}${hint}</label>
+    <input type="text" class="form-control form-control-sm edit-field" data-field="${esc(fieldName)}"
+           value="${esc(String(currentVal||''))}" list="${lid}" autocomplete="off">
+    <datalist id="${lid}">${opts}</datalist>
+  </div>`;
+}
+function _editDocList(sheetName, rowName) {
+  const docs = docsFor(sheetName, rowName);
+  const rows = docs.map((d,i)=>{
+    const nm=f(d,'Name'), fi=f(d,'File'), di=f(d,'Directory'), cat=f(d,'Category');
+    return `<div class="edit-doc-row border rounded p-2 mb-1" data-doc-i="${i}" data-sheet="${esc(sheetName)}" data-row="${esc(rowName)}" data-orig-name="${esc(nm)}">
+      <div class="row g-1 mb-1">
+        <div class="col-5"><input class="form-control form-control-sm" placeholder="Name" value="${esc(nm)}" data-dfield="Name"></div>
+        <div class="col-4"><input class="form-control form-control-sm" placeholder="Category" value="${esc(cat)}" data-dfield="Category"></div>
+        <div class="col-3 d-flex align-items-center gap-1">
+          <button class="btn btn-sm btn-outline-danger ms-auto py-0 px-1 rm-doc-btn" title="Remove document"><i class="bi bi-trash3"></i></button>
+        </div>
+      </div>
+      <div class="row g-1">
+        <div class="col-6"><input class="form-control form-control-sm" placeholder="File / URL" value="${esc(fi)}" data-dfield="File"></div>
+        <div class="col-6"><input class="form-control form-control-sm" placeholder="Directory" value="${esc(di)}" data-dfield="Directory"></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="mt-3 pt-2 border-top">
+    <div class="d-flex align-items-center mb-1">
+      <span style="font-size:.72rem;font-weight:700;color:var(--navy)"><i class="bi bi-folder2-open me-1"></i>Documents</span>
+      <button class="btn btn-sm btn-outline-primary ms-auto py-0 px-2 add-doc-btn" data-sheet="${esc(sheetName)}" data-row="${esc(rowName)}" style="font-size:.71rem">
+        <i class="bi bi-plus-circle me-1"></i>Add
+      </button>
+    </div>
+    <div id="doc-rows-${sheetName.toLowerCase()}">${rows}</div>
+  </div>`;
+}
+
+const _ESKIP = new Set(['createdby','createdon','extsystem','extobject','extidentifier']);
+function _eskip(k) { return k.startsWith('_') || _ESKIP.has(k.toLowerCase()); }
+
+function _buildEditBody(entityType, entityName) {
+  let propsHtml = '', assocHtml = '';
+
+  if (entityType === 'component') {
+    const obj = db.components.find(c => f(c,'Name') === entityName);
+    if (!obj) return '<p class="text-muted">Not found.</p>';
+    const shown = new Set(['typeName','type name','space']);
+    Object.entries(obj).forEach(([k,v]) => {
+      if (!_eskip(k) && !shown.has(k.toLowerCase()))
+        propsHtml += _ef(k, k, v);
+    });
+    const typeDescs = idx.types.map(n => {
+      const t = db.types.find(x => f(x,'Name') === n);
+      return { name: n, desc: t ? f(t,'Description') : '' };
+    });
+    assocHtml += _eauto('Type (TypeName)', 'TypeName', f(obj,'TypeName','Type Name'), typeDescs);
+    const spaceMap = new Map();
+    db.spaces.forEach(s => { const n=f(s,'Name'); if(n && !spaceMap.has(n)) spaceMap.set(n, f(s,'Description')); });
+    const spaceDescs = [...spaceMap.entries()].map(([name,desc])=>({name,desc}));
+    assocHtml += _eauto('Space / Room', 'Space', f(obj,'Space'), spaceDescs);
+    const cLow = entityName.toLowerCase();
+    const curSys = new Set(idx.compSys[cLow]||[]);
+    const sysChecks = idx.systems.map(sn=>{
+      const sid='cs_'+sn.replace(/[^a-z0-9]/gi,'_');
+      return `<label class="d-flex align-items-center gap-1 mb-1" style="font-size:.79rem">
+        <input type="checkbox" class="form-check-input sys-assoc-chk" value="${esc(sn)}" ${curSys.has(sn.toLowerCase())?'checked':''}> ${esc(sn)}
+      </label>`;
+    }).join('');
+    assocHtml += `<div class="mb-2"><div style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666;margin-bottom:.3rem">Systems</div>
+      <input type="search" placeholder="Filter systems…" class="form-control form-control-sm mb-1" style="font-size:.77rem"
+        oninput="this.nextElementSibling.querySelectorAll('label').forEach(l=>l.style.display=l.textContent.toLowerCase().includes(this.value.toLowerCase())?'':'none')">
+      <div style="max-height:130px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;padding:.35rem .5rem">${sysChecks||'<span class="text-muted small">No systems</span>'}</div></div>`;
+    assocHtml += _editDocList('Component', entityName);
+
+  } else if (entityType === 'type') {
+    const obj = db.types.find(t => f(t,'Name') === entityName);
+    if (!obj) return '<p class="text-muted">Not found.</p>';
+    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _ef(k,k,v); });
+    assocHtml += _editDocList('Type', entityName);
+
+  } else if (entityType === 'space') {
+    const obj = db.spaces.find(s => f(s,'Name') === entityName);
+    if (!obj) return '<p class="text-muted">Not found.</p>';
+    const flKeys = new Set(['floorname','floor name','floor']);
+    assocHtml += _esel('Floor', 'FloorName', f(obj,'FloorName','Floor Name','Floor'), idx.floors);
+    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)&&!flKeys.has(k.toLowerCase())) propsHtml += _ef(k,k,v); });
+    assocHtml += _editDocList('Space', entityName);
+
+  } else if (entityType === 'system') {
+    const obj = db.systems.find(s => f(s,'Name') === entityName);
+    if (!obj) return '<p class="text-muted">Not found.</p>';
+    ['Name','Category','Description'].forEach(k => propsHtml += _ef(k, k, obj[k]||''));
+    const sysCompsLow = new Set((idx.bySys[entityName.toLowerCase()]||[]).map(c=>f(c,'Name').toLowerCase()));
+    const allComps = [...new Set(db.components.map(c=>f(c,'Name')))].sort();
+    const compChecks = allComps.map(cn=>{
+      return `<label class="d-flex align-items-center gap-1 mb-1" style="font-size:.79rem">
+        <input type="checkbox" class="form-check-input comp-assoc-chk" value="${esc(cn)}" ${sysCompsLow.has(cn.toLowerCase())?'checked':''}> ${esc(cn)}
+      </label>`;
+    }).join('');
+    assocHtml += `<div class="mb-2"><div style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666;margin-bottom:.3rem">Components</div>
+      <div style="max-height:200px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;padding:.35rem .5rem">${compChecks||'<span class="text-muted small">None</span>'}</div></div>`;
+    assocHtml += _editDocList('System', entityName);
+
+  } else if (entityType === 'floor') {
+    const obj = db.floors.find(x => f(x,'Name') === entityName);
+    if (!obj) return '<p class="text-muted">Not found.</p>';
+    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _ef(k,k,v); });
+    assocHtml += _editDocList('Floor', entityName);
+
+  } else if (entityType === 'facility') {
+    const obj = db.facilities.find(x => x._facility === entityName);
+    if (!obj) return '<p class="text-muted">Not found.</p>';
+    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _ef(k,k,v); });
+    assocHtml += _editDocList('Facility', entityName);
+  }
+
+  const hdr = (ico, t) => `<div style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:.6rem"><i class="bi ${ico} me-1"></i>${t}</div>`;
+  return `<div class="row g-3">
+    <div class="col-md-6 pe-md-3 border-end-md">
+      ${hdr('bi-list-ul','Properties')}
+      ${propsHtml||'<p class="text-muted small">No properties.</p>'}
+    </div>
+    <div class="col-md-6 ps-md-3">
+      ${hdr('bi-link-45deg','Associations')}
+      ${assocHtml||'<p class="text-muted small">No associations.</p>'}
+    </div>
+  </div>`;
+}
+
+// Add/remove doc rows in edit modal
+document.getElementById('edit-modal').addEventListener('click', e => {
+  const rmBtn = e.target.closest('.rm-doc-btn');
+  if (rmBtn) {
+    const row = rmBtn.closest('.edit-doc-row');
+    if (row) {
+      _editDocRemovals.push({ sheetName: row.dataset.sheet, rowName: row.dataset.row, docName: row.dataset.origName });
+      row.remove();
+    }
+    return;
+  }
+  const addBtn = e.target.closest('.add-doc-btn');
+  if (addBtn) {
+    const cont = document.getElementById('doc-rows-' + addBtn.dataset.sheet.toLowerCase());
+    if (cont) {
+      const nr = document.createElement('div');
+      nr.className = 'edit-doc-row new-doc-row border rounded p-2 mb-1';
+      nr.dataset.sheet = addBtn.dataset.sheet; nr.dataset.row = addBtn.dataset.row; nr.dataset.origName = '';
+      nr.innerHTML = `<div class="row g-1 mb-1">
+        <div class="col-5"><input class="form-control form-control-sm" placeholder="Name" data-dfield="Name"></div>
+        <div class="col-4"><input class="form-control form-control-sm" placeholder="Category" data-dfield="Category"></div>
+        <div class="col-3 d-flex align-items-center">
+          <button class="btn btn-sm btn-outline-danger ms-auto py-0 px-1 rm-doc-btn"><i class="bi bi-trash3"></i></button>
+        </div>
+      </div>
+      <div class="row g-1">
+        <div class="col-6"><input class="form-control form-control-sm" placeholder="File / URL" data-dfield="File"></div>
+        <div class="col-6"><input class="form-control form-control-sm" placeholder="Directory" data-dfield="Directory"></div>
+      </div>`;
+      cont.appendChild(nr);
+    }
+  }
+});
+
+function saveEdit() {
+  if (!_editState) return;
+  const { entityType, entityName } = _editState;
+
+  // Collect direct field edits
+  const fields = {};
+  document.querySelectorAll('#edit-modal-body .edit-field').forEach(el => {
+    if (el.dataset.field) fields[el.dataset.field] = el.value;
+  });
+
+  if (entityType === 'component') {
+    const obj = db.components.find(c => f(c,'Name') === entityName);
+    if (obj) {
+      Object.assign(obj, fields);
+      const newTN = (fields.TypeName || fields['Type Name'] || '').trim();
+      if (newTN && !db.types.some(t => f(t,'Name') === newTN)) {
+        _pendingNewType = { name: newTN, facility: obj._facility || '' };
+      }
+      const newSys = new Set([...document.querySelectorAll('#edit-modal-body .sys-assoc-chk:checked')].map(el=>el.value));
+      _updateCompSystems(entityName, newSys);
+    }
+  } else if (entityType === 'type') {
+    const obj = db.types.find(t => f(t,'Name') === entityName);
+    if (obj) Object.assign(obj, fields);
+  } else if (entityType === 'space') {
+    const obj = db.spaces.find(s => f(s,'Name') === entityName);
+    if (obj) Object.assign(obj, fields);
+  } else if (entityType === 'system') {
+    db.systems.filter(s => f(s,'Name') === entityName).forEach(s => {
+      ['Category','Description'].forEach(k => { if (fields[k]!==undefined) s[k]=fields[k]; });
+    });
+    const newComps = [...document.querySelectorAll('#edit-modal-body .comp-assoc-chk:checked')].map(el=>el.value);
+    _updateSysComponents(entityName, newComps);
+  } else if (entityType === 'floor') {
+    const obj = db.floors.find(x => f(x,'Name') === entityName);
+    if (obj) Object.assign(obj, fields);
+  } else if (entityType === 'facility') {
+    const obj = db.facilities.find(x => x._facility === entityName);
+    if (obj) Object.assign(obj, fields);
+  }
+
+  // Apply doc removals
+  _editDocRemovals.forEach(({ sheetName, rowName, docName }) => {
+    const i = db.documents.findIndex(d =>
+      f(d,'SheetName','Sheet Name').toLowerCase() === sheetName.toLowerCase() &&
+      f(d,'RowName','Row Name').toLowerCase() === rowName.toLowerCase() &&
+      f(d,'Name') === docName
+    );
+    if (i !== -1) db.documents.splice(i, 1);
+  });
+
+  // Update existing doc rows + add new ones
+  document.querySelectorAll('#edit-modal-body .edit-doc-row').forEach(row => {
+    const sheet = row.dataset.sheet, rn = row.dataset.row, orig = row.dataset.origName;
+    const vals = {};
+    row.querySelectorAll('[data-dfield]').forEach(el => { vals[el.dataset.dfield] = el.value; });
+    if (row.classList.contains('new-doc-row')) {
+      if (vals.Name || vals.File) {
+        const fac = (db.components.find(c=>f(c,'Name')===entityName)||db.facilities[0]||{})?._facility||'';
+        db.documents.push({ Name:vals.Name||'', File:vals.File||'', Category:vals.Category||'',
+          Directory:vals.Directory||'', SheetName:sheet, RowName:rn,
+          CreatedBy:'', CreatedOn:'', Description:'', ExtSystem:'', ExtObject:'', ExtIdentifier:'', Reference:'',
+          _facility: fac });
+      }
+    } else if (orig) {
+      const doc = db.documents.find(d =>
+        f(d,'SheetName','Sheet Name').toLowerCase() === sheet.toLowerCase() &&
+        f(d,'RowName','Row Name').toLowerCase() === rn.toLowerCase() &&
+        f(d,'Name') === orig
+      );
+      if (doc) Object.keys(vals).forEach(k => { doc[k] = vals[k]; });
+    }
+  });
+
+  _logChange(entityType, entityName);
+  buildIdx();
+  applyFilters();
+  if (_pendingNewType) {
+    const _pt = _pendingNewType; _pendingNewType = null;
+    document.getElementById('edit-modal').addEventListener('hidden.bs.modal', () => {
+      openCreateModal('type', _pt.name, _pt.facility);
+    }, { once: true });
+  }
+  bootstrap.Modal.getInstance(document.getElementById('edit-modal'))?.hide();
+}
+
+function _updateCompSystems(compName, newSystems) {
+  const cLow = compName.toLowerCase();
+  idx.systems.forEach(sysName => {
+    const rows = db.systems.filter(s => f(s,'Name') === sysName);
+    const shouldHave = newSystems.has(sysName);
+    rows.forEach(s => {
+      const ck = s.ComponentNames !== undefined ? 'ComponentNames' : 'Component Names';
+      const list = (s[ck]||'').split(',').map(x=>x.trim()).filter(Boolean);
+      const has = list.some(x=>x.toLowerCase()===cLow);
+      if (shouldHave && !has) list.push(compName);
+      if (!shouldHave && has) { const i=list.findIndex(x=>x.toLowerCase()===cLow); list.splice(i,1); }
+      s[ck] = list.join(',');
+    });
+    if (shouldHave && !rows.length) {
+      const fac = (db.components.find(c=>f(c,'Name')===compName)||{})?._facility||'';
+      db.systems.push({ Name: sysName, ComponentNames: compName, _facility: fac });
+    }
+  });
+}
+
+function _updateSysComponents(sysName, newComps) {
+  const sysRow = db.systems.find(s => f(s,'Name') === sysName);
+  if (sysRow) {
+    const ck = sysRow.ComponentNames !== undefined ? 'ComponentNames' : 'Component Names';
+    sysRow[ck] = newComps.join(',');
+  } else if (newComps.length) {
+    db.systems.push({ Name: sysName, ComponentNames: newComps.join(','), _facility: db.facilities[0]?._facility||'' });
+  }
+}
+
+function exportCOBieModified() {
+  if (!db.facilities.length) { alert('No data loaded.'); return; }
+  const wb = XLSX.utils.book_new();
+  const clean = arr => arr.map(r => { const o={}; Object.entries(r).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return o; });
+  [['Facility',db.facilities],['Floor',db.floors],['Space',db.spaces],['Type',db.types],
+   ['Component',db.components],['System',db.systems],['Document',db.documents]
+  ].forEach(([name,arr]) => {
+    const data = clean(arr);
+    if (data.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name);
+  });
+  XLSX.writeFile(wb, (db.facilities[0]._facility||'COBie').replace(/[^a-z0-9_\-]/gi,'_') + '_modified.xlsx');
+}
+
+// ── Create Modal ──────────────────────────────────────────────
+let _createType = 'space';
+
+function openCreateModal(entityType, prefillName, prefillFac) {
+  _createType = entityType || 'space';
+  const facSel = document.getElementById('create-fac-sel');
+  const facRow = document.getElementById('create-fac-row');
+  facSel.innerHTML = db.facilities.map(fac =>
+    `<option value="${esc(fac._facility)}"${fac._facility===prefillFac?' selected':''}>${esc(fac._facility)}</option>`
+  ).join('');
+  facRow.classList.toggle('d-none', db.facilities.length <= 1);
+  switchCreateType(_createType, prefillName || '');
+  new bootstrap.Modal(document.getElementById('create-modal')).show();
+}
+
+function switchCreateType(type, prefillName) {
+  _createType = type;
+  prefillName = prefillName || '';
+  const icons  = {space:'bi-grid-fill',type:'bi-tag-fill',component:'bi-tools',system:'bi-diagram-3-fill',contact:'bi-person-fill'};
+  const titles = {space:'New Room / Space',type:'New Type',component:'New Component',system:'New System',contact:'New Contact'};
+  document.querySelectorAll('.create-type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.etype === type));
+  document.getElementById('create-modal-icon').className = `bi ${icons[type]||'bi-plus-circle'} me-2`;
+  document.getElementById('create-modal-title').textContent = titles[type] || 'Create New';
+  document.getElementById('create-form-body').innerHTML = _buildCreateForm(type, prefillName);
+}
+
+function _buildCreateForm(type, prefillName) {
+  prefillName = prefillName || '';
+  const lbl = 'style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666"';
+  const cf = (label, field, val='', ph='') =>
+    `<div class="mb-2"><label class="d-block mb-1" ${lbl}>${label}</label>
+     <input type="text" class="form-control form-control-sm create-field" data-field="${esc(field)}"
+       value="${esc(String(val))}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
+  const cta = (label, field, val='', opts=[]) => {
+    const lid = 'cdl_' + field.replace(/[^a-z0-9]/gi,'_');
+    const items = opts.slice(0,400).map(o => typeof o==='string'
+      ? `<option value="${esc(o)}">`
+      : `<option value="${esc(o.name)}">${esc(o.desc||'')}</option>`).join('');
+    return `<div class="mb-2"><label class="d-block mb-1" ${lbl}>${label}</label>
+      <input type="text" class="form-control form-control-sm create-field" data-field="${esc(field)}"
+        value="${esc(String(val))}" list="${lid}" autocomplete="off">
+      <datalist id="${lid}">${items}</datalist></div>`;
+  };
+  const csel = (label, field, opts=[]) => {
+    const items = opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    return `<div class="mb-2"><label class="d-block mb-1" ${lbl}>${label}</label>
+      <select class="form-select form-select-sm create-field" data-field="${esc(field)}">
+        <option value="">— none —</option>${items}</select></div>`;
+  };
+  const carea = (label, field, ph='') =>
+    `<div class="mb-2"><label class="d-block mb-1" ${lbl}>${label}</label>
+     <textarea class="form-control form-control-sm create-field" data-field="${esc(field)}"
+       rows="3" placeholder="${esc(ph)}"></textarea></div>`;
+
+  if (type === 'space') {
+    return `<div class="row g-3"><div class="col-md-6">
+      ${cf('Name *','Name',prefillName,'e.g. GF-001')}
+      ${cf('Category','Category','','e.g. Office')}
+      ${csel('Floor','FloorName',idx.floors||[])}
+      ${cf('Room Tag','RoomTag')}
+    </div><div class="col-md-6">
+      ${carea('Description','Description','Room / space description')}
+      ${cf('Usable Height','UsableHeight')}
+      ${cf('Gross Area','GrossArea')}
+      ${cf('Net Area','NetArea')}
+    </div></div>`;
+  }
+  if (type === 'type') {
+    const cats = [...new Set(db.types.map(t=>f(t,'Category')).filter(Boolean))].sort();
+    return `<div class="row g-3"><div class="col-md-6">
+      ${cf('Name *','Name',prefillName,'e.g. Air Handling Unit')}
+      ${cta('Category','Category','',cats)}
+      ${cf('Asset Type','AssetType','','Fixed, Moveable, etc.')}
+      ${cf('Manufacturer','Manufacturer')}
+      ${cf('Model Number','ModelNumber')}
+    </div><div class="col-md-6">
+      ${carea('Description','Description','Plain-language description of this type…')}
+      ${cf('Warranty Guarantor (Parts)','WarrantyGuarantorParts')}
+      ${cf('Warranty Duration (Parts)','WarrantyDurationParts')}
+      ${cf('Warranty Guarantor (Labour)','WarrantyGuarantorLabor')}
+      ${cf('Warranty Duration (Labour)','WarrantyDurationLabor')}
+    </div></div>`;
+  }
+  if (type === 'component') {
+    const typeDescs = idx.types.map(n => {
+      const t = db.types.find(x => f(x,'Name')===n);
+      return { name:n, desc: t ? f(t,'Description') : '' };
+    });
+    const spaceMap = new Map();
+    db.spaces.forEach(s => { const n=f(s,'Name'); if(n && !spaceMap.has(n)) spaceMap.set(n, f(s,'Description')); });
+    const spaceDescs = [...spaceMap.entries()].map(([name,desc])=>({name,desc}));
+    return `<div class="row g-3"><div class="col-md-6">
+      ${cf('Name *','Name',prefillName,'e.g. AHU-01')}
+      ${cta('Type (TypeName)','TypeName','',typeDescs)}
+      ${cta('Space / Room','Space','',spaceDescs)}
+      ${cf('Description','Description')}
+    </div><div class="col-md-6">
+      ${cf('Assembly Type','AssemblyType')}
+      ${cf('Serial Number','SerialNumber')}
+      ${cf('Installation Date','InstallationDate','','YYYY-MM-DD')}
+      ${cf('Tag Number','TagNumber')}
+    </div></div>`;
+  }
+  if (type === 'system') {
+    const cats = [...new Set(db.systems.map(s=>f(s,'Category')).filter(Boolean))].sort();
+    const compList = [...new Set(db.components.map(c=>f(c,'Name')))].sort().map(cn =>
+      `<label class="d-flex align-items-center gap-1 mb-1" style="font-size:.79rem">
+        <input type="checkbox" class="form-check-input create-comp-chk" value="${esc(cn)}"> ${esc(cn)}
+      </label>`).join('');
+    return `<div class="row g-3"><div class="col-md-6">
+      ${cf('Name *','Name',prefillName,'e.g. Mechanical Ventilation')}
+      ${cta('Category','Category','',cats)}
+      ${carea('Description','Description','System description…')}
+    </div><div class="col-md-6">
+      <div class="mb-2"><label class="d-block mb-1" ${lbl}>Components</label>
+        <input type="search" placeholder="Filter components…" class="form-control form-control-sm mb-1" style="font-size:.77rem"
+          oninput="this.nextElementSibling.querySelectorAll('label').forEach(l=>l.style.display=l.textContent.toLowerCase().includes(this.value.toLowerCase())?'':'none')">
+        <div style="max-height:170px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;padding:.35rem .5rem">
+          ${compList||'<span class="text-muted small">No components loaded yet.</span>'}
+        </div>
+      </div>
+    </div></div>`;
+  }
+  if (type === 'contact') {
+    const cats = [...new Set((db.contacts||[]).map(c=>f(c,'Category')).filter(Boolean))].sort();
+    return `<div class="row g-3"><div class="col-md-6">
+      ${cf('Name / Unique ID *','Name',prefillName,'Usually the email address in COBie')}
+      ${cf('Given Name','GivenName')}
+      ${cf('Family Name','FamilyName')}
+      ${cf('Email','Email')}
+      ${cf('Phone','Phone')}
+    </div><div class="col-md-6">
+      ${cf('Company / Organisation','Company')}
+      ${cta('Category','Category','',cats)}
+      ${cf('Department','Department')}
+      ${cf('Organisation Code','OrganizationCode')}
+      ${cf('Town / City','Town')}
+      ${cf('Country','Country')}
+    </div></div>`;
+  }
+  return '<p class="text-muted small">Select an entity type above.</p>';
+}
+
+function saveCreate() {
+  const type = _createType;
+  const facEl = document.getElementById('create-fac-sel');
+  const fac   = db.facilities.length <= 1
+    ? (db.facilities[0]?._facility || '')
+    : (facEl?.value || db.facilities[0]?._facility || '');
+
+  const fields = {};
+  document.querySelectorAll('#create-form-body .create-field').forEach(el => {
+    if (el.dataset.field) fields[el.dataset.field] = el.value;
+  });
+
+  const name  = (fields.Name || '').trim();
+  const today = new Date().toISOString().slice(0,10);
+  const base  = { CreatedBy:'', CreatedOn:today, ExtSystem:'', ExtObject:'', ExtIdentifier:'', _facility:fac };
+
+  if (type === 'space') {
+    if (!name) { alert('Name is required.'); return; }
+    if (db.spaces.some(s => f(s,'Name')===name)) { alert(`Space "${name}" already exists.`); return; }
+    db.spaces.push({ ...base, Name:name, Category:fields.Category||'', FloorName:fields.FloorName||'',
+      Description:fields.Description||'', RoomTag:fields.RoomTag||'',
+      UsableHeight:fields.UsableHeight||'', GrossArea:fields.GrossArea||'', NetArea:fields.NetArea||'' });
+
+  } else if (type === 'type') {
+    if (!name) { alert('Name is required.'); return; }
+    if (db.types.some(t => f(t,'Name')===name)) { alert(`Type "${name}" already exists.`); return; }
+    db.types.push({ ...base, Name:name, Category:fields.Category||'', Description:fields.Description||'',
+      AssetType:fields.AssetType||'', Manufacturer:fields.Manufacturer||'', ModelNumber:fields.ModelNumber||'',
+      WarrantyGuarantorParts:fields.WarrantyGuarantorParts||'', WarrantyDurationParts:fields.WarrantyDurationParts||'',
+      WarrantyGuarantorLabor:fields.WarrantyGuarantorLabor||'', WarrantyDurationLabor:fields.WarrantyDurationLabor||'',
+      WarrantyDurationUnit:'', Reference:'' });
+
+  } else if (type === 'component') {
+    if (!name) { alert('Name is required.'); return; }
+    if (db.components.some(c => f(c,'Name')===name)) { alert(`Component "${name}" already exists.`); return; }
+    db.components.push({ ...base, Name:name, TypeName:fields.TypeName||'', Space:fields.Space||'',
+      Description:fields.Description||'', AssemblyType:fields.AssemblyType||'',
+      SerialNumber:fields.SerialNumber||'', InstallationDate:fields.InstallationDate||'', TagNumber:fields.TagNumber||'' });
+    const newTN = (fields.TypeName||'').trim();
+    if (newTN && !db.types.some(t => f(t,'Name')===newTN)) {
+      _pendingNewType = { name: newTN, facility: fac };
+    }
+
+  } else if (type === 'system') {
+    if (!name) { alert('Name is required.'); return; }
+    if (db.systems.some(s => f(s,'Name')===name)) { alert(`System "${name}" already exists.`); return; }
+    const compNames = [...document.querySelectorAll('#create-form-body .create-comp-chk:checked')].map(el=>el.value).join(',');
+    db.systems.push({ ...base, Name:name, Category:fields.Category||'', Description:fields.Description||'',
+      ComponentNames:compNames });
+
+  } else if (type === 'contact') {
+    if (!name) { alert('Name / unique ID is required.'); return; }
+    if (!db.contacts) db.contacts = [];
+    if (db.contacts.some(c => f(c,'Name')===name)) { alert(`Contact "${name}" already exists.`); return; }
+    db.contacts.push({ ...base, Name:name, GivenName:fields.GivenName||'', FamilyName:fields.FamilyName||'',
+      Email:fields.Email||'', Phone:fields.Phone||'', Company:fields.Company||'', Category:fields.Category||'',
+      Department:fields.Department||'', OrganizationCode:fields.OrganizationCode||'',
+      Town:fields.Town||'', Country:fields.Country||'' });
+  }
+
+  _logChange(type, name);
+  if (type === 'type' || type === 'space' || type === 'system') {
+    _justCreated.add(type + '::' + name.toLowerCase());
+  }
+  buildIdx(); applyFilters();
+  if (type === 'component' && !allExpanded) toggleExpandAll();
+  const pendingType = _pendingNewType; _pendingNewType = null;
+  bootstrap.Modal.getInstance(document.getElementById('create-modal'))?.hide();
+  if (pendingType) {
+    setTimeout(() => openCreateModal('type', pendingType.name, pendingType.facility), 400);
+  }
+}
+
+// ── Change Tracking & Export ─────────────────────────────────
+function _logChange(entityType, entityName) {
+  let facNames = [];
+  if (entityType === 'component') {
+    const o = db.components.find(c => f(c,'Name') === entityName);
+    if (o?._facility) facNames = [o._facility];
+  } else if (entityType === 'type') {
+    facNames = [...new Set(db.types.filter(t=>f(t,'Name')===entityName).map(t=>t._facility).filter(Boolean))];
+  } else if (entityType === 'space') {
+    const o = db.spaces.find(s => f(s,'Name') === entityName);
+    if (o?._facility) facNames = [o._facility];
+  } else if (entityType === 'system') {
+    facNames = [...new Set(db.systems.filter(s=>f(s,'Name')===entityName).map(s=>s._facility).filter(Boolean))];
+  } else if (entityType === 'floor') {
+    const o = db.floors.find(x => f(x,'Name') === entityName);
+    if (o?._facility) facNames = [o._facility];
+  } else if (entityType === 'facility') {
+    facNames = [entityName];
+  }
+  if (!facNames.length) facNames = db.facilities.map(x=>x._facility).filter(Boolean);
+  // Deduplicate — re-editing the same entity replaces the old entry
+  _changeLog = _changeLog.filter(e => !(e.entityType===entityType && e.entityName===entityName));
+  _changeLog.push({ entityType, entityName, facNames, timestamp: Date.now() });
+  _updateChangesBtn();
+}
+
+function _updateChangesBtn() {
+  const btn = document.getElementById('changes-btn');
+  const cnt = document.getElementById('changes-count');
+  if (!btn || !cnt) return;
+  cnt.textContent = _changeLog.length;
+  btn.classList.toggle('d-none', _changeLog.length === 0);
+}
+
+function openChangesModal() {
+  const byFac = {};
+  _changeLog.forEach(entry => {
+    entry.facNames.forEach(fn => { (byFac[fn] = byFac[fn] || []).push(entry); });
+  });
+  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility'};
+  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building'};
+  let html = '';
+  if (!_changeLog.length) {
+    html = '<p class="text-muted small mb-0">No changes recorded.</p>';
+  } else {
+    Object.entries(byFac).forEach(([facName, entries]) => {
+      const facObj = db.facilities.find(x => x._facility === facName);
+      const fileName = facObj?._fileName || (facName + '.xlsx');
+      html += `<div class="mb-3 border rounded p-2">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <i class="bi bi-file-earmark-excel text-success"></i>
+          <strong style="font-size:.88rem">${esc(facName)}</strong>
+          <code style="font-size:.74rem;color:#888">${esc(fileName)}</code>
+          <span class="badge bg-secondary ms-auto">${entries.length} change${entries.length!==1?'s':''}</span>
+        </div>
+        <ul class="mb-0 small ps-3">
+          ${entries.map(e=>`<li><i class="bi ${icons[e.entityType]||'bi-pencil'} me-1 text-muted"></i>${esc(labels[e.entityType]||e.entityType)}: <strong>${esc(e.entityName)}</strong></li>`).join('')}
+        </ul>
+      </div>`;
+    });
+  }
+  document.getElementById('changes-modal-body').innerHTML = html;
+  new bootstrap.Modal(document.getElementById('changes-modal')).show();
+}
+
+function _exportFacility(facObj, asNew) {
+  const fac     = facObj._facility;
+  const origName = facObj._fileName || (fac.replace(/[^a-z0-9_\-]/gi,'_') + '.xlsx');
+  const outName  = asNew ? origName.replace(/\.xlsx?$/i, '_modified.xlsx') : origName;
+  const wb = XLSX.utils.book_new();
+  const cleanRows = (arr) => arr
+    .filter(r => r._facility === fac)
+    .map(r => { const o={}; Object.entries(r).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return o; });
+  const cleanFac = () => { const o={}; Object.entries(facObj).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return [o]; };
+  [['Facility',cleanFac()],['Contact',cleanRows(db.contacts||[])],['Floor',cleanRows(db.floors)],
+   ['Space',cleanRows(db.spaces)],['Type',cleanRows(db.types)],['Component',cleanRows(db.components)],
+   ['System',cleanRows(db.systems)],['Document',cleanRows(db.documents)]
+  ].forEach(([name,data]) => {
+    if (data.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name);
+  });
+  XLSX.writeFile(wb, outName);
+}
+
+function saveToExistingFiles() {
+  db.facilities.forEach(fac => { if (fac._facility) _exportFacility(fac, false); });
+  _afterSave();
+}
+function saveToNewFiles() {
+  db.facilities.forEach(fac => { if (fac._facility) _exportFacility(fac, true); });
+  _afterSave();
+}
+function _afterSave() {
+  _changeLog = []; _updateChangesBtn();
+  bootstrap.Modal.getInstance(document.getElementById('changes-modal'))?.hide();
+}
+function discardChanges() {
+  if (!_changeLog.length) return;
+  if (!confirm('Discard all ' + _changeLog.length + ' recorded change' + (_changeLog.length!==1?'s':'') + '?')) return;
+  _changeLog = []; _updateChangesBtn();
+  bootstrap.Modal.getInstance(document.getElementById('changes-modal'))?.hide();
+}
 
 // ── Filter bar resize ────────────────────────────────────────
 (function() {
