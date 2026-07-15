@@ -23,7 +23,7 @@
     body {
       display: flex; flex-direction: column;
       background: var(--surf);
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: Verdana, Geneva, sans-serif;
     }
 
     /* Header */
@@ -108,7 +108,7 @@
     #filter-bar {
       flex-shrink: 0; height: var(--fh);
       display: flex; background: #fff;
-      border-bottom: none;
+      border-bottom: none; overflow: hidden;
     }
     /* Resize handle */
     #filter-resize {
@@ -125,13 +125,27 @@
     #filter-resize:hover::after { background: rgba(255,255,255,.7); }
     #filter-resize.resizing { background: var(--accent); }
     #filter-resize.resizing::after { background: rgba(255,255,255,.7); }
+    #filter-resize-btns {
+      position: absolute; left: .5rem;
+      display: flex; gap: .1rem; align-items: center; z-index: 1;
+    }
+    .frb {
+      background: none; border: none; color: #888;
+      cursor: pointer; padding: .1rem .2rem; font-size: .72rem;
+      line-height: 1; display: flex; align-items: center;
+      transition: color .12s;
+    }
+    .frb:hover { color: #333; }
+    .frb.frb-active { color: var(--accent); }
     .fp {
       flex: 1; min-width: 0;
-      display: flex; flex-direction: column;
+      display: flex; flex-direction: row;
       border-right: 1px solid #e4e8ec;
+      transition: flex .2s ease;
     }
     .fp:last-child { border-right: none; }
-    .fp-hd {
+    .fp.fp-collapsed { flex: 0 0 30px; min-width: 30px; }
+    .fp-hd-top {
       flex-shrink: 0;
       display: flex; align-items: center; justify-content: space-between;
       padding: .28rem .6rem;
@@ -139,14 +153,57 @@
       font-size: .7rem; font-weight: 700;
       text-transform: uppercase; letter-spacing: .06em;
     }
+    .fp-hd {
+      flex-shrink: 0; width: 30px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: .4rem .1rem;
+      background: var(--navy); color: #fff;
+      cursor: pointer; user-select: none;
+      transition: background .15s;
+    }
+    .fp-hd:hover { background: #454545; }
+    .fp-hd-arrow { font-size: .78rem; opacity: .7; transition: transform .2s; }
+    .fp.fp-collapsed .fp-hd-arrow { transform: rotate(180deg); }
+    .fp-hd-label {
+      display: none;
+      writing-mode: vertical-rl;
+      font-size: .7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em;
+      white-space: nowrap; opacity: .85;
+    }
+    .fp.fp-collapsed .fp-hd { justify-content: flex-start; padding-top: .6rem; }
+    .fp.fp-collapsed .fp-hd-label { display: block; }
     .fp-badge {
       background: var(--accent); color: #fff;
-      border-radius: 8px; padding: 0 .4rem;
+      border-radius: 8px; padding: .1rem .28rem;
       font-size: .67rem; font-weight: 700;
     }
-    .fp-body { flex: 1; overflow-y: auto; }
+    .fp-body { flex: 1; overflow-y: auto; min-width: 0; }
+    .fp.fp-collapsed .fp-body { display: none; }
     .fp-body::-webkit-scrollbar { width: 4px; }
     .fp-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+    .fp-inner {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .fp-search-wrap {
+      flex-shrink: 0;
+      padding: .28rem .35rem;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e4e8ec;
+    }
+    .fp-search {
+      width: 100%; border: 1px solid #dee2e6;
+      border-radius: 4px; padding: .18rem .38rem;
+      font-size: .74rem; outline: none;
+      background: #fff; color: #333;
+      transition: border-color .15s;
+    }
+    .fp-search:focus { border-color: var(--accent); }
+    .fp-search::placeholder { color: #bbb; }
+    .fp.fp-collapsed .fp-search-wrap { display: none; }
 
     .fp-item {
       display: flex; align-items: center; gap: .3rem;
@@ -450,35 +507,64 @@
 <!-- APP -->
 <div id="app">
 
-  <!-- 5-panel filter bar -->
+  <!-- 6-panel filter bar -->
   <div id="filter-bar">
     <div class="fp">
-      <div class="fp-hd"><span>Facility</span><span class="fp-badge d-none" id="fb-facility"></span></div>
-      <div class="fp-body" id="fpl-facility"></div>
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Facility</span><span class="fp-badge d-none" id="fb-facility"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-facility"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Facility</span></div>
     </div>
     <div class="fp">
-      <div class="fp-hd"><span>Floor</span><span class="fp-badge d-none" id="fb-floor"></span></div>
-      <div class="fp-body" id="fpl-floor"></div>
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Floor</span><span class="fp-badge d-none" id="fb-floor"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-floor"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Floor</span></div>
     </div>
     <div class="fp">
-      <div class="fp-hd"><span>Space / Room</span><span class="fp-badge d-none" id="fb-space"></span></div>
-      <div class="fp-body" id="fpl-space"></div>
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Space / Room</span><span class="fp-badge d-none" id="fb-space"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-space"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Space / Room</span></div>
     </div>
     <div class="fp">
-      <div class="fp-hd"><span>Type</span><span class="fp-badge d-none" id="fb-type"></span></div>
-      <div class="fp-body" id="fpl-type"></div>
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Type</span><span class="fp-badge d-none" id="fb-type"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-type"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Type</span></div>
     </div>
     <div class="fp">
-      <div class="fp-hd"><span>System</span><span class="fp-badge d-none" id="fb-system"></span></div>
-      <div class="fp-body" id="fpl-system"></div>
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>System</span><span class="fp-badge d-none" id="fb-system"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-system"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">System</span></div>
     </div>
     <div class="fp">
-      <div class="fp-hd"><span>Doc Cat.</span><span class="fp-badge d-none" id="fb-doccat"></span></div>
-      <div class="fp-body" id="fpl-doccat"></div>
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Doc Cat.</span><span class="fp-badge d-none" id="fb-doccat"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-doccat"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Doc Cat.</span></div>
     </div>
   </div>
 
-  <div id="filter-resize" title="Drag to resize"></div>
+  <div id="filter-resize" title="Drag to resize">
+    <div id="filter-resize-btns">
+      <button class="frb" id="frb-min" title="Minimise filter pane"><i class="bi bi-chevron-down"></i></button>
+      <button class="frb" id="frb-max" title="Maximise filter pane"><i class="bi bi-chevron-up"></i></button>
+    </div>
+  </div>
 
   <!-- Results -->
   <div id="content">
@@ -993,6 +1079,7 @@ function applyFilters() {
 
   lastCounts = c;
   renderPanels(c);
+  reapplyPanelSearches();
   renderPills();
   renderComps(comps);
   const n = comps.length;
@@ -1122,13 +1209,49 @@ function renderPanelCat(listId, badgeId, dim, counts) {
   document.getElementById(listId).innerHTML = html;
 }
 
+function _filterPanelItems(body, q) {
+  // Walk children in DOM order so each item can inherit its category header's text
+  let curCat = '';
+  Array.from(body.children).forEach(el => {
+    if (el.classList.contains('fp-cat-hdr')) {
+      curCat = (el.dataset.cat || '').toLowerCase();
+    } else if (el.classList.contains('fp-item')) {
+      const text = el.querySelector('.fp-name')?.textContent.toLowerCase() || '';
+      const isSel = el.classList.contains('fp-sel');
+      el.style.display = (!q || text.includes(q) || curCat.includes(q) || isSel) ? '' : 'none';
+    }
+  });
+  body.querySelectorAll('.fp-cat-hdr').forEach(hdr => {
+    let sib = hdr.nextElementSibling, vis = false;
+    while (sib && !sib.classList.contains('fp-cat-hdr')) {
+      if (sib.style.display !== 'none' && !sib.classList.contains('fp-zero')) { vis = true; break; }
+      sib = sib.nextElementSibling;
+    }
+    hdr.style.display = vis ? '' : 'none';
+  });
+}
+function reapplyPanelSearches() {
+  document.querySelectorAll('.fp-search').forEach(inp => {
+    const q = inp.value.toLowerCase().trim();
+    if (!q) return;
+    _filterPanelItems(inp.closest('.fp-inner').querySelector('.fp-body'), q);
+  });
+}
+
 document.getElementById('filter-bar').addEventListener('click', e => {
+  const hd = e.target.closest('.fp-hd');
+  if (hd) { hd.closest('.fp').classList.toggle('fp-collapsed'); return; }
   const item = e.target.closest('.fp-item');
   if (item && !item.classList.contains('fp-zero')) {
     toggle(item.dataset.dim, item.dataset.key); return;
   }
   const cat = e.target.closest('.fp-cat-hdr');
   if (cat) toggleCategory(cat.dataset.dim, cat.dataset.cat);
+});
+document.getElementById('filter-bar').addEventListener('input', e => {
+  const inp = e.target.closest('.fp-search');
+  if (!inp) return;
+  _filterPanelItems(inp.closest('.fp-inner').querySelector('.fp-body'), inp.value.toLowerCase().trim());
 });
 
 function toggleCategory(dim, catName) {
@@ -2685,6 +2808,36 @@ function discardChanges() {
     bar.style.height = Math.max(58, Math.min(540, startH + t.clientY - startY)) + 'px';
   }, { passive: false });
   document.addEventListener('touchend', () => { dragging = false; });
+
+  // Minimise / Maximise buttons
+  let _prevHMin = null, _prevHMax = null;
+  const _minH = 58, _maxH = 540;
+  document.getElementById('frb-min').addEventListener('click', e => {
+    e.stopPropagation();
+    const cur = bar.offsetHeight;
+    if (cur <= _minH) {
+      bar.style.height = (_prevHMin !== null ? _prevHMin : 215) + 'px';
+      _prevHMin = null;
+      document.getElementById('frb-min').classList.remove('frb-active');
+    } else {
+      _prevHMin = cur;
+      bar.style.height = _minH + 'px';
+      document.getElementById('frb-min').classList.add('frb-active');
+    }
+  });
+  document.getElementById('frb-max').addEventListener('click', e => {
+    e.stopPropagation();
+    const cur = bar.offsetHeight;
+    if (cur >= _maxH) {
+      bar.style.height = (_prevHMax !== null ? _prevHMax : 215) + 'px';
+      _prevHMax = null;
+      document.getElementById('frb-max').classList.remove('frb-active');
+    } else {
+      _prevHMax = cur;
+      bar.style.height = _maxH + 'px';
+      document.getElementById('frb-max').classList.add('frb-active');
+    }
+  });
 })();
 </script>
 </body>
