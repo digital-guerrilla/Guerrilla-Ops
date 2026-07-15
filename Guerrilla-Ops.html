@@ -1470,7 +1470,7 @@ function docCard(entry) {
   const file=f(doc,'File'), dir=f(doc,'Directory'), desc=f(doc,'Description');
   const cat=f(doc,'Category'), ref=f(doc,'Reference');
   const isUrl=s=>/^https?:\/\//i.test(s);
-  const lpath=(!isUrl(file)&&file)?(dir?dir.replace(/\/$/,'')+'\\'+file:file):'';
+  const lpath = dir || '';
   const LL={component:'Component',type:'Type',space:'Space',system:'System',facility:'Facility',floor:'Floor'};
   const di=docStore.length; docStore.push(doc);
   return `<div class="cc">
@@ -1485,9 +1485,9 @@ function docCard(entry) {
         ${lpath?`<div style="font-size:.74rem;color:#888;margin-top:.25rem;display:flex;align-items:center;gap:.3rem">
           <code style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lpath)}</code>
           <button class="xbtn py-0 px-1 cp-btn-inline" data-p="${esc(lpath)}" title="Copy path"><i class="bi bi-clipboard"></i></button>
+          <a href="${esc(lpath)}" target="_blank" rel="noopener" class="xbtn py-0 px-1" title="Open in new tab"><i class="bi bi-box-arrow-up-right"></i></a>
         </div>`:''}
         ${isUrl(ref)?`<div style="font-size:.74rem;margin-top:.2rem"><a href="${esc(ref)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>${esc(ref)}</a></div>`:''}
-        ${isUrl(file)?`<div style="font-size:.74rem;margin-top:.2rem"><a href="${esc(file)}" target="_blank" rel="noopener"><i class="bi bi-download me-1"></i>Open file</a></div>`:''}
       </div>
       <button class="xbtn" data-doc="${di}" title="Document details"><i class="bi bi-info-circle"></i></button>
     </div>
@@ -1905,7 +1905,7 @@ function openDoc(doc) {
                             : (file?`<code>${esc(file)}</code>`:'');
   const rCell = isUrl(ref)  ? `<a href="${esc(ref)}"  target="_blank" rel="noopener">${esc(ref)}</a>`
                             : esc(ref);
-  const lpath = (!isUrl(file)&&file) ? (dir?dir.replace(/\/$/,'')+'\\'+file:file) : '';
+  const lpath = dir || '';
 
   const tRows = [
     ['Name',name&&esc(name)], ['Category',cat&&esc(cat)], ['Description',desc&&esc(desc)],
@@ -1918,8 +1918,10 @@ function openDoc(doc) {
   const pathBlock = lpath ? `<div class="alert alert-secondary py-2 px-3 mt-3 d-flex align-items-center gap-2 mb-0" style="font-size:.79rem">
     <i class="bi bi-folder2-open"></i>
     <code style="flex:1;word-break:break-all">${esc(lpath)}</code>
-    <button class="btn btn-sm btn-outline-secondary py-0 px-2 cp-btn" data-p="${esc(lpath)}">
-      <i class="bi bi-clipboard"></i></button></div>` : '';
+    <button class="btn btn-sm btn-outline-secondary py-0 px-2 cp-btn" data-p="${esc(lpath)}" title="Copy path">
+      <i class="bi bi-clipboard"></i></button>
+    <a href="${esc(lpath)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Open in new tab">
+      <i class="bi bi-box-arrow-up-right"></i></a></div>` : '';
 
   document.getElementById('mdoc-body').innerHTML =
     `<table class="table table-sm mb-0"><tbody>${tRows}</tbody></table>${pathBlock}`;
