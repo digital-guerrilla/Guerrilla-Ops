@@ -950,59 +950,49 @@ function showApp(filename) {
 }
 
 // ── Filtering ────────────────────────────────────────────────
-function matches(comp, skip) {
-  if (skip !== 'facility' && sel.facility.size) {
-    if (!sel.facility.has((comp._facility||'').toLowerCase())) return false;
-  }
-  if (skip !== 'doccat' && sel.doccat.size) {
-    const _cn = f(comp,'Name').toLowerCase();
-    const _cats = idx.docCatByComp?.[_cn];
-    if (!_cats || ![...sel.doccat].some(c => _cats.has(c))) return false;
-  }
-  const sp = f(comp,'Space').toLowerCase();
-  const tn = f(comp,'TypeName','Type Name').toLowerCase();
-  const fl = idx.spFloor[sp] || '';
-  const cn = f(comp,'Name').toLowerCase();
+// Returns true if Set a and Set b share at least one element
+function _setHasAny(a, b) { for (const x of a) if (b.has(x)) return true; return false; }
 
-  if (skip !== 'floor'  && sel.floor.size  && !sel.floor.has(fl))  return false;
-  if (skip !== 'space'  && sel.space.size  && !sel.space.has(sp))  return false;
-  if (skip !== 'type'   && sel.type.size   && !sel.type.has(tn))   return false;
-  if (skip !== 'system' && sel.system.size) {
-    const cs = idx.compSys[cn] || [];
-    if (!cs.some(s => sel.system.has(s))) return false;
-  }
-  if (searchQuery) {
-    const text = idx.searchText?.[cn] || '';
-    if (!text.includes(searchQuery)) return false;
-  }
-  return true;
-}
-
-function crossCounts() {
-  const c = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
-  ['facility','floor','space','type','system','doccat'].forEach(dim => {
-    db.components.filter(comp => matches(comp, dim)).forEach(comp => {
-      const fac = (comp._facility||'').toLowerCase();
-      const sp  = f(comp,'Space').toLowerCase();
-      const tn  = f(comp,'TypeName','Type Name').toLowerCase();
-      const fl  = idx.spFloor[sp] || '';
-      const cn  = f(comp,'Name').toLowerCase();
-      if (dim==='facility' && fac) c.facility[fac] = (c.facility[fac]||0)+1;
-      if (dim==='floor'    && fl)  c.floor[fl]     = (c.floor[fl]    ||0)+1;
-      if (dim==='space'    && sp)  c.space[sp]     = (c.space[sp]    ||0)+1;
-      if (dim==='type'     && tn)  c.type[tn]      = (c.type[tn]     ||0)+1;
-      if (dim==='system')          (idx.compSys[cn]||[]).forEach(sk => c.system[sk]=(c.system[sk]||0)+1);
-      if (dim==='doccat')          (idx.docCatByComp?.[cn]||new Set()).forEach(cat => c.doccat[cat]=(c.doccat[cat]||0)+1);
-    });
-  });
-  return c;
-}
-
+// Single-pass: builds filtered component list + cross-counts simultaneously.
+// Uses a 6-bit mask (one bit per dimension) so each component is visited once.
 function applyFilters() {
-  const comps  = db.components.filter(c => matches(c));
-  const counts = crossCounts();
-  lastCounts = counts;
-  renderPanels(counts);
+  const c = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
+  const comps = [];
+  const ALL = 63; // bits: 0=facility 1=floor 2=space 3=type 4=system 5=doccat
+
+  db.components.forEach(comp => {
+    const sp  = f(comp,'Space').toLowerCase();
+    const tn  = f(comp,'TypeName','Type Name').toLowerCase();
+    const fl  = idx.spFloor[sp] || '';
+    const fac = (comp._facility||'').toLowerCase();
+    const cn  = f(comp,'Name').toLowerCase();
+
+    if (searchQuery && !(idx.searchText?.[cn] || '').includes(searchQuery)) return;
+
+    const cats = idx.docCatByComp?.[cn];
+    const syss = idx.compSys[cn] || [];
+
+    const bits =
+      ((!sel.facility.size || sel.facility.has(fac))                         ? 1  : 0) |
+      ((!sel.floor.size    || sel.floor.has(fl))                             ? 2  : 0) |
+      ((!sel.space.size    || sel.space.has(sp))                             ? 4  : 0) |
+      ((!sel.type.size     || sel.type.has(tn))                              ? 8  : 0) |
+      ((!sel.system.size   || syss.some(s => sel.system.has(s)))             ? 16 : 0) |
+      ((!sel.doccat.size   || (cats && _setHasAny(sel.doccat, cats)))        ? 32 : 0);
+
+    if (bits === ALL) comps.push(comp);
+
+    // For each dimension, count this component if all OTHER dimensions pass
+    if ((bits | 1)  === ALL && fac)  c.facility[fac] = (c.facility[fac]||0)+1;
+    if ((bits | 2)  === ALL && fl)   c.floor[fl]     = (c.floor[fl]    ||0)+1;
+    if ((bits | 4)  === ALL && sp)   c.space[sp]     = (c.space[sp]    ||0)+1;
+    if ((bits | 8)  === ALL && tn)   c.type[tn]      = (c.type[tn]     ||0)+1;
+    if ((bits | 16) === ALL) syss.forEach(sk => c.system[sk] = (c.system[sk]||0)+1);
+    if ((bits | 32) === ALL && cats) cats.forEach(cat => c.doccat[cat] = (c.doccat[cat]||0)+1);
+  });
+
+  lastCounts = c;
+  renderPanels(c);
   renderPills();
   renderComps(comps);
   const n = comps.length;
@@ -1595,168 +1585,7 @@ function buildGroupInfoBtn(dim, name) {
   return `<button class="type-info-btn" data-grpidx="${i}"><i class="bi ${icons[dim]} me-1"></i>${labels[dim]} Info</button>`;
 }
 
-function groupedByType(comps, nested = false) {
-  const map = new Map();
-  comps.forEach(c => {
-    const k = f(c,'TypeName','Type Name') || '(Unassigned)';
-    if (!map.has(k)) map.set(k, []);
-    map.get(k).push(c);
-  });
 
-  return [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([typeName, cs]) => {
-    const sub  = typeSubtitle(typeName);
-    const tObj = db.types.find(x => f(x,'Name').toLowerCase() === typeName.toLowerCase());
-    const cid  = 'col_' + (collapseCounter++);
-    let infoBtn = '';
-    if (tObj) {
-      const ti = typeStore.length; typeStore.push(tObj);
-      infoBtn = `<button class="type-info-btn" data-typeidx="${ti}"><i class="bi bi-info-circle-fill me-1"></i>Type Info</button>`;
-    }
-    return `<div class="grp-block${nested?' nested':''}">
-      <div class="grp-hdr grp-collapsed" data-cid="${cid}">
-        <i class="bi bi-chevron-down grp-chev"></i>
-        <span class="grp-name">${esc(withDesc(typeName,'type'))}</span>
-        ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
-        ${infoBtn}<span class="grp-cnt">${cs.length}</span>
-      </div>
-      <div class="grp-closed" id="${cid}">${cs.map(c=>card(c)).join('')}</div>
-    </div>`;
-  }).join('');
-}
-
-function groupedNested(comps, dim) {
-  const map = new Map();
-  if (dim === 'system') {
-    comps.forEach(c => {
-      const cn   = f(c,'Name').toLowerCase();
-      const syss = idx.compSys[cn] || [];
-      const keys = syss.length
-        ? syss.map(sk => idx.systems.find(n => n.toLowerCase() === sk) || sk)
-        : ['(No System)'];
-      keys.forEach(k => { if (!map.has(k)) map.set(k,[]); map.get(k).push(c); });
-    });
-  } else {
-    comps.forEach(c => {
-      let k;
-      if (dim === 'space') {
-        k = f(c,'Space') || '(No Space)';
-      } else {
-        const sp = f(c,'Space').toLowerCase();
-        const fl = idx.spFloor[sp] || '';
-        k = idx.floors.find(n => n.toLowerCase() === fl) || fl || '(No Floor)';
-      }
-      if (!map.has(k)) map.set(k,[]);
-      map.get(k).push(c);
-    });
-  }
-  const isBracket = s => s.startsWith('(');
-  return [...map.entries()]
-    .sort(([a],[b]) => isBracket(a)!==isBracket(b) ? (isBracket(a)?1:-1) : a.localeCompare(b))
-    .map(([outerName, cs]) => {
-      const cid  = 'col_' + (collapseCounter++);
-      const sub  = getOuterSubtitle(dim, outerName);
-      const iBtn = buildOuterInfoBtn(dim, outerName);
-      const ico  = {system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill'}[dim];
-      return `<div class="grp-block outer">
-        <div class="grp-hdr grp-outer grp-collapsed" data-cid="${cid}">
-          <i class="bi bi-chevron-down grp-chev"></i>
-          <i class="bi ${ico} me-1" style="opacity:.75"></i>
-          <span class="grp-name">${esc(withDesc(outerName,dim))}</span>
-          ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
-          ${iBtn}<span class="grp-cnt">${cs.length}</span>
-        </div>
-        <div class="grp-outer-body grp-closed" id="${cid}">${groupedByType(cs, true)}</div>
-      </div>`;
-    }).join('');
-}
-
-function getOuterSubtitle(dim, name) {
-  if (name.startsWith('(')) return '';
-  if (dim === 'system') {
-    const s = db.systems.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
-    return s ? f(s,'Category') : '';
-  }
-  if (dim === 'space') {
-    const s = db.spaces.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
-    if (!s) return '';
-    const fl = f(s,'FloorName','Floor Name');
-    return fl ? 'Floor: '+fl : f(s,'Description');
-  }
-  if (dim === 'floor') {
-    const fl = db.floors.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
-    if (!fl) return '';
-    const elev = f(fl,'Elevation');
-    return elev ? 'Elev: '+elev : f(fl,'Description');
-  }
-  return '';
-}
-
-function buildOuterInfoBtn(dim, name) {
-  if (name.startsWith('(')) return '';
-  const icons  = {system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill'};
-  const labels = {system:'System',space:'Space',floor:'Floor'};
-  const store  = dim==='system' ? systemStore : dim==='space' ? spaceStore : floorStore;
-  const si = store.length; store.push(name);
-  return `<button class="type-info-btn" data-dim="${dim}" data-outeridx="${si}"><i class="bi ${icons[dim]} me-1"></i>${labels[dim]} Info</button>`;
-}
-
-function grouped(comps, keyFn, subtitleFn) {
-  const map = new Map();
-  comps.forEach(c => {
-    const k = keyFn(c) || '(Unassigned)';
-    if (!map.has(k)) map.set(k, []);
-    map.get(k).push(c);
-  });
-  return [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,cs]) => {
-    const sub = subtitleFn(name);
-    return `<div class="grp-block">
-      <div class="grp-hdr">
-        <span class="grp-name">${esc(name)}</span>
-        ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
-        <span class="grp-cnt">${cs.length}</span>
-      </div>${cs.map(c=>card(c)).join('')}
-    </div>`;
-  }).join('');
-}
-
-function groupedSystem(comps) {
-  const cset = new Set(comps.map(c=>f(c,'Name').toLowerCase()));
-  const map  = new Map();
-  idx.systems.forEach(sn => {
-    const sc = (idx.bySys[sn.toLowerCase()]||[]).filter(c=>cset.has(f(c,'Name').toLowerCase()));
-    if (sc.length) map.set(sn, sc);
-  });
-  const assigned = new Set([...map.values()].flat().map(c=>f(c,'Name').toLowerCase()));
-  const none = comps.filter(c => !assigned.has(f(c,'Name').toLowerCase()));
-
-  let html = [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,cs]) => {
-    const so  = db.systems.find(s=>f(s,'Name').toLowerCase()===name.toLowerCase());
-    const sub = so ? f(so,'Category') : '';
-    return `<div class="grp-block">
-      <div class="grp-hdr">
-        <span class="grp-name">${esc(name)}</span>
-        ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
-        <span class="grp-cnt">${cs.length}</span>
-      </div>${cs.map(c=>card(c)).join('')}</div>`;
-  }).join('');
-
-  if (none.length) html += `<div class="grp-block">
-    <div class="grp-hdr"><span class="grp-name">(No System)</span><span class="grp-cnt">${none.length}</span></div>
-    ${none.map(c=>card(c)).join('')}</div>`;
-
-  return html;
-}
-
-function typeSubtitle(name) {
-  const t = db.types.find(x=>f(x,'Name').toLowerCase()===name.toLowerCase());
-  return t ? [f(t,'Manufacturer'),f(t,'ModelNumber','Model Number')].filter(Boolean).join(' - ') : '';
-}
-function spaceSubtitle(name) {
-  const s = db.spaces.find(x=>f(x,'Name').toLowerCase()===name.toLowerCase());
-  if (!s) return '';
-  const fl = f(s,'FloorName','Floor Name');
-  return fl ? 'Floor: '+fl : '';
-}
 
 function card(c) {
   const name = f(c,'Name');
@@ -2106,10 +1935,8 @@ document.getElementById('mdoc-body').addEventListener('click', e => {
 });
 
 // ── Utilities ────────────────────────────────────────────────
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+const _ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+function esc(s) { return String(s||'').replace(/[&<>"']/g, c => _ESC_MAP[c]); }
 function fmtDate(x) {
   if (!x) return '';
   if (x instanceof Date && !isNaN(x)) return x.toLocaleDateString();
@@ -2118,14 +1945,16 @@ function fmtDate(x) {
   const d=new Date(s);
   return !isNaN(d.getTime()) ? d.toLocaleDateString() : s;
 }
+const _DOC_ICONS = {
+  pdf:'bi-file-earmark-pdf', doc:'bi-file-earmark-word',  docx:'bi-file-earmark-word',
+  xls:'bi-file-earmark-excel',xlsx:'bi-file-earmark-excel',xlsm:'bi-file-earmark-excel',
+  dwg:'bi-file-earmark-code', dxf:'bi-file-earmark-code', ifc:'bi-box',
+  png:'bi-file-earmark-image',jpg:'bi-file-earmark-image', jpeg:'bi-file-earmark-image',
+  zip:'bi-file-earmark-zip',  rar:'bi-file-earmark-zip'
+};
 function docIcon(fn) {
-  const ext=(String(fn||'').split('.').pop()||'').toLowerCase();
-  const m={pdf:'bi-file-earmark-pdf',doc:'bi-file-earmark-word',docx:'bi-file-earmark-word',
-    xls:'bi-file-earmark-excel',xlsx:'bi-file-earmark-excel',xlsm:'bi-file-earmark-excel',
-    dwg:'bi-file-earmark-code',dxf:'bi-file-earmark-code',ifc:'bi-box',
-    png:'bi-file-earmark-image',jpg:'bi-file-earmark-image',jpeg:'bi-file-earmark-image',
-    zip:'bi-file-earmark-zip',rar:'bi-file-earmark-zip'};
-  return `<i class="bi ${m[ext]||'bi-file-earmark'}"></i>`;
+  const ext = (String(fn||'').split('.').pop()||'').toLowerCase();
+  return `<i class="bi ${_DOC_ICONS[ext]||'bi-file-earmark'}"></i>`;
 }
 
 // ── Group chip drag-and-drop ──────────────────────────────────
