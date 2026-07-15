@@ -14,7 +14,6 @@
       --hh: 54px;
       --fh: 215px;
       --navy:  #323232;
-      --navy2: #254b7a;
       --accent:#00aded;
       --surf:  #f4f6f9;
     }
@@ -301,11 +300,6 @@
     }
     .res-row { margin-left: auto; display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
     #res-count { font-size: .8rem; color: #555; white-space: nowrap; }
-    #group-sel {
-      font-size: .78rem; padding: .2rem .45rem;
-      border: 1px solid #dee2e6; border-radius: 6px;
-      background: #fff; cursor: pointer; color: #333;
-    }
     #expand-all-btn {
       font-size: .78rem; padding: .2rem .55rem;
       border: 1px solid #dee2e6; border-radius: 6px;
@@ -399,17 +393,6 @@
     .grp-chev { transition: transform .2s; flex-shrink: 0; margin-right: .25rem; font-size: .78rem; }
     .grp-hdr.grp-collapsed .grp-chev { transform: rotate(-90deg); }
     .grp-closed { display: none; }
-    /* Outer group (system / space / floor) */
-    .grp-hdr.grp-outer { background: #0c1e2f; padding: .52rem .8rem; }
-    .grp-outer-body {
-      background: #edf2f8; border: 1px solid #c8d8ec;
-      border-top: none; padding: .5rem .5rem .25rem;
-      border-radius: 0 0 9px 9px;
-    }
-    .grp-block.outer { margin-bottom: 1.1rem; }
-    .grp-outer-body .grp-block { margin-bottom: .45rem; }
-    .grp-outer-body .grp-block:last-child { margin-bottom: 0; }
-    .grp-outer-body .grp-hdr { background: #254b7a; border-radius: 5px 5px 0 0; }
     .dtbl { width: 100%; font-size: .8rem; border-collapse: collapse; }
     .dtbl td { padding: .2rem .25rem; vertical-align: top; }
     .dtbl td:first-child { color: #888; white-space: nowrap; width: 140px; padding-right: .6rem; }
@@ -744,6 +727,10 @@ const db  = { types:[], components:[], spaces:[], floors:[], systems:[], documen
 const idx = {};
 let docStore = [];
 let cardCtr  = 0;
+
+// ── Shared icon / label lookup tables (hoisted to avoid per-call object creation) ──
+const _GRP_ICONS  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'};
+const _GRP_LABELS = {type:'Type',system:'System',space:'Space',floor:'Floor',facility:'Facility'};
 
 const sel = { facility: new Set(), floor: new Set(), space: new Set(), type: new Set(), system: new Set(), doccat: new Set() };
 let lastCounts = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
@@ -1151,9 +1138,9 @@ function renderPanel(listId, badgeId, names, dim, counts) {
     const nw   = _justCreated.has(dim+'::'+k);
     const z    = !act && cnt === 0 && !nw;
     const disp = withDesc(name, dim);
-    const badge = (nw && !act && !cnt) ? '<small style="color:var(--accent);font-size:.62rem;margin-left:.25rem">new</small>' : '';
+    const newTag = (nw && !act && !cnt) ? '<small style="color:var(--accent);font-size:.62rem;margin-left:.25rem">new</small>' : '';
     return `<div class="fp-item${act?' fp-sel':''}${z?' fp-zero':''}${nw&&!act&&!cnt?' fp-new':''}" data-dim="${dim}" data-key="${esc(k)}">
-      <span class="fp-name" title="${esc(disp)}">${esc(disp)}${badge}</span>
+      <span class="fp-name" title="${esc(disp)}">${esc(disp)}${newTag}</span>
       <span class="fp-cnt">${cnt||''}</span>
     </div>`;
   }).join('');
@@ -1198,9 +1185,9 @@ function renderPanelCat(listId, badgeId, dim, counts) {
       const nw   = _justCreated.has(dim+'::'+k);
       const z    = !act && cnt === 0 && !nw;
       const disp = withDesc(name, dim);
-      const badge = (nw && !act && !cnt) ? '<small style="color:var(--accent);font-size:.62rem;margin-left:.25rem">new</small>' : '';
+      const newTag = (nw && !act && !cnt) ? '<small style="color:var(--accent);font-size:.62rem;margin-left:.25rem">new</small>' : '';
       html += `<div class="fp-item${act?' fp-sel':''}${z?' fp-zero':''}${nw&&!act&&!cnt?' fp-new':''}" data-dim="${dim}" data-key="${esc(k)}">
-        <span class="fp-name" title="${esc(disp)}">${esc(disp)}${badge}</span>
+        <span class="fp-name" title="${esc(disp)}">${esc(disp)}${newTag}</span>
         <span class="fp-cnt">${cnt||''}</span>
       </div>`;
     });
@@ -1701,11 +1688,9 @@ function getGroupSubtitle(dim, name) {
 
 function buildGroupInfoBtn(dim, name) {
   if (!name || name.startsWith('(')) return '';
-  const icons  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'};
-  const labels = {type:'Type',system:'System',space:'Space',floor:'Floor',facility:'Facility'};
   const i = groupInfoStore.length;
   groupInfoStore.push({ dim, name });
-  return `<button class="type-info-btn" data-grpidx="${i}"><i class="bi ${icons[dim]} me-1"></i>${labels[dim]} Info</button>`;
+  return `<button class="type-info-btn" data-grpidx="${i}"><i class="bi ${_GRP_ICONS[dim]} me-1"></i>${_GRP_LABELS[dim]} Info</button>`;
 }
 
 
@@ -1904,8 +1889,7 @@ function buildDocSection(docs) {
 }
 
 function openGroupInfo(dim, name) {
-  const icons  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'};
-  document.getElementById('mtype-icon').className  = `bi ${icons[dim]||'bi-info-circle'} me-2`;
+  document.getElementById('mtype-icon').className  = `bi ${_GRP_ICONS[dim]||'bi-info-circle'} me-2`;
   document.getElementById('mtype-title').textContent = name;
 
   let body = '';
@@ -2202,6 +2186,20 @@ function _editDocList(sheetName, rowName) {
 const _ESKIP = new Set(['createdby','createdon','extsystem','extobject','extidentifier']);
 function _eskip(k) { return k.startsWith('_') || _ESKIP.has(k.toLowerCase()); }
 
+function _filterCheckboxList(inp) {
+  const q = inp.value.toLowerCase();
+  const container = inp.nextElementSibling;
+  if (!container) return;
+  container.querySelectorAll('label').forEach(l => {
+    const v = (l.querySelector('input')?.value || '').toLowerCase();
+    if (!q || v.includes(q)) {
+      l.style.removeProperty('display');
+    } else {
+      l.style.setProperty('display', 'none', 'important');
+    }
+  });
+}
+
 function _buildEditBody(entityType, entityName) {
   let propsHtml = '', assocHtml = '';
 
@@ -2225,14 +2223,13 @@ function _buildEditBody(entityType, entityName) {
     const cLow = entityName.toLowerCase();
     const curSys = new Set(idx.compSys[cLow]||[]);
     const sysChecks = idx.systems.map(sn=>{
-      const sid='cs_'+sn.replace(/[^a-z0-9]/gi,'_');
       return `<label class="d-flex align-items-center gap-1 mb-1" style="font-size:.79rem">
         <input type="checkbox" class="form-check-input sys-assoc-chk" value="${esc(sn)}" ${curSys.has(sn.toLowerCase())?'checked':''}> ${esc(sn)}
       </label>`;
     }).join('');
     assocHtml += `<div class="mb-2"><div style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666;margin-bottom:.3rem">Systems</div>
       <input type="search" placeholder="Filter systems…" class="form-control form-control-sm mb-1" style="font-size:.77rem"
-        oninput="this.nextElementSibling.querySelectorAll('label').forEach(l=>l.style.display=l.textContent.toLowerCase().includes(this.value.toLowerCase())?'':'none')">
+        oninput="_filterCheckboxList(this)">
       <div style="max-height:130px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;padding:.35rem .5rem">${sysChecks||'<span class="text-muted small">No systems</span>'}</div></div>`;
     assocHtml += _editDocList('Component', entityName);
 
@@ -2441,19 +2438,6 @@ function _updateSysComponents(sysName, newComps) {
   }
 }
 
-function exportCOBieModified() {
-  if (!db.facilities.length) { alert('No data loaded.'); return; }
-  const wb = XLSX.utils.book_new();
-  const clean = arr => arr.map(r => { const o={}; Object.entries(r).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return o; });
-  [['Facility',db.facilities],['Floor',db.floors],['Space',db.spaces],['Type',db.types],
-   ['Component',db.components],['System',db.systems],['Document',db.documents]
-  ].forEach(([name,arr]) => {
-    const data = clean(arr);
-    if (data.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name);
-  });
-  XLSX.writeFile(wb, (db.facilities[0]._facility||'COBie').replace(/[^a-z0-9_\-]/gi,'_') + '_modified.xlsx');
-}
-
 // ── Create Modal ──────────────────────────────────────────────
 let _createType = 'space';
 
@@ -2570,7 +2554,7 @@ function _buildCreateForm(type, prefillName) {
     </div><div class="col-md-6">
       <div class="mb-2"><label class="d-block mb-1" ${lbl}>Components</label>
         <input type="search" placeholder="Filter components…" class="form-control form-control-sm mb-1" style="font-size:.77rem"
-          oninput="this.nextElementSibling.querySelectorAll('label').forEach(l=>l.style.display=l.textContent.toLowerCase().includes(this.value.toLowerCase())?'':'none')">
+          oninput="_filterCheckboxList(this)">
         <div style="max-height:170px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;padding:.35rem .5rem">
           ${compList||'<span class="text-muted small">No components loaded yet.</span>'}
         </div>
@@ -2812,30 +2796,32 @@ function discardChanges() {
   // Minimise / Maximise buttons
   let _prevHMin = null, _prevHMax = null;
   const _minH = 58, _maxH = 540;
-  document.getElementById('frb-min').addEventListener('click', e => {
+  const frbMin = document.getElementById('frb-min');
+  const frbMax = document.getElementById('frb-max');
+  frbMin.addEventListener('click', e => {
     e.stopPropagation();
     const cur = bar.offsetHeight;
     if (cur <= _minH) {
       bar.style.height = (_prevHMin !== null ? _prevHMin : 215) + 'px';
       _prevHMin = null;
-      document.getElementById('frb-min').classList.remove('frb-active');
+      frbMin.classList.remove('frb-active');
     } else {
       _prevHMin = cur;
       bar.style.height = _minH + 'px';
-      document.getElementById('frb-min').classList.add('frb-active');
+      frbMin.classList.add('frb-active');
     }
   });
-  document.getElementById('frb-max').addEventListener('click', e => {
+  frbMax.addEventListener('click', e => {
     e.stopPropagation();
     const cur = bar.offsetHeight;
     if (cur >= _maxH) {
       bar.style.height = (_prevHMax !== null ? _prevHMax : 215) + 'px';
       _prevHMax = null;
-      document.getElementById('frb-max').classList.remove('frb-active');
+      frbMax.classList.remove('frb-active');
     } else {
       _prevHMax = cur;
       bar.style.height = _maxH + 'px';
-      document.getElementById('frb-max').classList.add('frb-active');
+      frbMax.classList.add('frb-active');
     }
   });
 })();
