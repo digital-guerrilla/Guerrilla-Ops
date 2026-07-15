@@ -1,0 +1,2050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guerrilla Ops</title>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+  <style>
+    :root {
+      --hh: 54px;
+      --fh: 215px;
+      --navy:  #323232;
+      --navy2: #254b7a;
+      --accent:#00aded;
+      --surf:  #f4f6f9;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body {
+      display: flex; flex-direction: column;
+      background: var(--surf);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    /* Header */
+    #hdr {
+      flex-shrink: 0; height: var(--hh);
+      background: var(--navy); color: #fff;
+      display: flex; align-items: center; gap: .7rem;
+      padding: 0 1.2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.3);
+      z-index: 200;
+    }
+    #hdr .title { font-size: 1.05rem; font-weight: 600; letter-spacing: .02em; flex: 1; }
+    #hdr .file-lbl {
+      font-size: .78rem; opacity: .6; max-width: 280px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    #load-lbl, #load-folder-lbl {
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,.4);
+      color: #fff; padding: .3rem .8rem;
+      border-radius: 6px; font-size: .8rem;
+      display: flex; align-items: center; gap: .35rem;
+      transition: background .15s;
+    }
+    #load-lbl:hover, #load-folder-lbl:hover { background: rgba(255,255,255,.12); }
+    /* Global search */
+    #search-wrap {
+      display: flex; align-items: center; gap: .4rem;
+      background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.2);
+      border-radius: 6px; padding: .22rem .7rem;
+      flex: 1; max-width: 340px; min-width: 150px;
+      transition: background .15s, border-color .15s;
+    }
+    #search-wrap:focus-within { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.42); }
+    #search-wrap input {
+      background: none; border: none; color: #fff;
+      font-size: .82rem; outline: none; flex: 1; min-width: 0;
+    }
+    #search-wrap input::placeholder { color: rgba(255,255,255,.4); }
+    #s-clear {
+      background: none; border: none; color: rgba(255,255,255,.55);
+      font-size: .88rem; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0;
+    }
+    #s-clear:hover { color: #fff; }
+    .search-active #search-wrap { background: rgba(255,255,255,.18); border-color: var(--accent); }
+
+    /* Upload */
+    #upload {
+      flex: 1; display: flex;
+      align-items: center; justify-content: center;
+    }
+    .up-card {
+      background: #fff; border-radius: 14px;
+      padding: 3rem 2.5rem; text-align: center;
+      box-shadow: 0 6px 28px rgba(0,0,0,.09);
+      max-width: 440px; width: 100%;
+    }
+    .up-card .ico { font-size: 4rem; color: var(--navy); margin-bottom: .9rem; }
+    .up-card h4   { color: var(--navy); margin-bottom: .4rem; }
+    .up-card p    { color: #6c757d; font-size: .88rem; }
+    #drop-zone.drag-over { outline: 3px dashed var(--accent); outline-offset: 4px; }
+
+    /* App shell */
+    #app {
+      flex: 1; display: none; flex-direction: column;
+      min-height: 0; overflow: hidden;
+    }
+
+    /* 4-column filter bar */
+    #filter-bar {
+      flex-shrink: 0; height: var(--fh);
+      display: flex; background: #fff;
+      border-bottom: none;
+    }
+    /* Resize handle */
+    #filter-resize {
+      flex-shrink: 0; height: 7px;
+      background: #d0d6dc; cursor: ns-resize;
+      position: relative; transition: background .15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #filter-resize::after {
+      content: ''; width: 48px; height: 3px;
+      background: rgba(0,0,0,.18); border-radius: 3px;
+    }
+    #filter-resize:hover { background: var(--accent); }
+    #filter-resize:hover::after { background: rgba(255,255,255,.7); }
+    #filter-resize.resizing { background: var(--accent); }
+    #filter-resize.resizing::after { background: rgba(255,255,255,.7); }
+    .fp {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column;
+      border-right: 1px solid #e4e8ec;
+    }
+    .fp:last-child { border-right: none; }
+    .fp-hd {
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .28rem .6rem;
+      background: var(--navy); color: #fff;
+      font-size: .7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .fp-badge {
+      background: var(--accent); color: #fff;
+      border-radius: 8px; padding: 0 .4rem;
+      font-size: .67rem; font-weight: 700;
+    }
+    .fp-body { flex: 1; overflow-y: auto; }
+    .fp-body::-webkit-scrollbar { width: 4px; }
+    .fp-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+    .fp-item {
+      display: flex; align-items: center; gap: .3rem;
+      padding: .3rem .6rem;
+      font-size: .79rem; cursor: pointer;
+      border-bottom: 1px solid #f3f3f3;
+      user-select: none; transition: background .1s;
+    }
+    .fp-item:hover:not(.fp-zero) { background: #eef3fa; }
+    .fp-item.fp-sel {
+      background: #dceaf7;
+      border-left: 3px solid var(--navy);
+      color: var(--navy); font-weight: 600;
+    }
+    .fp-item.fp-zero { display: none; }
+    .fp-name {
+      flex: 1; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .fp-cnt {
+      flex-shrink: 0;
+      font-size: .68rem; background: #e9ecef;
+      color: #666; border-radius: 8px;
+      padding: .04rem .4rem; min-width: 20px; text-align: center;
+    }
+    .fp-item.fp-sel .fp-cnt { background: var(--navy); color: #fff; }
+    /* Category headers inside filter panels */
+    .fp-cat-hdr {
+      display: flex; align-items: center; gap: .3rem;
+      padding: .3rem .6rem;
+      background: #ecf2f9; font-size: .7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .05em; color: #3a5a80;
+      cursor: pointer; border-bottom: 1px solid #d4e4f2;
+      user-select: none; position: sticky; top: 0; z-index: 1;
+    }
+    .fp-cat-hdr:hover { background: #dce8f7; }
+    .fp-cat-check { font-size: .8rem; flex-shrink: 0; }
+    .fp-cat-cnt { margin-left: auto; font-size: .67rem; color: #7a96b2; font-weight: 400; }
+
+    /* Content area */
+    #content {
+      flex: 1; min-height: 0;
+      overflow-y: auto;
+      padding: .9rem 1.2rem 2rem;
+    }
+    #content::-webkit-scrollbar { width: 5px; }
+    #content::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+    /* Stats */
+    #stats {
+      display: flex; align-items: center;
+      flex-wrap: wrap; gap: .6rem;
+      background: #fff; border: 1px solid #e9ecef;
+      border-radius: 9px; padding: .6rem 1rem;
+      margin-bottom: .8rem;
+    }
+    #stats .fac      { flex: 1; min-width: 140px; }
+    #stats .fac-name { font-weight: 700; color: var(--navy); font-size: .95rem; }
+    #stats .fac-desc { font-size: .75rem; color: #888; }
+    .s-chip { text-align: center; padding: .28rem .65rem; background: var(--surf); border-radius: 7px; }
+    .s-chip .n { font-size: 1.15rem; font-weight: 700; color: var(--navy); }
+    .s-chip .l { font-size: .67rem; color: #777; }
+
+    /* Active filter bar */
+    #active-bar {
+      display: flex; align-items: center;
+      flex-wrap: wrap; gap: .35rem;
+      background: #fff; border: 1px solid #e9ecef;
+      border-radius: 9px; padding: .5rem .8rem;
+      margin-bottom: .8rem;
+    }
+    #active-bar .lbl { font-size: .76rem; color: #aaa; flex-shrink: 0; }
+    #pills { display: flex; flex-wrap: wrap; gap: .3rem; flex: 1; min-width: 0; }
+    .pill {
+      display: inline-flex; align-items: center; gap: .28rem;
+      padding: .18rem .6rem; border-radius: 14px; font-size: .76rem; font-weight: 500;
+    }
+    .pill-floor  { background: #e8f0fe; color: #1557b0; }
+    .pill-space  { background: #e6f4ea; color: #137333; }
+    .pill-type   { background: #fce8e6; color: #c5221f; }
+    .pill-system   { background: #fef7e0; color: #b06000; }
+    .pill-facility  { background: #f3e8ff; color: #7c3aed; }
+    .pill-doccat    { background: #e0f7fa; color: #00695c; }
+    .doc-cat-label {
+      font-size: .69rem; color: #888; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .05em;
+      margin: .35rem 0 .1rem; width: 100%;
+    }
+    .pill-rm { opacity: .6; cursor: pointer; font-size: .7rem; margin-left: .1rem; }
+    .pill-rm:hover { opacity: 1; }
+    #clear-btn {
+      font-size: .74rem; color: #dc3545; background: none;
+      border: none; cursor: pointer; text-decoration: underline; padding: 0 .2rem;
+    }
+    .res-row { margin-left: auto; display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+    #res-count { font-size: .8rem; color: #555; white-space: nowrap; }
+    #group-sel {
+      font-size: .78rem; padding: .2rem .45rem;
+      border: 1px solid #dee2e6; border-radius: 6px;
+      background: #fff; cursor: pointer; color: #333;
+    }
+    #expand-all-btn {
+      font-size: .78rem; padding: .2rem .55rem;
+      border: 1px solid #dee2e6; border-radius: 6px;
+      background: #fff; cursor: pointer; color: #444;
+      display: flex; align-items: center; gap: .22rem;
+      white-space: nowrap; transition: background .12s;
+    }
+    #expand-all-btn:hover { background: #f0f4f8; }
+    /* Drag-and-drop group config */
+    #group-config { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
+    .grp-cfg-lbl { font-size: .73rem; color: #888; white-space: nowrap; }
+    #group-sortable { list-style: none; padding: 0; margin: 0; display: flex; gap: .22rem; }
+    .group-chip {
+      display: inline-flex; align-items: center; gap: .18rem;
+      padding: .2rem .52rem; border-radius: 14px; font-size: .74rem;
+      border: 1px solid #ddd; background: #f5f5f5; color: #999;
+      cursor: grab; user-select: none; transition: all .12s; white-space: nowrap;
+    }
+    .group-chip:active { cursor: grabbing; }
+    .group-chip.gchip-active { background: var(--navy); border-color: var(--navy); color: #fff; }
+    .group-chip:hover:not(.gchip-active) { background: #eee; border-color: #bbb; color: #555; }
+    .gchip-grip { font-size: .7rem; opacity: .4; }
+    /* Depth-based group header + body */
+    .grp-d0 { margin-bottom: 1.1rem; }
+    .grp-d0 > .grp-hdr { background: #0c1e2f; border-radius: 9px 9px 0 0; padding: .52rem .8rem; }
+    .grp-d0 > .grp-body {
+      background: #edf2f8; border: 1px solid #c8d8ec;
+      border-top: none; padding: .5rem .5rem .25rem; border-radius: 0 0 9px 9px;
+    }
+    .grp-d1 { margin-bottom: .45rem; }
+    .grp-d1 > .grp-hdr { background: var(--navy); border-radius: 5px 5px 0 0; }
+    .grp-d1 > .grp-body { padding: .35rem .35rem .1rem; }
+    .grp-d2 { margin-bottom: .35rem; }
+    .grp-d2 > .grp-hdr { background: #254b7a; border-radius: 4px 4px 0 0; }
+    .grp-d2 > .grp-body { padding: .25rem .25rem .05rem; }
+    .grp-d3 > .grp-hdr { background: #2e6096; border-radius: 4px 4px 0 0; font-size: .84rem; }
+    /* Load-more pagination */
+    .load-more-wrap { padding: .4rem .6rem .1rem; }
+    .load-more-btn {
+      width: 100%; padding: .35rem; font-size: .78rem;
+      border: 1px dashed #c0cfe0; border-radius: 6px;
+      background: #f5f8fc; color: #5a7a99; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: .3rem;
+      transition: background .12s;
+    }
+    .load-more-btn:hover { background: #e8f0f9; border-color: #8aabcc; }
+    .lm-remaining { opacity: .65; }
+
+    /* Group header */
+    .grp-block  { margin-bottom: 1.1rem; }
+    .grp-hdr {
+      display: flex; align-items: baseline; gap: .6rem;
+      padding: .4rem .75rem;
+      background: var(--navy); color: #fff;
+      border-radius: 7px 7px 0 0;
+    }
+    .grp-name { font-weight: 600; font-size: .9rem; }
+    .grp-meta { font-size: .74rem; opacity: .72; flex: 1; }
+    .grp-cnt  { font-size: .73rem; background: rgba(255,255,255,.18); border-radius: 8px; padding: .04rem .4rem; }
+
+    /* Component card */
+    .cc {
+      background: #fff; border: 1px solid #e9ecef;
+      border-radius: 8px; padding: .8rem 1rem;
+      margin-bottom: .5rem; transition: box-shadow .18s;
+    }
+    .grp-block .cc { border-radius: 0; border-top: none; }
+    .grp-block .cc:last-child { border-radius: 0 0 7px 7px; }
+    .cc:hover { box-shadow: 0 3px 12px rgba(0,0,0,.09); }
+    .cc-name { font-weight: 600; color: var(--navy); font-size: .92rem; }
+    .cc-desc { font-weight: 400; color: #555; font-size: .88rem; }
+    .cc-meta { font-size: .77rem; color: #6c757d; margin-top: .1rem; }
+    .cc-meta span + span { margin-left: .6rem; }
+    .xbtn {
+      background: none; border: 1px solid #dee2e6;
+      border-radius: 6px; color: #6c757d;
+      padding: .1rem .42rem; font-size: .75rem;
+      cursor: pointer; flex-shrink: 0; transition: all .12s;
+    }
+    .xbtn:hover { background: #f0f4f8; border-color: #aaa; }
+    .type-info-btn {
+      background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.32);
+      color: #fff; border-radius: 5px; padding: .1rem .45rem;
+      font-size: .74rem; cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; gap: .22rem;
+      transition: background .12s;
+    }
+    .type-info-btn:hover { background: rgba(255,255,255,.32); }
+    /* Collapsible group headers */
+    .grp-hdr { cursor: pointer; user-select: none; }
+    .grp-chev { transition: transform .2s; flex-shrink: 0; margin-right: .25rem; font-size: .78rem; }
+    .grp-hdr.grp-collapsed .grp-chev { transform: rotate(-90deg); }
+    .grp-closed { display: none; }
+    /* Outer group (system / space / floor) */
+    .grp-hdr.grp-outer { background: #0c1e2f; padding: .52rem .8rem; }
+    .grp-outer-body {
+      background: #edf2f8; border: 1px solid #c8d8ec;
+      border-top: none; padding: .5rem .5rem .25rem;
+      border-radius: 0 0 9px 9px;
+    }
+    .grp-block.outer { margin-bottom: 1.1rem; }
+    .grp-outer-body .grp-block { margin-bottom: .45rem; }
+    .grp-outer-body .grp-block:last-child { margin-bottom: 0; }
+    .grp-outer-body .grp-hdr { background: #254b7a; border-radius: 5px 5px 0 0; }
+    .dtbl { width: 100%; font-size: .8rem; border-collapse: collapse; }
+    .dtbl td { padding: .2rem .25rem; vertical-align: top; }
+    .dtbl td:first-child { color: #888; white-space: nowrap; width: 140px; padding-right: .6rem; }
+
+    /* Doc badge */
+    .dbadge {
+      display: inline-flex; align-items: center; gap: .25rem;
+      padding: .18rem .55rem; margin: .1rem;
+      background: #eaf4fd; border: 1px solid #b8dffa;
+      border-radius: 20px; font-size: .74rem; color: #1a6fa8;
+      cursor: pointer; transition: background .12s;
+    }
+    .dbadge:hover { background: #c7e8fc; }
+    .dbadge.tp { background: #edf7ee; border-color: #b2ddb7; color: #1a6832; }
+    .dbadge.tp:hover { background: #c5e9c8; }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 3.5rem 2rem; color: #adb5bd; }
+    .empty i { font-size: 3rem; display: block; margin-bottom: .7rem; }
+    .empty p { font-size: .88rem; }
+    /* Mode toggle */
+    #mode-toggle { display: flex; gap: .4rem; margin-bottom: .8rem; }
+    .mode-btn {
+      padding: .32rem .85rem; border-radius: 8px; font-size: .8rem;
+      border: 1px solid #dee2e6; background: #fff; cursor: pointer;
+      color: #555; display: inline-flex; align-items: center; gap: .3rem;
+      transition: all .12s;
+    }
+    .mode-btn.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+    .mode-btn:hover:not(.active) { background: #f0f4f8; border-color: #bbb; color: #333; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="hdr">
+  <i class="bi bi-building" style="font-size:1.2rem;color:var(--accent)"></i>
+  <span class="title">Guerrilla Ops</span>
+  <span class="file-lbl d-none" id="file-lbl"></span>
+  <div id="search-wrap" class="d-none">
+    <i class="bi bi-search" style="opacity:.5;font-size:.8rem;flex-shrink:0"></i>
+    <input type="search" id="search-input" placeholder="Search all fields…" oninput="onSearch(this.value)" autocomplete="off">
+    <button id="s-clear" onclick="clearSearch()" style="display:none" title="Clear search"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <label id="load-lbl" for="fileInput">
+    <i class="bi bi-file-earmark-excel"></i> Load Files
+  </label>
+  <label id="load-folder-lbl" for="folderInput" title="Load all COBie files from a folder">
+    <i class="bi bi-folder2-open"></i> Load Folder
+  </label>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm" multiple class="d-none">
+  <input type="file" id="folderInput" webkitdirectory class="d-none">
+</header>
+
+<!-- UPLOAD -->
+<div id="upload">
+  <div class="up-card" id="drop-zone">
+    <div class="ico"><i class="bi bi-folder2-open"></i></div>
+    <h4>Open COBie Files</h4>
+    <p>Select individual files, open a whole folder, or drag &amp; drop Excel files here.</p>
+    <div class="d-flex gap-2 justify-content-center flex-wrap">
+      <label class="btn btn-primary" for="fileInput" style="background:var(--navy);border-color:var(--navy);cursor:pointer">
+        <i class="bi bi-file-earmark-excel me-1"></i>Select Files
+      </label>
+      <label class="btn btn-outline-secondary" for="folderInput" style="cursor:pointer">
+        <i class="bi bi-folder2-open me-1"></i>Open Folder
+      </label>
+    </div>
+    <p id="load-progress" style="font-size:.8rem;color:var(--accent);margin-top:.9rem;margin-bottom:0;min-height:1.2em"></p>
+    <p class="mt-2 mb-0" style="font-size:.74rem;color:#bbb">Runs entirely in your browser. Nothing is uploaded.</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- 5-panel filter bar -->
+  <div id="filter-bar">
+    <div class="fp">
+      <div class="fp-hd"><span>Facility</span><span class="fp-badge d-none" id="fb-facility"></span></div>
+      <div class="fp-body" id="fpl-facility"></div>
+    </div>
+    <div class="fp">
+      <div class="fp-hd"><span>Floor</span><span class="fp-badge d-none" id="fb-floor"></span></div>
+      <div class="fp-body" id="fpl-floor"></div>
+    </div>
+    <div class="fp">
+      <div class="fp-hd"><span>Space / Room</span><span class="fp-badge d-none" id="fb-space"></span></div>
+      <div class="fp-body" id="fpl-space"></div>
+    </div>
+    <div class="fp">
+      <div class="fp-hd"><span>Type</span><span class="fp-badge d-none" id="fb-type"></span></div>
+      <div class="fp-body" id="fpl-type"></div>
+    </div>
+    <div class="fp">
+      <div class="fp-hd"><span>System</span><span class="fp-badge d-none" id="fb-system"></span></div>
+      <div class="fp-body" id="fpl-system"></div>
+    </div>
+    <div class="fp">
+      <div class="fp-hd"><span>Doc Cat.</span><span class="fp-badge d-none" id="fb-doccat"></span></div>
+      <div class="fp-body" id="fpl-doccat"></div>
+    </div>
+  </div>
+
+  <div id="filter-resize" title="Drag to resize"></div>
+
+  <!-- Results -->
+  <div id="content">
+
+    <div id="mode-toggle">
+      <button class="mode-btn active" id="btn-asset" onclick="setMode('asset')">
+        <i class="bi bi-tools me-1"></i>Asset View
+      </button>
+      <button class="mode-btn" id="btn-document" onclick="setMode('document')">
+        <i class="bi bi-folder2-open me-1"></i>Document View
+      </button>
+    </div>
+
+    <div id="stats">
+      <div class="fac">
+        <div class="fac-name" id="fac-name">-</div>
+        <div class="fac-desc" id="fac-desc"></div>
+      </div>
+      <div class="s-chip"><div class="n" id="st-facilities">0</div><div class="l">Facilities</div></div>
+      <div class="s-chip"><div class="n" id="st-types">0</div><div class="l">Types</div></div>
+      <div class="s-chip"><div class="n" id="st-comps">0</div><div class="l">Components</div></div>
+      <div class="s-chip"><div class="n" id="st-spaces">0</div><div class="l">Spaces</div></div>
+      <div class="s-chip"><div class="n" id="st-sys">0</div><div class="l">Systems</div></div>
+      <div class="s-chip"><div class="n" id="st-docs">0</div><div class="l">Documents</div></div>
+    </div>
+
+    <div id="active-bar">
+      <span class="lbl">Filters:</span>
+      <div id="pills"></div>
+      <button id="clear-btn" class="d-none" onclick="clearAll()">Clear all</button>
+      <div class="res-row">
+        <span id="res-count">-</span>
+        <div id="group-config">
+          <span class="grp-cfg-lbl">Group:</span>
+          <ul id="group-sortable">
+            <li class="group-chip" data-dim="facility"><i class="bi bi-grip-vertical gchip-grip"></i>Facility</li>
+            <li class="group-chip gchip-active" data-dim="type"><i class="bi bi-grip-vertical gchip-grip"></i>Type</li>
+            <li class="group-chip" data-dim="system"><i class="bi bi-grip-vertical gchip-grip"></i>System</li>
+            <li class="group-chip" data-dim="space"><i class="bi bi-grip-vertical gchip-grip"></i>Space</li>
+            <li class="group-chip" data-dim="floor"><i class="bi bi-grip-vertical gchip-grip"></i>Floor</li>
+            <li class="group-chip" data-dim="doccat" id="chip-doccat"><i class="bi bi-grip-vertical gchip-grip"></i>Doc Category</li>
+          </ul>
+        </div>
+        <button id="expand-all-btn" onclick="toggleExpandAll()">
+          <i class="bi bi-arrows-expand"></i>Expand All
+        </button>
+      </div>
+    </div>
+
+    <div id="comp-list"></div>
+  </div>
+</div>
+
+<!-- TYPE DETAIL MODAL -->
+<div class="modal fade" id="type-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i id="mtype-icon" class="bi bi-tag-fill me-2"></i><span id="mtype-title">Type</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="mtype-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DOCUMENT MODAL -->
+<div class="modal fade" id="doc-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i><span id="mdoc-title">Document</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="mdoc-body"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const db  = { types:[], components:[], spaces:[], floors:[], systems:[], documents:[], facilities:[], facility:null };
+const idx = {};
+let docStore = [];
+let cardCtr  = 0;
+
+const sel = { facility: new Set(), floor: new Set(), space: new Set(), type: new Set(), system: new Set(), doccat: new Set() };
+let lastCounts = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
+let searchQuery = '';
+let viewMode = 'asset';
+
+// ── File loading ────────────────────────────────────────────
+const _excelRe = /\.(xlsx|xls|xlsm)$/i;
+document.getElementById('fileInput')  .addEventListener('change', e => { if(e.target.files.length) loadFiles(e.target.files); });
+document.getElementById('folderInput').addEventListener('change', e => { if(e.target.files.length) loadFiles(e.target.files); });
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.style.outline='3px dashed var(--accent)'; });
+dz.addEventListener('dragleave', () => { dz.style.outline=''; });
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.style.outline='';
+  if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files);
+});
+
+function readBuf(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = () => reject(new Error(file.name));
+    r.onload  = ev => resolve(ev.target.result);
+    r.readAsArrayBuffer(file);
+  });
+}
+
+async function loadFiles(fileList) {
+  const files = [...fileList].filter(f => _excelRe.test(f.name));
+  if (!files.length) { alert('No COBie Excel files found (.xlsx / .xls / .xlsm).'); return; }
+
+  resetDb();
+  const prog = document.getElementById('load-progress');
+  let loaded = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    if (prog) prog.textContent = `Loading ${i + 1} of ${files.length}: ${files[i].name}`;
+    try {
+      const buf = await readBuf(files[i]);
+      const wb  = XLSX.read(new Uint8Array(buf), { type:'array', cellDates:true });
+      parseCOBieInto(wb, files[i].name);
+      loaded++;
+    } catch(err) {
+      console.warn('Skipped', files[i].name, err.message);
+    }
+  }
+
+  if (prog) prog.textContent = '';
+  buildIdx();
+  const label = files.length === 1 ? files[0].name : `${loaded} of ${files.length} files loaded`;
+  showApp(label);
+}
+
+function resetDb() {
+  db.types=[]; db.components=[]; db.spaces=[];
+  db.floors=[]; db.systems=[]; db.documents=[];
+  db.facilities=[]; db.facility=null;
+}
+
+// ── Parsing ─────────────────────────────────────────────────
+function readSheet(wb, name) {
+  const k = Object.keys(wb.Sheets).find(k => k.toLowerCase() === name.toLowerCase());
+  return k ? XLSX.utils.sheet_to_json(wb.Sheets[k], { defval:'' }) : [];
+}
+function v(x) {
+  const s = String(x ?? '').trim();
+  return (s === '' || s.toLowerCase() === 'n/a') ? '' : s;
+}
+function f(row, ...names) {
+  for (const n of names) { const r = v(row[n]); if (r) return r; }
+  return '';
+}
+
+function parseCOBieInto(wb, fileName) {
+  const facRow  = readSheet(wb,'Facility')[0] || {};
+  const facName = f(facRow,'Name') || fileName.replace(/\.[^.]+$/, '');
+  const tag = rec => { rec._facility = facName; return rec; };
+
+  db.types      .push(...readSheet(wb,'Type')     .map(tag));
+  db.components .push(...readSheet(wb,'Component').map(tag));
+  db.spaces     .push(...readSheet(wb,'Space')    .map(tag));
+  db.floors     .push(...readSheet(wb,'Floor')    .map(tag));
+  db.systems    .push(...readSheet(wb,'System')   .map(tag));
+  db.documents  .push(...readSheet(wb,'Document') .map(tag));
+  db.facilities .push({ ...facRow, _facility: facName, _fileName: fileName });
+  if (!db.facility) db.facility = facRow; // backward compat
+}
+
+function buildIdx() {
+  // Documents
+  idx.docs = {};
+  db.documents.forEach(d => {
+    const s = f(d,'SheetName','Sheet Name').toLowerCase();
+    const r = f(d,'RowName','Row Name').toLowerCase();
+    if (s && r) (idx.docs[s+'::'+r] = idx.docs[s+'::'+r] || []).push(d);
+  });
+
+  // Space to floor
+  idx.spFloor = {};
+  db.spaces.forEach(s => {
+    const sp = f(s,'Name').toLowerCase();
+    const fl = f(s,'FloorName','Floor Name','Floor').toLowerCase();
+    if (sp) idx.spFloor[sp] = fl;
+  });
+
+  // By type / by space
+  idx.byType  = {};
+  idx.bySpace = {};
+  db.components.forEach(c => {
+    const tn = f(c,'TypeName','Type Name').toLowerCase();
+    (idx.byType[tn]  = idx.byType[tn]  || []).push(c);
+    const sp = f(c,'Space').toLowerCase();
+    if (sp) (idx.bySpace[sp] = idx.bySpace[sp] || []).push(c);
+  });
+
+  // Systems (handles multiple-row-per-component pattern)
+  const byName = {};
+  db.components.forEach(c => { byName[f(c,'Name').toLowerCase()] = c; });
+
+  const sysSets = {};
+  db.systems.forEach(s => {
+    const key = f(s,'Name').toLowerCase();
+    if (!key) return;
+    if (!sysSets[key]) sysSets[key] = new Set();
+    const raw = f(s,'ComponentNames','Component Names');
+    if (raw) raw.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean)
+                .forEach(cn => sysSets[key].add(cn));
+  });
+
+  idx.bySys = {};
+  Object.entries(sysSets).forEach(([k,set]) => {
+    idx.bySys[k] = [...set].map(n => byName[n]).filter(Boolean);
+  });
+
+  // Reverse: component to systems
+  idx.compSys = {};
+  Object.entries(idx.bySys).forEach(([sk,comps]) => {
+    comps.forEach(c => {
+      const cn = f(c,'Name').toLowerCase();
+      (idx.compSys[cn] = idx.compSys[cn] || []).push(sk);
+    });
+  });
+
+  // Sorted unique lists (deduplicated across multiple files)
+  idx.floors = [...new Set(
+    db.floors.length
+      ? db.floors.map(x => f(x,'Name'))
+      : db.spaces.map(x => f(x,'FloorName','Floor Name','Floor'))
+  )].filter(Boolean).sort();
+
+  idx.spaces  = [...new Set(db.spaces .map(s=>f(s,'Name')).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  idx.types   = [...new Set(db.types  .map(t=>f(t,'Name')).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  idx.systems = [...new Set(db.systems.map(s=>f(s,'Name')))].filter(Boolean).sort();
+  idx.facilityNames = [...new Set(db.facilities.map(fac => fac._facility||'').filter(Boolean))].sort();
+
+  // Description lookup indices
+  idx.desc = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
+  db.facilities.forEach(x => { const n=(x._facility||'').toLowerCase(); if(n) idx.desc.facility[n] = f(x,'Description'); });
+  db.floors .forEach(x => { const n=f(x,'Name').toLowerCase(); if(n) idx.desc.floor[n]  = f(x,'Description'); });
+  db.spaces .forEach(x => { const n=f(x,'Name').toLowerCase(); if(n) idx.desc.space[n]  = f(x,'Description'); });
+  db.types  .forEach(x => { const n=f(x,'Name').toLowerCase(); if(n) idx.desc.type[n]   = f(x,'Description'); });
+  const _seenSys = new Set();
+  db.systems.forEach(x => {
+    const n=f(x,'Name').toLowerCase();
+    if(n && !_seenSys.has(n)) { _seenSys.add(n); idx.desc.system[n] = f(x,'Description'); }
+  });
+
+  // Category groups for Space, Type, System filter panels
+  idx.catGroups = {};
+  ['type','space','system'].forEach(dim => {
+    const groups = {};
+    if (dim === 'type') {
+      db.types.forEach(t => {
+        const name = f(t,'Name'); if (!name) return;
+        const cat = f(t,'Category') || '(Uncategorised)';
+        (groups[cat] = groups[cat] || []).push(name);
+      });
+    } else if (dim === 'space') {
+      db.spaces.forEach(s => {
+        const name = f(s,'Name'); if (!name) return;
+        const cat = f(s,'Category') || '(Uncategorised)';
+        (groups[cat] = groups[cat] || []).push(name);
+      });
+    } else {
+      const seen = new Set();
+      db.systems.forEach(s => {
+        const name = f(s,'Name'); if (!name) return;
+        if (seen.has(name.toLowerCase())) return;
+        seen.add(name.toLowerCase());
+        const cat = f(s,'Category') || '(Uncategorised)';
+        (groups[cat] = groups[cat] || []).push(name);
+      });
+    }
+    Object.keys(groups).forEach(c => { groups[c] = [...new Set(groups[c])].sort((a,b)=>a.localeCompare(b)); });
+    idx.catGroups[dim] = groups;
+  });
+
+  // Search text cache — one lowercase string per component covering all relevant fields
+  const tByN = {}, sByN = {};
+  db.types .forEach(t => { tByN[f(t,'Name').toLowerCase()] = t; });
+  db.spaces.forEach(s => { sByN[f(s,'Name').toLowerCase()] = s; });
+  idx.searchText = {};
+  db.components.forEach(c => {
+    const tn = f(c,'TypeName','Type Name').toLowerCase();
+    const sp = f(c,'Space').toLowerCase();
+    const t2 = tByN[tn], s2 = sByN[sp];
+    idx.searchText[f(c,'Name').toLowerCase()] = [
+      f(c,'Name'), f(c,'TypeName','Type Name'), f(c,'Space'),
+      f(c,'Description'), f(c,'SerialNumber','Serial Number'),
+      f(c,'TagNumber','Tag Number'), f(c,'BarCode','Bar Code'),
+      f(c,'AssetIdentifier','Asset Identifier'),
+      t2 ? [f(t2,'Category'),f(t2,'Manufacturer'),f(t2,'ModelNumber','Model Number'),f(t2,'Description')].join(' ') : '',
+      s2 ? [f(s2,'Description'),f(s2,'Category'),f(s2,'FloorName','Floor Name')].join(' ') : '',
+    ].filter(Boolean).join(' ').toLowerCase();
+  });
+
+  // Document category index
+  const _dcDisp = {};
+  db.documents.forEach(d => {
+    const c = f(d,'Category'); if (!c) return;
+    _dcDisp[c.toLowerCase()] = c;
+  });
+  // Track which categories appear on facility docs vs component/type docs
+  const _facDocCats = {}; // facilityName.lower → Set<cat.lower>
+  const _catsOnFac  = new Set();
+  const _catsOnComp = new Set();
+  db.documents.forEach(d => {
+    const sn  = f(d,'SheetName','Sheet Name').toLowerCase();
+    const cv  = f(d,'Category'); if (!cv) return;
+    const cvl = cv.toLowerCase();
+    if (sn === 'facility') {
+      const fnl = f(d,'RowName','Row Name').toLowerCase();
+      if (!_facDocCats[fnl]) _facDocCats[fnl] = new Set();
+      _facDocCats[fnl].add(cvl);
+      _catsOnFac.add(cvl);
+    } else if (sn === 'component' || sn === 'type') {
+      _catsOnComp.add(cvl);
+    }
+  });
+  // Categories that ONLY exist on facility docs (not on component/type)
+  idx.docCatFacilityOnly = new Set([..._catsOnFac].filter(c => !_catsOnComp.has(c)));
+  idx.docCatByComp = {};
+  db.components.forEach(c => {
+    const cn = f(c,'Name').toLowerCase();
+    const tn = f(c,'TypeName','Type Name').toLowerCase();
+    const fn = (c._facility || '').toLowerCase();
+    const cats = new Set();
+    (idx.docs['component::'+cn] || []).forEach(d => { const cv=f(d,'Category'); if(cv) cats.add(cv.toLowerCase()); });
+    (idx.docs['type::'+tn]      || []).forEach(d => { const cv=f(d,'Category'); if(cv) cats.add(cv.toLowerCase()); });
+    // Include facility-level doc categories so facility docs appear in the filter
+    if (fn && _facDocCats[fn]) _facDocCats[fn].forEach(cat => cats.add(cat));
+    if (cats.size) idx.docCatByComp[cn] = cats;
+  });
+  idx.docCategories = Object.keys(_dcDisp).map(k => _dcDisp[k]).sort((a,b) => {
+    const pa=a.startsWith('('), pb=b.startsWith('(');
+    return pa!==pb ? (pa?1:-1) : a.localeCompare(b);
+  });
+}
+
+function docsFor(sheet, name) {
+  return idx.docs[(sheet+'::'+name).toLowerCase()] || [];
+}
+
+// ── Show app ─────────────────────────────────────────────────
+function showApp(filename) {
+  document.getElementById('upload').style.display = 'none';
+  document.getElementById('app').style.display    = 'flex';
+
+  const lbl = document.getElementById('file-lbl');
+  lbl.textContent = filename; lbl.classList.remove('d-none');
+
+  if (db.facilities.length === 1) {
+    document.getElementById('fac-name').textContent = db.facilities[0]._facility || 'Facility';
+    document.getElementById('fac-desc').textContent = f(db.facilities[0], 'Description');
+  } else {
+    document.getElementById('fac-name').textContent = db.facilities.length + ' Facilities';
+    document.getElementById('fac-desc').textContent = db.facilities.map(fac => fac._facility).join(' · ');
+  }
+  document.getElementById('st-facilities').textContent = db.facilities.length;
+  document.getElementById('st-types') .textContent = db.types.length;
+  document.getElementById('st-comps') .textContent = db.components.length;
+  document.getElementById('st-spaces').textContent = db.spaces.length;
+  document.getElementById('st-sys')   .textContent = idx.systems.length;
+  document.getElementById('st-docs')  .textContent = db.documents.length;
+  document.getElementById('search-wrap').classList.remove('d-none');
+
+  applyFilters();
+}
+
+// ── Filtering ────────────────────────────────────────────────
+function matches(comp, skip) {
+  if (skip !== 'facility' && sel.facility.size) {
+    if (!sel.facility.has((comp._facility||'').toLowerCase())) return false;
+  }
+  if (skip !== 'doccat' && sel.doccat.size) {
+    const _cn = f(comp,'Name').toLowerCase();
+    const _cats = idx.docCatByComp?.[_cn];
+    if (!_cats || ![...sel.doccat].some(c => _cats.has(c))) return false;
+  }
+  const sp = f(comp,'Space').toLowerCase();
+  const tn = f(comp,'TypeName','Type Name').toLowerCase();
+  const fl = idx.spFloor[sp] || '';
+  const cn = f(comp,'Name').toLowerCase();
+
+  if (skip !== 'floor'  && sel.floor.size  && !sel.floor.has(fl))  return false;
+  if (skip !== 'space'  && sel.space.size  && !sel.space.has(sp))  return false;
+  if (skip !== 'type'   && sel.type.size   && !sel.type.has(tn))   return false;
+  if (skip !== 'system' && sel.system.size) {
+    const cs = idx.compSys[cn] || [];
+    if (!cs.some(s => sel.system.has(s))) return false;
+  }
+  if (searchQuery) {
+    const text = idx.searchText?.[cn] || '';
+    if (!text.includes(searchQuery)) return false;
+  }
+  return true;
+}
+
+function crossCounts() {
+  const c = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
+  ['facility','floor','space','type','system','doccat'].forEach(dim => {
+    db.components.filter(comp => matches(comp, dim)).forEach(comp => {
+      const fac = (comp._facility||'').toLowerCase();
+      const sp  = f(comp,'Space').toLowerCase();
+      const tn  = f(comp,'TypeName','Type Name').toLowerCase();
+      const fl  = idx.spFloor[sp] || '';
+      const cn  = f(comp,'Name').toLowerCase();
+      if (dim==='facility' && fac) c.facility[fac] = (c.facility[fac]||0)+1;
+      if (dim==='floor'    && fl)  c.floor[fl]     = (c.floor[fl]    ||0)+1;
+      if (dim==='space'    && sp)  c.space[sp]     = (c.space[sp]    ||0)+1;
+      if (dim==='type'     && tn)  c.type[tn]      = (c.type[tn]     ||0)+1;
+      if (dim==='system')          (idx.compSys[cn]||[]).forEach(sk => c.system[sk]=(c.system[sk]||0)+1);
+      if (dim==='doccat')          (idx.docCatByComp?.[cn]||new Set()).forEach(cat => c.doccat[cat]=(c.doccat[cat]||0)+1);
+    });
+  });
+  return c;
+}
+
+function applyFilters() {
+  const comps  = db.components.filter(c => matches(c));
+  const counts = crossCounts();
+  lastCounts = counts;
+  renderPanels(counts);
+  renderPills();
+  renderComps(comps);
+  const n = comps.length;
+  document.getElementById('res-count').textContent = n + ' component' + (n!==1?'s':'');
+}
+
+function toggle(dim, key) {
+  const k = key.toLowerCase();
+  if (sel[dim].has(k)) sel[dim].delete(k); else sel[dim].add(k);
+  // When selecting a facility-only doc category, auto-enable Facility grouping
+  // so the user can open the facility and find its documents
+  if (dim === 'doccat' && sel.doccat.has(k) && idx.docCatFacilityOnly?.has(k)) {
+    if (!groupState.active.has('facility')) {
+      groupState.active.add('facility');
+      const chip = document.querySelector('#group-sortable [data-dim="facility"]');
+      if (chip) chip.classList.add('gchip-active');
+    }
+  }
+  applyFilters();
+}
+
+function clearAll() {
+  ['facility','floor','space','type','system','doccat'].forEach(d => sel[d].clear());
+  applyFilters();
+}
+
+function onSearch(val) {
+  searchQuery = val.trim().toLowerCase();
+  const clr = document.getElementById('s-clear');
+  clr.style.display = searchQuery ? '' : 'none';
+  document.getElementById('hdr').classList.toggle('search-active', !!searchQuery);
+  applyFilters();
+}
+
+function clearSearch() {
+  searchQuery = '';
+  document.getElementById('search-input').value = '';
+  document.getElementById('s-clear').style.display = 'none';
+  document.getElementById('hdr').classList.remove('search-active');
+  applyFilters();
+}
+
+function setMode(mode) {
+  viewMode = mode;
+  document.getElementById('btn-asset')   .classList.toggle('active', mode==='asset');
+  document.getElementById('btn-document').classList.toggle('active', mode==='document');
+  applyFilters();
+}
+
+// ── Filter panels ────────────────────────────────────────────
+function renderPanels(counts) {
+  renderPanel('fpl-facility','fb-facility', idx.facilityNames,'facility', counts.facility);
+  renderPanel('fpl-floor',  'fb-floor',  idx.floors,  'floor',  counts.floor);
+  renderPanelCat('fpl-space',  'fb-space',  'space',  counts.space);
+  renderPanelCat('fpl-type',   'fb-type',   'type',   counts.type);
+  renderPanelCat('fpl-system', 'fb-system', 'system', counts.system);
+  renderPanel('fpl-doccat', 'fb-doccat', idx.docCategories||[], 'doccat', counts.doccat);
+}
+
+function renderPanel(listId, badgeId, names, dim, counts) {
+  const badge = document.getElementById(badgeId);
+  const n = sel[dim].size;
+  badge.textContent = n; badge.classList.toggle('d-none', n===0);
+
+  document.getElementById(listId).innerHTML = names.map(name => {
+    const k    = name.toLowerCase();
+    const act  = sel[dim].has(k);
+    const cnt  = counts[k] || 0;
+    const z    = !act && cnt === 0;
+    const disp = withDesc(name, dim);
+    return `<div class="fp-item${act?' fp-sel':''}${z?' fp-zero':''}" data-dim="${dim}" data-key="${esc(k)}">
+      <span class="fp-name" title="${esc(disp)}">${esc(disp)}</span>
+      <span class="fp-cnt">${cnt}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderPanelCat(listId, badgeId, dim, counts) {
+  const badge = document.getElementById(badgeId);
+  const nSel = sel[dim].size;
+  badge.textContent = nSel; badge.classList.toggle('d-none', nSel===0);
+
+  const groups = idx.catGroups[dim] || {};
+  const sortedCats = Object.keys(groups).sort((a,b) => {
+    const ua=a.startsWith('('), ub=b.startsWith('(');
+    return ua!==ub ? (ua?1:-1) : a.localeCompare(b);
+  });
+
+  let html = '';
+  sortedCats.forEach(catName => {
+    const names = groups[catName];
+    let selInCat = 0, visCount = 0;
+    names.forEach(name => {
+      const k = name.toLowerCase();
+      if (sel[dim].has(k) || (counts[k]||0) > 0) visCount++;
+      if (sel[dim].has(k)) selInCat++;
+    });
+    if (visCount === 0) return;
+
+    const icon = selInCat === 0         ? 'bi-square'
+               : selInCat === visCount  ? 'bi-check-square-fill'
+               : 'bi-dash-square-fill';
+
+    html += `<div class="fp-cat-hdr" data-dim="${dim}" data-cat="${esc(catName)}">
+      <i class="bi ${icon} fp-cat-check"></i>
+      <span class="fp-cat-name">${esc(catName)}</span>
+      <span class="fp-cat-cnt">${selInCat>0?selInCat+'/':''}${visCount}</span>
+    </div>`;
+
+    names.forEach(name => {
+      const k    = name.toLowerCase();
+      const act  = sel[dim].has(k);
+      const cnt  = counts[k] || 0;
+      const z    = !act && cnt === 0;
+      const disp = withDesc(name, dim);
+      html += `<div class="fp-item${act?' fp-sel':''}${z?' fp-zero':''}" data-dim="${dim}" data-key="${esc(k)}">
+        <span class="fp-name" title="${esc(disp)}">${esc(disp)}</span>
+        <span class="fp-cnt">${cnt}</span>
+      </div>`;
+    });
+  });
+
+  document.getElementById(listId).innerHTML = html;
+}
+
+document.getElementById('filter-bar').addEventListener('click', e => {
+  const item = e.target.closest('.fp-item');
+  if (item && !item.classList.contains('fp-zero')) {
+    toggle(item.dataset.dim, item.dataset.key); return;
+  }
+  const cat = e.target.closest('.fp-cat-hdr');
+  if (cat) toggleCategory(cat.dataset.dim, cat.dataset.cat);
+});
+
+function toggleCategory(dim, catName) {
+  const names = (idx.catGroups[dim] || {})[catName] || [];
+  const keys  = names.map(n => n.toLowerCase())
+    .filter(k => sel[dim].has(k) || (lastCounts[dim]?.[k] || 0) > 0);
+  if (!keys.length) return;
+  const allSel = keys.every(k => sel[dim].has(k));
+  keys.forEach(k => { if (allSel) sel[dim].delete(k); else sel[dim].add(k); });
+  applyFilters();
+}
+
+// ── Filter pills ─────────────────────────────────────────────
+const DIM_CFG = {
+  facility: { label:'Facility',     cls:'pill-facility' },
+  floor:    { label:'Floor',        cls:'pill-floor'    },
+  space:    { label:'Space',        cls:'pill-space'    },
+  type:     { label:'Type',         cls:'pill-type'     },
+  system:   { label:'System',       cls:'pill-system'   },
+  doccat:   { label:'Doc Category', cls:'pill-doccat'   },
+};
+const NAME_LISTS = {
+  facility: () => idx.facilityNames || [],
+  floor:    () => idx.floors,  space:  () => idx.spaces,
+  type:     () => idx.types,   system: () => idx.systems,
+  doccat:   () => idx.docCategories || [],
+};
+function toggleExpandAll() {
+  allExpanded = !allExpanded;
+  const eab = document.getElementById('expand-all-btn');
+
+  if (!allExpanded) {
+    // Collapse all immediately
+    document.querySelectorAll('#comp-list .grp-hdr[data-cid]').forEach(hdr => {
+      hdr.classList.add('grp-collapsed');
+      const body = document.getElementById(hdr.dataset.cid);
+      if (body) body.classList.add('grp-closed');
+    });
+    if (eab) eab.innerHTML = '<i class="bi bi-arrows-expand"></i>Expand All';
+    return;
+  }
+
+  if (eab) eab.innerHTML = '<i class="bi bi-arrows-collapse"></i>Collapse All';
+
+  // Expand all - reveal headers first, then render lazily in animation-frame batches
+  document.querySelectorAll('#comp-list .grp-hdr[data-cid]').forEach(hdr => {
+    hdr.classList.remove('grp-collapsed');
+    const body = document.getElementById(hdr.dataset.cid);
+    if (body) body.classList.remove('grp-closed');
+  });
+
+  function renderPendingBatch() {
+    const pending = [...document.querySelectorAll('#comp-list .grp-hdr[data-cid]')]
+      .filter(hdr => pendingGroups[hdr.dataset.cid]);
+    if (!pending.length) return;
+    pending.slice(0, 20).forEach(hdr => {
+      const cid = hdr.dataset.cid;
+      if (!pendingGroups[cid]) return;
+      const pg = pendingGroups[cid];
+      delete pendingGroups[cid];
+      const body = document.getElementById(cid);
+      if (body) {
+        if (pg.isDocMode) {
+          body.innerHTML = pg.isCatLeaf
+            ? pg.docEntries.map(e => docCard(e)).join('')
+            : groupDocsNested(pg.docEntries, pg.dims || [], pg.depth || 0);
+        } else {
+          body.innerHTML = groupNested(pg.comps, pg.dims, pg.depth);
+        }
+        // Also reveal any newly rendered sub-headers
+        body.querySelectorAll('.grp-hdr[data-cid]').forEach(h => {
+          h.classList.remove('grp-collapsed');
+          const b = document.getElementById(h.dataset.cid);
+          if (b) b.classList.remove('grp-closed');
+        });
+      }
+    });
+    if (pending.length > 20) requestAnimationFrame(renderPendingBatch);
+  }
+  requestAnimationFrame(renderPendingBatch);
+}
+
+function withDesc(name, dim) {
+  if (!name) return name;
+  const desc = idx.desc?.[dim]?.[name.toLowerCase()];
+  return desc ? name + ' - ' + desc : name;
+}
+
+function dispName(dim, key) {
+  const name = NAME_LISTS[dim]().find(n => n.toLowerCase()===key) || key;
+  return withDesc(name, dim);
+}
+
+function _pillItem(cfg, dim, key) {
+  return `<span class="pill ${cfg.cls}">
+    <span style="opacity:.6;font-size:.69rem">${cfg.label}:</span>
+    ${esc(dispName(dim,key))}
+    <span class="pill-rm" data-dim="${esc(dim)}" data-key="${esc(key)}">x</span>
+  </span>`;
+}
+
+function renderPills() {
+  const any = Object.values(sel).some(s => s.size);
+  document.getElementById('clear-btn').classList.toggle('d-none', !any);
+
+  let html = '';
+  Object.entries(DIM_CFG).forEach(([dim, cfg]) => {
+    if (!sel[dim].size) return;
+    const catGrps = idx.catGroups?.[dim];
+    if (!catGrps) {
+      // No category grouping (facility, floor, doccat) — individual pills
+      sel[dim].forEach(key => { html += _pillItem(cfg, dim, key); });
+      return;
+    }
+    const handled = new Set();
+    Object.entries(catGrps).forEach(([catName, names]) => {
+      const keys    = names.map(n => n.toLowerCase());
+      const selKeys = keys.filter(k => sel[dim].has(k));
+      if (!selKeys.length) return;
+      // visKeys = items that are selected OR have a non-zero count
+      const visKeys = keys.filter(k => sel[dim].has(k) || (lastCounts[dim]?.[k] || 0) > 0);
+      if (selKeys.length === visKeys.length && visKeys.length > 0) {
+        // Entire visible category selected — show one category pill
+        html += `<span class="pill ${cfg.cls}">
+          <span style="opacity:.6;font-size:.69rem">${cfg.label}:</span>
+          ${esc(catName)}<span style="opacity:.5;font-size:.67rem"> (${selKeys.length})</span>
+          <span class="pill-rm" data-dim="${esc(dim)}" data-cat="${esc(catName)}">x</span>
+        </span>`;
+      } else {
+        selKeys.forEach(k => { html += _pillItem(cfg, dim, k); });
+      }
+      selKeys.forEach(k => handled.add(k));
+    });
+    // Safety: any selected keys not covered by catGroups
+    sel[dim].forEach(k => { if (!handled.has(k)) html += _pillItem(cfg, dim, k); });
+  });
+
+  document.getElementById('pills').innerHTML =
+    html || '<span style="font-size:.76rem;color:#ccc;font-style:italic">None - showing all components</span>';
+}
+
+document.getElementById('pills').addEventListener('click', e => {
+  const rm = e.target.closest('.pill-rm');
+  if (!rm) return;
+  if (rm.dataset.cat) {
+    // Category pill — remove all items in that category
+    const names = (idx.catGroups?.[rm.dataset.dim] || {})[rm.dataset.cat] || [];
+    names.forEach(n => sel[rm.dataset.dim].delete(n.toLowerCase()));
+  } else {
+    sel[rm.dataset.dim].delete(rm.dataset.key);
+  }
+  applyFilters();
+});
+
+// ── Component rendering ──────────────────────────────────────
+let groupInfoStore = [];
+let collapseCounter = 0;
+let allExpanded = false;
+const groupState = {
+  order:  ['facility', 'type', 'system', 'space', 'floor', 'doccat'],
+  active: new Set(['type']),
+};
+const BATCH_SIZE = 200;
+let pendingGroups = {}; // cid → {comps, dims, depth} – lazy group bodies
+let pendingLeaf   = {}; // lcid → remaining component array
+
+function renderComps(comps) {
+  docStore = []; groupInfoStore = [];
+  pendingGroups = {}; pendingLeaf = {};
+  collapseCounter = 0; cardCtr = 0;
+  allExpanded = false;
+  const eab = document.getElementById('expand-all-btn');
+  if (eab) eab.innerHTML = '<i class="bi bi-arrows-expand"></i>Expand All';
+  const list = document.getElementById('comp-list');
+
+  if (!comps.length) {
+    list.innerHTML = `<div class="empty"><i class="bi bi-inbox"></i><p>No components match the current filters.</p></div>`;
+    return;
+  }
+
+  if (viewMode === 'document') {
+    renderDocumentMode(list, collectDocsForComps(comps));
+    return;
+  }
+
+  const dims = groupState.order.filter(d => groupState.active.has(d));
+  list.innerHTML = dims.length
+    ? groupNested(comps, dims)
+    : renderLeaf(comps);
+}
+
+function groupNested(comps, dims, depth = 0) {
+  if (!dims.length || !comps.length) return renderLeaf(comps);
+  const [dim, ...rest] = dims;
+  const map = buildGroupMap(comps, dim);
+  const lvl = Math.min(depth, 3);
+  const ico = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'}[dim] || 'bi-folder';
+  return [...map.entries()].map(([name, cs]) => {
+    const cid  = 'col_' + (collapseCounter++);
+    const sub  = getGroupSubtitle(dim, name);
+    const iBtn = buildGroupInfoBtn(dim, name);
+    pendingGroups[cid] = { comps: cs, dims: rest, depth: depth + 1 };
+    return `<div class="grp-block grp-d${lvl}">
+      <div class="grp-hdr grp-collapsed" data-cid="${cid}">
+        <i class="bi bi-chevron-down grp-chev"></i>
+        <i class="bi ${ico} me-1" style="opacity:.72;font-size:.82rem"></i>
+        <span class="grp-name">${esc(withDesc(name, dim))}</span>
+        ${sub ? `<span class="grp-meta">${esc(sub)}</span>` : ''}
+        ${iBtn}<span class="grp-cnt">${cs.length}</span>
+      </div>
+      <div class="grp-body grp-closed" id="${cid}"></div>
+    </div>`;
+  }).join('');
+}
+
+function renderLeaf(comps) {
+  if (!comps.length) return '';
+  const first = comps.slice(0, BATCH_SIZE);
+  const rest  = comps.slice(BATCH_SIZE);
+  const html  = first.map(c => card(c)).join('');
+  if (!rest.length) return html;
+  const lcid = 'lm_' + (collapseCounter++);
+  pendingLeaf[lcid] = rest;
+  return html + `<div class="load-more-wrap" id="${lcid}">
+    <button class="load-more-btn" data-lcid="${lcid}">
+      <i class="bi bi-chevron-double-down"></i>
+      Show next ${Math.min(BATCH_SIZE, rest.length)}
+      <span class="lm-remaining">(${rest.length} more)</span>
+    </button>
+  </div>`;
+}
+
+// ── Document Mode ──────────────────────────────────────────
+function collectDocsForComps(comps) {
+  const seen=new Set(), entries=[];
+  const doneT=new Set(), doneSp=new Set(), doneSy=new Set(), doneF=new Set();
+  const addDoc = (doc, linkedType, linkedName, comp) => {
+    const key=f(doc,'Name')+'|||'+f(doc,'File')+'|||'+linkedType+'|||'+linkedName;
+    if(seen.has(key))return; seen.add(key);
+    const sp  = comp ? f(comp,'Space').toLowerCase() : (linkedType==='space'?linkedName.toLowerCase():'');
+    const fl  = sp ? (idx.spFloor[sp]||'') : '';
+    const flN = fl ? (idx.floors.find(n=>n.toLowerCase()===fl)||fl) : '';
+    const syss = comp ? (idx.compSys[f(comp,'Name').toLowerCase()]||[]).map(sk=>idx.systems.find(n=>n.toLowerCase()===sk)||sk)
+                      : (linkedType==='system'?[linkedName]:[]);
+    entries.push({ doc, linkedType, linkedName,
+      typeName:     comp?f(comp,'TypeName','Type Name'):(linkedType==='type'?linkedName:''),
+      spaceName:    comp?f(comp,'Space'):(linkedType==='space'?linkedName:''),
+      facilityName: comp?(comp._facility||''):(linkedType==='facility'?linkedName:''),
+      floorName:    flN, systemNames: syss });
+  };
+  comps.forEach(c => {
+    const cn=f(c,'Name').toLowerCase(), tn=f(c,'TypeName','Type Name').toLowerCase();
+    const sp=f(c,'Space').toLowerCase(), fn=(c._facility||'').toLowerCase();
+    (idx.docs['component::'+cn]||[]).forEach(d=>addDoc(d,'component',f(c,'Name'),c));
+    if(tn&&!doneT.has(tn)){doneT.add(tn);(idx.docs['type::'+tn]||[]).forEach(d=>addDoc(d,'type',f(c,'TypeName','Type Name'),null));}
+    if(sp&&!doneSp.has(sp)){doneSp.add(sp);(idx.docs['space::'+sp]||[]).forEach(d=>addDoc(d,'space',f(c,'Space'),c));}
+    if(fn&&!doneF.has(fn)){doneF.add(fn);(idx.docs['facility::'+fn]||[]).forEach(d=>addDoc(d,'facility',c._facility||'',null));}
+    (idx.compSys[cn]||[]).forEach(sk=>{
+      if(doneSy.has(sk))return; doneSy.add(sk);
+      const sn=idx.systems.find(n=>n.toLowerCase()===sk)||sk;
+      (idx.docs['system::'+sk]||[]).forEach(d=>addDoc(d,'system',sn,null));
+    });
+  });
+  return entries;
+}
+
+function renderDocumentMode(list, entries) {
+  if(!entries.length){
+    list.innerHTML=`<div class="empty"><i class="bi bi-folder-x"></i><p>No documents found for the current filters.</p></div>`;
+    return;
+  }
+  const dims = groupState.order.filter(d => groupState.active.has(d));
+  list.innerHTML = dims.length ? groupDocsNested(entries, dims) : renderDocsByCat(entries);
+}
+
+function _docEntryVal(e, dim) {
+  if(dim==='type')     return e.typeName     ||'(No Type)';
+  if(dim==='space')    return e.spaceName     ||'(No Space)';
+  if(dim==='facility') return e.facilityName  ||'(No Facility)';
+  if(dim==='floor')    return e.floorName     ||'(No Floor)';
+  if(dim==='system')   return e.systemNames.length?e.systemNames[0]:'(No System)';
+  if(dim==='doccat')   return f(e.doc,'Category')||'(Uncategorised)';
+  return '(Unknown)';
+}
+
+function groupDocsNested(entries, dims, depth = 0) {
+  if(!dims.length||!entries.length) return renderDocsByCat(entries);
+  const [dim,...rest] = dims;
+  const map = new Map();
+  entries.forEach(e => {
+    const ks = (dim==='system'&&e.systemNames.length>1) ? e.systemNames : [_docEntryVal(e,dim)];
+    ks.forEach(k=>{ if(!map.has(k))map.set(k,[]); map.get(k).push(e); });
+  });
+  const ico = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building',doccat:'bi-folder2-open'}[dim]||'bi-folder';
+  const lvl = Math.min(depth,3);
+  const pb = s=>s.startsWith('(');
+  return [...map.entries()].filter(([k])=>!pb(k)).sort(([a],[b])=>a.localeCompare(b)).map(([name,grpE])=>{
+    const cid='col_'+(collapseCounter++);
+    pendingGroups[cid]={docEntries:grpE,dims:rest,depth:depth+1,isDocMode:true};
+    const sub=dim!=='doccat'?getGroupSubtitle(dim,name):'';
+    return `<div class="grp-block grp-d${lvl}">
+      <div class="grp-hdr grp-collapsed" data-cid="${cid}">
+        <i class="bi bi-chevron-down grp-chev"></i>
+        <i class="bi ${ico} me-1" style="opacity:.72;font-size:.82rem"></i>
+        <span class="grp-name">${esc(withDesc(name,dim))}</span>
+        ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
+        <span class="grp-cnt">${grpE.length}</span>
+      </div>
+      <div class="grp-body grp-closed" id="${cid}"></div>
+    </div>`;
+  }).join('');
+}
+
+function renderDocsByCat(entries) {
+  if(!entries.length) return '';
+  const bycat=new Map();
+  entries.forEach(e=>{ const c=f(e.doc,'Category')||'(Uncategorised)'; if(!bycat.has(c))bycat.set(c,[]); bycat.get(c).push(e); });
+  const cats=[...bycat.keys()].sort((a,b)=>{const pa=a.startsWith('('),pb=b.startsWith('(');return pa!==pb?(pa?1:-1):a.localeCompare(b);});
+  if(cats.length===1) return bycat.get(cats[0]).map(e=>docCard(e)).join('');
+  return cats.map(cat=>{
+    const catE=bycat.get(cat);
+    const cid='col_'+(collapseCounter++);
+    pendingGroups[cid]={docEntries:catE,isDocMode:true,isCatLeaf:true};
+    return `<div class="grp-block grp-d2" style="margin-bottom:.3rem">
+      <div class="grp-hdr grp-collapsed" data-cid="${cid}">
+        <i class="bi bi-chevron-down grp-chev"></i>
+        <i class="bi bi-folder2-open me-1" style="opacity:.72;font-size:.82rem"></i>
+        <span class="grp-name">${esc(cat)}</span>
+        <span class="grp-cnt">${catE.length}</span>
+      </div>
+      <div class="grp-body grp-closed" id="${cid}"></div>
+    </div>`;
+  }).join('');
+}
+
+function docCard(entry) {
+  const {doc,linkedType,linkedName}=entry;
+  const name=f(doc,'Name')||f(doc,'File')||'(Unnamed)';
+  const file=f(doc,'File'), dir=f(doc,'Directory'), desc=f(doc,'Description');
+  const cat=f(doc,'Category'), ref=f(doc,'Reference');
+  const isUrl=s=>/^https?:\/\//i.test(s);
+  const lpath=(!isUrl(file)&&file)?(dir?dir.replace(/\/$/,'')+'\\'+file:file):'';
+  const LL={component:'Component',type:'Type',space:'Space',system:'System',facility:'Facility',floor:'Floor'};
+  const di=docStore.length; docStore.push(doc);
+  return `<div class="cc">
+    <div class="d-flex align-items-start gap-2">
+      <div style="flex:1;min-width:0">
+        <div class="cc-name">${docIcon(file||name)} ${esc(name)}</div>
+        <div class="cc-meta">
+          <span><i class="bi bi-link-45deg me-1"></i>${esc(LL[linkedType]||linkedType)}: ${esc(linkedName)}</span>
+          ${cat?`<span><i class="bi bi-tag me-1"></i>${esc(cat)}</span>`:''}
+        </div>
+        ${desc?`<div style="font-size:.78rem;color:#666;margin-top:.2rem">${esc(desc)}</div>`:''}
+        ${lpath?`<div style="font-size:.74rem;color:#888;margin-top:.25rem;display:flex;align-items:center;gap:.3rem">
+          <code style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lpath)}</code>
+          <button class="xbtn py-0 px-1 cp-btn-inline" data-p="${esc(lpath)}" title="Copy path"><i class="bi bi-clipboard"></i></button>
+        </div>`:''}
+        ${isUrl(ref)?`<div style="font-size:.74rem;margin-top:.2rem"><a href="${esc(ref)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>${esc(ref)}</a></div>`:''}
+        ${isUrl(file)?`<div style="font-size:.74rem;margin-top:.2rem"><a href="${esc(file)}" target="_blank" rel="noopener"><i class="bi bi-download me-1"></i>Open file</a></div>`:''}
+      </div>
+      <button class="xbtn" data-doc="${di}" title="Document details"><i class="bi bi-info-circle"></i></button>
+    </div>
+  </div>`;
+}
+
+function buildGroupMap(comps, dim) {
+  const map = new Map();
+  if (dim === 'facility') {
+    comps.forEach(c => {
+      const k = c._facility || '(Unknown)';
+      if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
+    });
+  } else if (dim === 'system') {
+    comps.forEach(c => {
+      const cn = f(c,'Name').toLowerCase();
+      const syss = idx.compSys[cn] || [];
+      const keys = syss.length
+        ? syss.map(sk => idx.systems.find(n => n.toLowerCase() === sk) || sk)
+        : ['(No System)'];
+      keys.forEach(k => { if (!map.has(k)) map.set(k,[]); map.get(k).push(c); });
+    });
+  } else if (dim === 'type') {
+    comps.forEach(c => {
+      const k = f(c,'TypeName','Type Name') || '(Unassigned)';
+      if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
+    });
+  } else if (dim === 'space') {
+    comps.forEach(c => {
+      const k = f(c,'Space') || '(No Space)';
+      if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
+    });
+  } else if (dim === 'floor') {
+    comps.forEach(c => {
+      const sp = f(c,'Space').toLowerCase();
+      const fl = idx.spFloor[sp] || '';
+      const k  = idx.floors.find(n => n.toLowerCase() === fl) || fl || '(No Floor)';
+      if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
+    });
+  } else if (dim === 'doccat') {
+    comps.forEach(c => {
+      const cn   = f(c,'Name').toLowerCase();
+      const cats = idx.docCatByComp?.[cn];
+      if (cats && cats.size) {
+        cats.forEach(cat => {
+          const disp = idx.docCategories?.find(n => n.toLowerCase()===cat) || cat;
+          if (!map.has(disp)) map.set(disp,[]);
+          map.get(disp).push(c);
+        });
+      } else {
+        const k = '(No Documents)';
+        if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
+      }
+    });
+  }
+  const pb = s => s.startsWith('(');
+  return new Map([...map.entries()].sort(([a],[b]) => pb(a)!==pb(b)?(pb(a)?1:-1):a.localeCompare(b)));
+}
+
+function getGroupSubtitle(dim, name) {
+  if (!name || name.startsWith('(')) return '';
+  if (dim === 'facility') {
+    const fac = db.facilities.find(x => x._facility === name);
+    return fac ? f(fac,'Description') : '';
+  }
+  if (dim === 'type') {
+    const t = db.types.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+    return t ? [f(t,'Manufacturer'),f(t,'ModelNumber','Model Number')].filter(Boolean).join(' – ') : '';
+  }
+  if (dim === 'system') {
+    const s = db.systems.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+    return s ? f(s,'Category') : '';
+  }
+  if (dim === 'space') {
+    const s = db.spaces.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+    if (!s) return '';
+    const fl = f(s,'FloorName','Floor Name');
+    return fl ? 'Floor: '+fl : '';
+  }
+  if (dim === 'floor') {
+    const fl = db.floors.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+    if (!fl) return '';
+    const elev = f(fl,'Elevation');
+    return elev ? 'Elev: '+elev : '';
+  }
+  return '';
+}
+
+function buildGroupInfoBtn(dim, name) {
+  if (!name || name.startsWith('(')) return '';
+  const icons  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'};
+  const labels = {type:'Type',system:'System',space:'Space',floor:'Floor',facility:'Facility'};
+  const i = groupInfoStore.length;
+  groupInfoStore.push({ dim, name });
+  return `<button class="type-info-btn" data-grpidx="${i}"><i class="bi ${icons[dim]} me-1"></i>${labels[dim]} Info</button>`;
+}
+
+function groupedByType(comps, nested = false) {
+  const map = new Map();
+  comps.forEach(c => {
+    const k = f(c,'TypeName','Type Name') || '(Unassigned)';
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(c);
+  });
+
+  return [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([typeName, cs]) => {
+    const sub  = typeSubtitle(typeName);
+    const tObj = db.types.find(x => f(x,'Name').toLowerCase() === typeName.toLowerCase());
+    const cid  = 'col_' + (collapseCounter++);
+    let infoBtn = '';
+    if (tObj) {
+      const ti = typeStore.length; typeStore.push(tObj);
+      infoBtn = `<button class="type-info-btn" data-typeidx="${ti}"><i class="bi bi-info-circle-fill me-1"></i>Type Info</button>`;
+    }
+    return `<div class="grp-block${nested?' nested':''}">
+      <div class="grp-hdr grp-collapsed" data-cid="${cid}">
+        <i class="bi bi-chevron-down grp-chev"></i>
+        <span class="grp-name">${esc(withDesc(typeName,'type'))}</span>
+        ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
+        ${infoBtn}<span class="grp-cnt">${cs.length}</span>
+      </div>
+      <div class="grp-closed" id="${cid}">${cs.map(c=>card(c)).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function groupedNested(comps, dim) {
+  const map = new Map();
+  if (dim === 'system') {
+    comps.forEach(c => {
+      const cn   = f(c,'Name').toLowerCase();
+      const syss = idx.compSys[cn] || [];
+      const keys = syss.length
+        ? syss.map(sk => idx.systems.find(n => n.toLowerCase() === sk) || sk)
+        : ['(No System)'];
+      keys.forEach(k => { if (!map.has(k)) map.set(k,[]); map.get(k).push(c); });
+    });
+  } else {
+    comps.forEach(c => {
+      let k;
+      if (dim === 'space') {
+        k = f(c,'Space') || '(No Space)';
+      } else {
+        const sp = f(c,'Space').toLowerCase();
+        const fl = idx.spFloor[sp] || '';
+        k = idx.floors.find(n => n.toLowerCase() === fl) || fl || '(No Floor)';
+      }
+      if (!map.has(k)) map.set(k,[]);
+      map.get(k).push(c);
+    });
+  }
+  const isBracket = s => s.startsWith('(');
+  return [...map.entries()]
+    .sort(([a],[b]) => isBracket(a)!==isBracket(b) ? (isBracket(a)?1:-1) : a.localeCompare(b))
+    .map(([outerName, cs]) => {
+      const cid  = 'col_' + (collapseCounter++);
+      const sub  = getOuterSubtitle(dim, outerName);
+      const iBtn = buildOuterInfoBtn(dim, outerName);
+      const ico  = {system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill'}[dim];
+      return `<div class="grp-block outer">
+        <div class="grp-hdr grp-outer grp-collapsed" data-cid="${cid}">
+          <i class="bi bi-chevron-down grp-chev"></i>
+          <i class="bi ${ico} me-1" style="opacity:.75"></i>
+          <span class="grp-name">${esc(withDesc(outerName,dim))}</span>
+          ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
+          ${iBtn}<span class="grp-cnt">${cs.length}</span>
+        </div>
+        <div class="grp-outer-body grp-closed" id="${cid}">${groupedByType(cs, true)}</div>
+      </div>`;
+    }).join('');
+}
+
+function getOuterSubtitle(dim, name) {
+  if (name.startsWith('(')) return '';
+  if (dim === 'system') {
+    const s = db.systems.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+    return s ? f(s,'Category') : '';
+  }
+  if (dim === 'space') {
+    const s = db.spaces.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+    if (!s) return '';
+    const fl = f(s,'FloorName','Floor Name');
+    return fl ? 'Floor: '+fl : f(s,'Description');
+  }
+  if (dim === 'floor') {
+    const fl = db.floors.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+    if (!fl) return '';
+    const elev = f(fl,'Elevation');
+    return elev ? 'Elev: '+elev : f(fl,'Description');
+  }
+  return '';
+}
+
+function buildOuterInfoBtn(dim, name) {
+  if (name.startsWith('(')) return '';
+  const icons  = {system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill'};
+  const labels = {system:'System',space:'Space',floor:'Floor'};
+  const store  = dim==='system' ? systemStore : dim==='space' ? spaceStore : floorStore;
+  const si = store.length; store.push(name);
+  return `<button class="type-info-btn" data-dim="${dim}" data-outeridx="${si}"><i class="bi ${icons[dim]} me-1"></i>${labels[dim]} Info</button>`;
+}
+
+function grouped(comps, keyFn, subtitleFn) {
+  const map = new Map();
+  comps.forEach(c => {
+    const k = keyFn(c) || '(Unassigned)';
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(c);
+  });
+  return [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,cs]) => {
+    const sub = subtitleFn(name);
+    return `<div class="grp-block">
+      <div class="grp-hdr">
+        <span class="grp-name">${esc(name)}</span>
+        ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
+        <span class="grp-cnt">${cs.length}</span>
+      </div>${cs.map(c=>card(c)).join('')}
+    </div>`;
+  }).join('');
+}
+
+function groupedSystem(comps) {
+  const cset = new Set(comps.map(c=>f(c,'Name').toLowerCase()));
+  const map  = new Map();
+  idx.systems.forEach(sn => {
+    const sc = (idx.bySys[sn.toLowerCase()]||[]).filter(c=>cset.has(f(c,'Name').toLowerCase()));
+    if (sc.length) map.set(sn, sc);
+  });
+  const assigned = new Set([...map.values()].flat().map(c=>f(c,'Name').toLowerCase()));
+  const none = comps.filter(c => !assigned.has(f(c,'Name').toLowerCase()));
+
+  let html = [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,cs]) => {
+    const so  = db.systems.find(s=>f(s,'Name').toLowerCase()===name.toLowerCase());
+    const sub = so ? f(so,'Category') : '';
+    return `<div class="grp-block">
+      <div class="grp-hdr">
+        <span class="grp-name">${esc(name)}</span>
+        ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
+        <span class="grp-cnt">${cs.length}</span>
+      </div>${cs.map(c=>card(c)).join('')}</div>`;
+  }).join('');
+
+  if (none.length) html += `<div class="grp-block">
+    <div class="grp-hdr"><span class="grp-name">(No System)</span><span class="grp-cnt">${none.length}</span></div>
+    ${none.map(c=>card(c)).join('')}</div>`;
+
+  return html;
+}
+
+function typeSubtitle(name) {
+  const t = db.types.find(x=>f(x,'Name').toLowerCase()===name.toLowerCase());
+  return t ? [f(t,'Manufacturer'),f(t,'ModelNumber','Model Number')].filter(Boolean).join(' - ') : '';
+}
+function spaceSubtitle(name) {
+  const s = db.spaces.find(x=>f(x,'Name').toLowerCase()===name.toLowerCase());
+  if (!s) return '';
+  const fl = f(s,'FloorName','Floor Name');
+  return fl ? 'Floor: '+fl : '';
+}
+
+function card(c) {
+  const name = f(c,'Name');
+  const tn   = f(c,'TypeName','Type Name');
+  const sp   = f(c,'Space');
+  const desc = f(c,'Description');
+  const sn   = f(c,'SerialNumber','Serial Number');
+  const tag  = f(c,'TagNumber','Tag Number');
+  const bc   = f(c,'BarCode','Bar Code');
+  const aid  = f(c,'AssetIdentifier','Asset Identifier');
+  const inst = fmtDate(c['InstallationDate']  || c['Installation Date']);
+  const wst  = fmtDate(c['WarrantyStartDate'] || c['Warranty Start Date']);
+
+  const cdocs  = docsFor('Component', name);
+  const badges  = badgesByCat(cdocs);
+
+  const details = [
+    ['Type',tn], ['Location',sp], ['Description',desc],
+    ['Serial No.',sn], ['Tag No.',tag], ['Barcode',bc],
+    ['Asset ID',aid],  ['Installed',inst], ['Warranty Start',wst],
+  ].filter(([,val])=>val);
+
+  const id = 'cc'+(cardCtr++);
+  const rows = details.map(([k,val])=>`<tr><td>${esc(k)}</td><td>${esc(val)}</td></tr>`).join('');
+
+  return `<div class="cc">
+    <div class="d-flex align-items-start gap-2">
+      <div style="flex:1;min-width:0">
+        <div class="cc-name">${esc(name)}${desc ? `<span class="cc-desc"> : ${esc(desc)}</span>` : ''}</div>
+        <div class="cc-meta">
+          ${tn ? `<span><i class="bi bi-tag me-1"></i>${esc(withDesc(tn,'type'))}</span>` : ''}
+          ${sp ? `<span><i class="bi bi-geo-alt me-1"></i>${esc(withDesc(sp,'space'))}</span>` : ''}
+        </div>
+      </div>
+      ${details.length?`<button class="xbtn" data-bs-toggle="collapse" data-bs-target="#${id}">
+        <i class="bi bi-chevron-expand"></i> Details</button>`:''}
+    </div>
+    ${badges?`<div class="mt-2">${badges}</div>`:''}
+    ${details.length?`<div class="collapse mt-2" id="${id}"><hr class="my-2">
+      <table class="dtbl"><tbody>${rows}</tbody></table></div>`:''}
+  </div>`;
+}
+
+function badgesByCat(docs) {
+  if (!docs.length) return '';
+  const grp = new Map();
+  docs.forEach(d => {
+    const cat = f(d,'Category') || '(Uncategorised)';
+    if (!grp.has(cat)) grp.set(cat,[]);
+    grp.get(cat).push(d);
+  });
+  const cats = [...grp.keys()].sort((a,b) => { const pa=a.startsWith('('),pb=b.startsWith('('); return pa!==pb?(pa?1:-1):a.localeCompare(b); });
+  return cats.map(cat =>
+    (grp.size > 1 ? `<div class="doc-cat-label">${esc(cat)}</div>` : '') +
+    grp.get(cat).map(d => badge(d,false)).join('')
+  ).join('');
+}
+
+function badge(doc, fromType) {
+  const i = docStore.length; docStore.push(doc);
+  const label = f(doc,'Name')||f(doc,'File')||f(doc,'Description')||'Document';
+  const file  = f(doc,'File');
+  const tip   = fromType ? 'title="Type-level document"' : '';
+  return `<span class="dbadge${fromType?' tp':''}" data-doc="${i}" ${tip}>${docIcon(file||label)} ${esc(label)}</span>`;
+}
+
+document.getElementById('comp-list').addEventListener('click', e => {
+  // Group info button
+  const gb = e.target.closest('[data-grpidx]');
+  if (gb) {
+    const entry = groupInfoStore[+gb.dataset.grpidx];
+    if (entry) openGroupInfo(entry.dim, entry.name);
+    return;
+  }
+  // Doc badge
+  const docBtn = e.target.closest('[data-doc]');
+  if (docBtn) { const d=docStore[+docBtn.dataset.doc]; if(d) openDoc(d); return; }
+  // Inline copy path button (in document cards)
+  const cpInline = e.target.closest('.cp-btn-inline');
+  if (cpInline) {
+    navigator.clipboard.writeText(cpInline.dataset.p).then(()=>{
+      cpInline.innerHTML='<i class="bi bi-check2"></i>';
+      setTimeout(()=>{ cpInline.innerHTML='<i class="bi bi-clipboard"></i>'; },2000);
+    });
+    return;
+  }
+  // Load-more button (paginated leaf rendering)
+  const lm = e.target.closest('.load-more-btn');
+  if (lm) {
+    const lcid = lm.dataset.lcid;
+    const rem  = pendingLeaf[lcid];
+    if (rem) {
+      const batch = rem.splice(0, BATCH_SIZE);
+      lm.closest('.load-more-wrap').insertAdjacentHTML('beforebegin', batch.map(c=>card(c)).join(''));
+      if (rem.length > 0) {
+        lm.innerHTML = `<i class="bi bi-chevron-double-down"></i> Show next ${Math.min(BATCH_SIZE,rem.length)} <span class="lm-remaining">(${rem.length} more)</span>`;
+      } else {
+        delete pendingLeaf[lcid];
+        lm.closest('.load-more-wrap').remove();
+      }
+    }
+    return;
+  }
+  // Group header collapse toggle (with lazy render on first open)
+  const hdr = e.target.closest('.grp-hdr');
+  if (hdr && hdr.dataset.cid) {
+    const cid  = hdr.dataset.cid;
+    const body = document.getElementById(cid);
+    if (body) {
+      if (pendingGroups[cid]) {
+        const pg = pendingGroups[cid];
+        delete pendingGroups[cid];
+        if (pg.isDocMode) {
+          body.innerHTML = pg.isCatLeaf
+            ? pg.docEntries.map(e => docCard(e)).join('')
+            : groupDocsNested(pg.docEntries, pg.dims || [], pg.depth || 0);
+        } else {
+          body.innerHTML = groupNested(pg.comps, pg.dims, pg.depth);
+        }
+      }
+      const closing = !body.classList.contains('grp-closed');
+      body.classList.toggle('grp-closed');
+      hdr.classList.toggle('grp-collapsed', closing);
+    }
+  }
+});
+document.getElementById('comp-list').addEventListener('show.bs.collapse', e => {
+  const btn=document.querySelector(`[data-bs-target="#${e.target.id}"]`);
+  if(btn) btn.innerHTML='<i class="bi bi-chevron-contract"></i> Details';
+});
+document.getElementById('comp-list').addEventListener('hide.bs.collapse', e => {
+  const btn=document.querySelector(`[data-bs-target="#${e.target.id}"]`);
+  if(btn) btn.innerHTML='<i class="bi bi-chevron-expand"></i> Details';
+});
+
+// ── Type detail modal ──────────────────────────────────────────
+const TYPE_FIELDS = [
+  ['Category',              ['Category']],
+  ['Description',           ['Description']],
+  ['Asset Type',            ['AssetType','Asset Type']],
+  ['Manufacturer',          ['Manufacturer']],
+  ['Model No.',             ['ModelNumber','Model Number','ModelReference','Model Reference']],
+  ['Colour',                ['Color','Colour']],
+  ['Finish',                ['Finish']],
+  ['Grade',                 ['Grade']],
+  ['Material',              ['Material']],
+  ['Shape',                 ['Shape']],
+  ['Size',                  ['Size']],
+  ['Sustainability',        ['Sustainability']],
+  ['Nom. Length',           ['NominalLength','Nominal Length']],
+  ['Nom. Width',            ['NominalWidth','Nominal Width']],
+  ['Nom. Height',           ['NominalHeight','Nominal Height']],
+  ['Nom. Depth',            ['NominalDepth','Nominal Depth']],
+  ['Nom. Weight',           ['NominalWeight','Nominal Weight']],
+  ['Code Performance',      ['CodePerformance','Code Performance']],
+  ['Warranty (Parts)',      ['WarrantyGuarantorParts','Warranty Guarantor Parts']],
+  ['Warranty Dur. (Parts)', ['WarrantyDurationParts','Warranty Duration Parts']],
+  ['Warranty (Labour)',     ['WarrantyGuarantorLabor','Warranty Guarantor Labor','WarrantyGuarantorLabour','Warranty Guarantor Labour']],
+  ['Warranty Dur. (Labour)',['WarrantyDurationLabor','Warranty Duration Labor','WarrantyDurationLabour']],
+  ['Warranty Unit',         ['WarrantyDurationUnit','Warranty Duration Unit']],
+  ['Expected Life',         ['ExpectedLife','Expected Life']],
+  ['Life Duration Unit',    ['DurationUnit','Duration Unit']],
+  ['Replacement Cost',      ['ReplacementCost','Replacement Cost']],
+];
+
+function buildDocSection(docs) {
+  if (!docs.length) return '';
+  const grp = new Map();
+  docs.forEach(d => {
+    const cat = f(d,'Category') || '(Uncategorised)';
+    if (!grp.has(cat)) grp.set(cat,[]);
+    grp.get(cat).push(d);
+  });
+  const cats = [...grp.keys()].sort((a,b) => { const pa=a.startsWith('('),pb=b.startsWith('('); return pa!==pb?(pa?1:-1):a.localeCompare(b); });
+  let inner = cats.map(cat => {
+    const catHdr = grp.size > 1 ? `<div class="doc-cat-label">${esc(cat)}</div>` : '';
+    return catHdr + grp.get(cat).map(d => {
+      const di = docStore.length; docStore.push(d);
+      const label = f(d,'Name')||f(d,'File')||f(d,'Description')||'Document';
+      return `<span class="dbadge tp" data-doc="${di}">${docIcon(f(d,'File')||label)} ${esc(label)}</span>`;
+    }).join('');
+  }).join('');
+  return `<div class="mt-3 pt-2 border-top">
+    <div style="font-size:.78rem;font-weight:600;color:var(--navy);margin-bottom:.5rem">
+      <i class="bi bi-folder2-open me-1"></i>Documents
+    </div>
+    <div>${inner}</div>
+  </div>`;
+}
+
+function openGroupInfo(dim, name) {
+  const icons  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'};
+  document.getElementById('mtype-icon').className  = `bi ${icons[dim]||'bi-info-circle'} me-2`;
+  document.getElementById('mtype-title').textContent = name;
+
+  let body = '';
+  if (dim === 'type') {
+    const t = db.types.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+    body = t ? buildTypeBody(t) : '<p class="text-muted small mb-0">Type not found.</p>';
+  } else if (dim === 'system') {
+    body = buildSystemBody(name);
+  } else if (dim === 'space') {
+    body = buildSpaceBody(name);
+  } else if (dim === 'floor') {
+    body = buildFloorBody(name);
+  } else if (dim === 'facility') {
+    body = buildFacilityBody(name);
+  }
+  document.getElementById('mtype-body').innerHTML = body;
+  new bootstrap.Modal(document.getElementById('type-modal')).show();
+}
+
+function buildTypeBody(t) {
+  const rows = TYPE_FIELDS.map(([label, fields]) => {
+    const val = f(t, ...fields);
+    return val ? `<tr><td style="width:170px;color:#888;white-space:nowrap;font-size:.81rem">${esc(label)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>` : '';
+  }).filter(Boolean).join('');
+  return (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
+    : '<p class="text-muted small mb-0">No additional type data.</p>') + buildDocSection(docsFor('Type', f(t,'Name')));
+}
+
+function buildSystemBody(name) {
+  const s = db.systems.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+  const rows = s ? [['Category',f(s,'Category')],['Description',f(s,'Description')]]
+    .filter(([,v])=>v).map(([k,v])=>`<tr><td style="width:130px;color:#888;font-size:.81rem">${esc(k)}</td><td style="font-size:.83rem">${esc(v)}</td></tr>`).join('') : '';
+  return (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
+    : '<p class="text-muted small mb-0">No additional system data.</p>') + buildDocSection(docsFor('System', name));
+}
+
+function buildSpaceBody(name) {
+  const FIELDS = [
+    ['Floor',           ['FloorName','Floor Name','Floor']],
+    ['Description',     ['Description']],
+    ['Category',        ['Category']],
+    ['Gross Area',      ['GrossArea','Gross Area']],
+    ['Net Area',        ['NetArea','Net Area']],
+    ['Usable Height',   ['UsableHeight','Usable Height']],
+    ['Gross Perimeter', ['GrossPerimeter','Gross Perimeter']],
+    ['Net Perimeter',   ['NetPerimeter','Net Perimeter']],
+    ['Room Tag',        ['RoomTag','Room Tag']],
+  ];
+  const s = db.spaces.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+  const rows = s ? FIELDS.map(([l,fs])=>{const val=f(s,...fs);return val?`<tr><td style="width:150px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
+  return (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
+    : '<p class="text-muted small mb-0">No additional space data.</p>') + buildDocSection(docsFor('Space', name));
+}
+
+function buildFloorBody(name) {
+  const FIELDS = [
+    ['Category',    ['Category']],
+    ['Description', ['Description']],
+    ['Floor Type',  ['FloorType','Floor Type']],
+    ['Height',      ['Height']],
+    ['Elevation',   ['Elevation']],
+  ];
+  const fl = db.floors.find(x => f(x,'Name').toLowerCase() === name.toLowerCase());
+  const rows = fl ? FIELDS.map(([l,fs])=>{const val=f(fl,...fs);return val?`<tr><td style="width:130px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
+  return (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
+    : '<p class="text-muted small mb-0">No additional floor data.</p>') + buildDocSection(docsFor('Floor', name));
+}
+
+function buildFacilityBody(name) {
+  const FIELDS = [
+    ['Description',      ['Description']],
+    ['Phase',            ['Phase']],
+    ['Country Code',     ['CountryCode','Country Code']],
+    ['Language Code',    ['LanguageCode','Language Code']],
+    ['Currency Unit',    ['CurrencyUnit','Currency Unit']],
+    ['Area Measure',     ['AreaMeasurement','Area Measurement']],
+    ['Linear Unit',      ['LinearUnits','Linear Units']],
+    ['Volume Unit',      ['VolumeUnits','Volume Units']],
+    ['Postal Code',      ['PostalCode','Postal Code']],
+    ['Town',             ['Town']],
+    ['Region',           ['Region']],
+  ];
+  const fac = db.facilities.find(x => x._facility === name);
+  const rows = fac ? FIELDS.map(([l,fs])=>{const val=f(fac,...fs);return val?`<tr><td style="width:140px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
+  const fileRow = fac?._fileName ? `<tr><td style="width:140px;color:#888;font-size:.81rem">Source file</td><td style="font-size:.83rem"><code>${esc(fac._fileName)}</code></td></tr>` : '';
+  const allRows = fileRow + rows;
+  return (allRows ? `<table class="table table-sm mb-0"><tbody>${allRows}</tbody></table>`
+    : '<p class="text-muted small mb-0">No additional facility data.</p>') + buildDocSection(docsFor('Facility', name));
+}
+
+document.getElementById('type-modal').addEventListener('click', e => {
+  const b = e.target.closest('[data-doc]');
+  if (!b) return;
+  const d = docStore[+b.dataset.doc];
+  if (!d) return;
+  const tm = bootstrap.Modal.getInstance(document.getElementById('type-modal'));
+  if (tm) {
+    tm.hide();
+    document.getElementById('type-modal').addEventListener('hidden.bs.modal', () => openDoc(d), { once: true });
+  } else { openDoc(d); }
+});
+
+// ── Document modal ───────────────────────────────────────────
+function openDoc(doc) {
+  const name=f(doc,'Name'), file=f(doc,'File'), dir=f(doc,'Directory'),
+        desc=f(doc,'Description'), cat=f(doc,'Category'),
+        ref=f(doc,'Reference'),   ext=f(doc,'ExtSystem','Ext System');
+
+  document.getElementById('mdoc-title').textContent = name||file||'Document';
+  const isUrl = s => /^https?:\/\//i.test(s);
+  const fCell = isUrl(file) ? `<a href="${esc(file)}" target="_blank" rel="noopener">${esc(file)}</a>`
+                            : (file?`<code>${esc(file)}</code>`:'');
+  const rCell = isUrl(ref)  ? `<a href="${esc(ref)}"  target="_blank" rel="noopener">${esc(ref)}</a>`
+                            : esc(ref);
+  const lpath = (!isUrl(file)&&file) ? (dir?dir.replace(/\/$/,'')+'\\'+file:file) : '';
+
+  const tRows = [
+    ['Name',name&&esc(name)], ['Category',cat&&esc(cat)], ['Description',desc&&esc(desc)],
+    ['File',fCell], ['Directory',dir&&`<code>${esc(dir)}</code>`],
+    ['Reference',ref&&rCell], ['System',ext&&esc(ext)],
+  ].filter(([,v])=>v).map(([k,v])=>
+    `<tr><th style="width:110px;font-weight:500;color:#555">${k}</th><td>${v}</td></tr>`
+  ).join('');
+
+  const pathBlock = lpath ? `<div class="alert alert-secondary py-2 px-3 mt-3 d-flex align-items-center gap-2 mb-0" style="font-size:.79rem">
+    <i class="bi bi-folder2-open"></i>
+    <code style="flex:1;word-break:break-all">${esc(lpath)}</code>
+    <button class="btn btn-sm btn-outline-secondary py-0 px-2 cp-btn" data-p="${esc(lpath)}">
+      <i class="bi bi-clipboard"></i></button></div>` : '';
+
+  document.getElementById('mdoc-body').innerHTML =
+    `<table class="table table-sm mb-0"><tbody>${tRows}</tbody></table>${pathBlock}`;
+  new bootstrap.Modal(document.getElementById('doc-modal')).show();
+}
+document.getElementById('mdoc-body').addEventListener('click', e => {
+  const b=e.target.closest('.cp-btn');
+  if (!b) return;
+  navigator.clipboard.writeText(b.dataset.p).then(()=>{
+    b.innerHTML='<i class="bi bi-check2"></i>';
+    setTimeout(()=>{ b.innerHTML='<i class="bi bi-clipboard"></i>'; },2000);
+  });
+});
+
+// ── Utilities ────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function fmtDate(x) {
+  if (!x) return '';
+  if (x instanceof Date && !isNaN(x)) return x.toLocaleDateString();
+  const s=String(x).trim();
+  if (!s||s.toLowerCase()==='n/a') return '';
+  const d=new Date(s);
+  return !isNaN(d.getTime()) ? d.toLocaleDateString() : s;
+}
+function docIcon(fn) {
+  const ext=(String(fn||'').split('.').pop()||'').toLowerCase();
+  const m={pdf:'bi-file-earmark-pdf',doc:'bi-file-earmark-word',docx:'bi-file-earmark-word',
+    xls:'bi-file-earmark-excel',xlsx:'bi-file-earmark-excel',xlsm:'bi-file-earmark-excel',
+    dwg:'bi-file-earmark-code',dxf:'bi-file-earmark-code',ifc:'bi-box',
+    png:'bi-file-earmark-image',jpg:'bi-file-earmark-image',jpeg:'bi-file-earmark-image',
+    zip:'bi-file-earmark-zip',rar:'bi-file-earmark-zip'};
+  return `<i class="bi ${m[ext]||'bi-file-earmark'}"></i>`;
+}
+
+// ── Group chip drag-and-drop ──────────────────────────────────
+let _gDrag = false;
+const _gList = document.getElementById('group-sortable');
+if (_gList && typeof Sortable !== 'undefined') {
+  Sortable.create(_gList, {
+    animation: 150,
+    onStart: () => { _gDrag = true; },
+    onEnd: () => {
+      groupState.order = [..._gList.querySelectorAll('[data-dim]')].map(li => li.dataset.dim);
+      setTimeout(() => { _gDrag = false; }, 50);
+      applyFilters();
+    },
+  });
+}
+_gList && _gList.addEventListener('click', e => {
+  if (_gDrag) return;
+  const chip = e.target.closest('.group-chip');
+  if (!chip) return;
+  const dim = chip.dataset.dim;
+  if (groupState.active.has(dim)) groupState.active.delete(dim);
+  else groupState.active.add(dim);
+  chip.classList.toggle('gchip-active', groupState.active.has(dim));
+  applyFilters();
+});
+
+// ── Filter bar resize ────────────────────────────────────────
+(function() {
+  const handle = document.getElementById('filter-resize');
+  const bar    = document.getElementById('filter-bar');
+  if (!handle || !bar) return;
+  let dragging = false, startY = 0, startH = 0;
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY; startH = bar.offsetHeight;
+    handle.classList.add('resizing');
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ns-resize';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    bar.style.height = Math.max(58, Math.min(540, startH + e.clientY - startY)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('resizing');
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  });
+  handle.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    dragging = true; startY = t.clientY; startH = bar.offsetHeight;
+    e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const t = e.touches[0];
+    bar.style.height = Math.max(58, Math.min(540, startH + t.clientY - startY)) + 'px';
+  }, { passive: false });
+  document.addEventListener('touchend', () => { dragging = false; });
+})();
+</script>
+</body>
+</html>
