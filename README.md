@@ -24,7 +24,8 @@ systems and documents. No installation. No account. No data upload.
   <a href="#2-find-the-information-you-need">Find assets</a> ·
   <a href="#3-choose-a-working-mode">Choose a view</a> ·
   <a href="#4-review-update-and-create-records">Edit and create</a> ·
-  <a href="#save-your-work">Save your work</a>
+  <a href="#save-your-work">Save your work</a> ·
+  <a href="#detailed-user-guides">Detailed guides</a>
 </p>
 
 ---
@@ -48,6 +49,23 @@ systems and documents. No installation. No account. No data upload.
 > [!NOTE]
 > Your workbook is read inside your browser. It is not uploaded to a server.
 
+## Detailed user guides
+
+The guides below provide step-by-step help beyond this quick introduction.
+
+| Guide | Covers |
+| --- | --- |
+| [Getting started](docs/guides/01-getting-started.md) | Loading modes, appending workbooks, privacy and screen layout |
+| [Find, filter, and group](docs/guides/02-find-filter-group.md) | Search, cross-filter counts, active filters and result grouping |
+| [Asset View](docs/guides/03-asset-view.md) | Component cards, details, relationships and asset workflows |
+| [Document View](docs/guides/04-document-view.md) | Document context, categories, links and direct document editing |
+| [QA View](docs/guides/05-qa-view.md) | Audit findings, severity, corrections and report download |
+| [Edit and create records](docs/guides/06-edit-create.md) | Properties, associations, renaming, documents and new records |
+| [Save, discard, and close](docs/guides/07-save-close.md) | Standard and editable saves, rollback and session safety |
+| [Troubleshooting and data notes](docs/guides/08-troubleshooting-data.md) | Browser limits, file issues, links and COBie relationships |
+
+Start from the [complete guide index](docs/guides/README.md) for suggested reading paths.
+
 ## 1. Open your workbook
 
 <p align="center">
@@ -65,7 +83,7 @@ systems and documents. No installation. No account. No data upload.
 
 Use the columns to narrow the results by **Facility**, **Floor**, **Space**,
 **Type**, **System** or **Document Category**. The numbers beside each option
-show how many matching components it contains.
+show matching components in Asset View or unique documents in Document View.
 
 The search box checks names, descriptions, serial numbers, tags,
 manufacturers and other useful fields.
@@ -149,8 +167,9 @@ The **Unsaved Changes** button appears after an edit.
 | Action | What it does |
 | --- | --- |
 | **Refresh Display** | Rebuilds the dashboard using your latest values |
-| **Discard Changes** | Restores the workbook data from the start of the session |
-| **Save to New Files** | Downloads updated copies of the workbooks |
+| **Discard All** | Restores workbook data to the session baseline |
+| **Download Modified Copies** | Downloads updated copies of the workbooks |
+| **Download with Original Names** | Downloads standard-mode outputs using the source filenames |
 | **Update Selected Files** | Updates files opened with **Open Editable XLSX** |
 
 > [!IMPORTANT]
@@ -161,7 +180,8 @@ The **Unsaved Changes** button appears after an edit.
 ## Working with several buildings
 
 Load several workbooks or an entire folder and Guerrilla Ops combines them in
-one dashboard. Use the **Facility** filter or grouping control to move between
+one dashboard. Additional selections append to the current session instead of
+replacing it. Use the **Facility** filter or grouping control to move between
 buildings while keeping each workbook's information separate.
 
 ## Good to know
@@ -172,6 +192,19 @@ buildings while keeping each workbook's information separate.
 | **Direct updates** | Require a current Chromium browser such as Chrome or Edge |
 | **Internet access** | Needed to load the interface libraries |
 | **Application format** | One portable HTML file |
+
+## AI use disclaimer
+
+This project has been developed and documented with assistance from artificial
+intelligence tools. AI-assisted output may contain errors or omissions and does
+not replace professional judgement, project information requirements, or an
+independent review of the source data.
+
+Guerrilla Ops itself does not provide an AI service and does not send loaded
+workbook data to an AI model. Users remain responsible for checking QA findings,
+edits, document links, and exported workbooks before relying on them or using
+them in a production information-management process. Work from backups and
+review the resulting Excel files against the original data.
 
 ## Contributing
 
