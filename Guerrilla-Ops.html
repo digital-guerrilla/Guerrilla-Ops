@@ -123,6 +123,7 @@
       transition: background .15s;
     }
     #load-lbl:hover, #load-folder-lbl:hover, #edit-files-btn:hover, #close-btn:hover { background: rgba(255,255,255,.12); }
+    #edit-files-btn { background: var(--navy); }
     #close-btn { border-color: rgba(255,255,255,.28); background: rgba(220,53,69,.16); }
     #changes-btn {
       cursor: pointer; border: 1px solid rgba(var(--amber-rgb),.55);
@@ -873,6 +874,7 @@ const sel = { facility: new Set(), floor: new Set(), space: new Set(), type: new
 let lastCounts = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
 let searchQuery = '';
 let viewMode = 'asset';
+let _loadMode = null;
 
 // ── File loading ────────────────────────────────────────────
 const _excelRe = /\.(xlsx|xls|xlsm)$/i;
@@ -932,10 +934,13 @@ async function openEditableFiles() {
 async function loadFiles(fileList, handleMap = new Map()) {
   const files = [...fileList].filter(f => _excelRe.test(f.name));
   if (!files.length) { alert('No COBie Excel files found (.xlsx / .xls / .xlsm).'); return; }
-  if (_changeLog.length && !confirm(
-    'Loading new workbooks will discard ' + _changeLog.length + ' unsaved change' +
-    (_changeLog.length !== 1 ? 's' : '') + '. Continue?'
-  )) return;
+  const incomingMode = handleMap.size ? 'editable' : 'standard';
+  if (_loadMode && _loadMode !== incomingMode) {
+    alert(_loadMode === 'editable'
+      ? 'This session contains editable workbooks. Use Open Editable to append more files.'
+      : 'This session contains standard workbooks. Use Load Files or Load Folder to append more files.');
+    return;
+  }
 
   const prog = document.getElementById('load-progress');
   const parsedFiles = [];
@@ -959,14 +964,24 @@ async function loadFiles(fileList, handleMap = new Map()) {
     return;
   }
 
-  resetDb();
+  const appending = db.facilities.length > 0;
+  const previousLengths = {};
+  ['types','components','spaces','floors','systems','documents','facilities','contacts'].forEach(key => {
+    previousLengths[key] = db[key].length;
+  });
+  if (!appending) resetDb();
   parsedFiles.forEach(({ file, workbook, buffer }) => {
     parseCOBieInto(workbook, file.name, buffer, handleMap.get(file) || null);
   });
   buildIdx();
-  _captureDbState();
-  const label = files.length === 1 ? parsedFiles[0].file.name : `${parsedFiles.length} of ${files.length} files loaded`;
+  if (appending) _appendDbState(previousLengths); else _captureDbState();
+  _loadMode = incomingMode;
+  const label = db.facilities.length === 1
+    ? db.facilities[0]._fileName
+    : `${db.facilities.length} workbooks loaded`;
   showApp(label);
+  document.getElementById('fileInput').value = '';
+  document.getElementById('folderInput').value = '';
   if (failures.length) {
     alert(`${failures.length} workbook${failures.length !== 1 ? 's were' : ' was'} skipped:\n\n${failures.join('\n')}`);
   }
@@ -979,6 +994,7 @@ function resetDb() {
   _justCreated.clear();
   _originalDbState = null;
   _changeLog = [];
+  _loadMode = null;
   _updateChangesBtn();
 }
 
@@ -1055,6 +1071,7 @@ function closeWorkbooks() {
   document.getElementById('btn-qa').classList.remove('active');
   document.getElementById('app').style.display = 'none';
   document.getElementById('upload').style.display = 'flex';
+  _updateLoaderControls();
 }
 
 function _cloneRecord(row) {
@@ -1072,6 +1089,13 @@ function _captureDbState() {
     systems: db.systems.map(_cloneRecord), documents: db.documents.map(_cloneRecord),
     facilities: db.facilities.map(_cloneRecord), contacts: db.contacts.map(_cloneRecord),
   };
+}
+
+function _appendDbState(previousLengths) {
+  if (!_originalDbState) { _captureDbState(); return; }
+  ['types','components','spaces','floors','systems','documents','facilities','contacts'].forEach(key => {
+    db[key].slice(previousLengths[key]).forEach(row => _originalDbState[key].push(_cloneRecord(row)));
+  });
 }
 
 function _restoreDbState() {
@@ -1363,8 +1387,18 @@ function showApp(filename) {
   _renderSummary();
   document.getElementById('search-wrap').classList.remove('d-none');
   document.getElementById('close-btn').classList.remove('d-none');
+  _updateLoaderControls();
 
   applyFilters();
+}
+
+function _updateLoaderControls() {
+  const hasWorkbooks = db.facilities.length > 0;
+  const editableMode = hasWorkbooks && _loadMode === 'editable';
+  const pickerSupported = typeof globalThis.showOpenFilePicker === 'function';
+  document.getElementById('edit-files-btn').classList.toggle('d-none', !pickerSupported || (hasWorkbooks && !editableMode));
+  document.getElementById('load-lbl').classList.toggle('d-none', editableMode);
+  document.getElementById('load-folder-lbl').classList.toggle('d-none', editableMode);
 }
 
 function _renderSummary() {
