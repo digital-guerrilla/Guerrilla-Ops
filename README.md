@@ -1,51 +1,179 @@
+<div align="center">
+
 # Guerrilla Ops
 
-A COBie O&M dashboard in a single HTML file. Drop a COBie workbook in and get a
-navigable, filterable view of the whole thing. No install, no webserver, no
-account. Nothing leaves your machine.
+### A quick, visual way to explore and update COBie information
 
-**Try it here:** [Guerrilla-Ops live](https://digital-guerrilla.github.io/Guerrilla-Ops/Guerrilla-Ops.html)
+Turn an Excel workbook into a searchable view of your buildings, assets,
+systems and documents. No installation. No account. No data upload.
 
-## Getting started
+[![Open Guerrilla Ops](https://img.shields.io/badge/Open_Guerrilla_Ops-00ADED?style=for-the-badge&logo=googlechrome&logoColor=white)](https://digital-guerrilla.github.io/Guerrilla-Ops/Guerrilla-Ops.html)
 
-1. Download `Guerrilla-Ops.html` (or use the hosted link above)
-2. Open it in any modern browser. Double clicking the file is enough, it runs
-   from disk with no webserver
-3. Drag and drop a COBie Excel file (`.xlsx`, `.xls`, `.xlsm`) onto the page,
-   or use **Select Files** / **Open Folder** to load several workbooks at once
+![Single HTML file](https://img.shields.io/badge/Single_HTML_File-323232?style=flat-square)
+![Runs in your browser](https://img.shields.io/badge/Runs_in_Your_Browser-323232?style=flat-square)
+![COBie Excel](https://img.shields.io/badge/COBie-Excel-217346?style=flat-square&logo=microsoftexcel&logoColor=white)
 
-Everything is parsed in your browser. No data is uploaded anywhere, so it is
-safe to use with live project information, on site, or offline.
+</div>
 
-## What you can do
+<p align="center">
+  <img src="docs/images/02-find-assets.png" alt="Guerrilla Ops asset browser" width="100%">
+</p>
 
-- **Browse assets** by Facility, Floor, Space, Type, System and Document
-  Category, with live cross filtering. Every filter shows a count of matching
-  components so you can see where the data is before you click
-- **Search everything.** One search box covers names, serial numbers, tag
-  numbers, barcodes, asset identifiers, descriptions, manufacturers and more
-- **Group your way.** Drag the grouping chips to nest the asset list however
-  you think about the building, for example Floor then Space then Type
-- **Open documents.** O&M manuals, certificates and other linked documents are
-  shown against their component, type, space, system or facility, with copy
-  and open buttons for file paths and links
-- **Document view.** Flip the whole dashboard to a document first view when
-  the question is "what paperwork do we hold" rather than "what assets exist"
-- **Edit and create.** Fix values, reassign types and spaces, manage document
-  links, and add new spaces, types, components, systems and contacts through
-  the built in forms
-- **Export back to COBie.** Changes are tracked per facility and can be saved
-  back to Excel, either overwriting the original file name or as a new
-  `_modified` copy
+<p align="center">
+  <a href="#get-started">Get started</a> ·
+  <a href="#2-find-the-information-you-need">Find assets</a> ·
+  <a href="#3-choose-a-working-mode">Choose a view</a> ·
+  <a href="#4-review-update-and-create-records">Edit and create</a> ·
+  <a href="#save-your-work">Save your work</a>
+</p>
 
-## Multiple buildings
+---
 
-Load a folder of COBie files and Guerrilla Ops merges them into one view,
-tagged per facility. The Facility filter and facility grouping keep estates
-work manageable across any number of buildings.
+## What can it do?
+
+| Explore | Maintain |
+| --- | --- |
+| Find assets without working through a large spreadsheet | Check COBie information for common gaps and broken links |
+| See where equipment is, what type it is and which system it belongs to | Edit records and create new items |
+| Bring manuals, certificates and other documents into one view | Save changes back to Excel |
+| Combine several building workbooks into one estate-wide view | Keep each building's information separate |
+
+## Get started
+
+1. **Open Guerrilla Ops.** Use the [live version](https://digital-guerrilla.github.io/Guerrilla-Ops/Guerrilla-Ops.html),
+   or download and double-click `Guerrilla-Ops.html`.
+2. **Choose your data.** Open one COBie workbook, several files, or a folder.
+3. **Start exploring.** Filter, search, group and open records.
+
+> [!NOTE]
+> Your workbook is read inside your browser. It is not uploaded to a server.
+
+## 1. Open your workbook
+
+<p align="center">
+  <img src="docs/images/01-open-workbook.png" alt="Choose a COBie workbook" width="900">
+</p>
+
+| Option | Use it when... |
+| --- | --- |
+| **Select Files** | You want to open one or more COBie workbooks |
+| **Open Folder** | You want to load all COBie workbooks from a folder |
+| **Open Editable XLSX** | You want Chrome or Edge to update an `.xlsx` file directly |
+| **Drag and drop** | You already have the files open in Explorer |
+
+## 2. Find the information you need
+
+Use the columns to narrow the results by **Facility**, **Floor**, **Space**,
+**Type**, **System** or **Document Category**. The numbers beside each option
+show how many matching components it contains.
+
+The search box checks names, descriptions, serial numbers, tags,
+manufacturers and other useful fields.
+
+### Group and reorder results
+
+The **Group** controls above the results decide how records are arranged:
+
+1. **Turn on a group.** Click **Floor**, **Space**, **Type** or another group
+   name. Active groups have a dark background.
+2. **Add more levels.** Turn on as many groups as you need. Click an active
+   group again to remove it.
+3. **Set the order.** Drag the group names left or right. The leftmost active
+   group becomes the outer level.
+4. **Open the results.** Select **Expand All** to open every group.
+
+> **Location-led example:** `Floor` → `Space` → `Type`<br>
+> **System-led example:** `System` → `Type`
+
+## 3. Choose a working mode
+
+The buttons above the results let you look at the same workbook in three
+different ways. Your active filters continue to apply when you move between
+views.
+
+| Mode | Best for | What you will see |
+| --- | --- | --- |
+| **Asset View** | Finding equipment | Components, locations, types, systems and full asset records |
+| **Document View** | Finding information files | Manuals, certificates, drawings, links and network file paths |
+| **QA View** | Checking data quality | Missing references, unresolved relationships and incomplete records |
+
+### Asset View
+
+Use **Asset View** for equipment and component information. It is the best
+starting point for finding an asset, checking where it is installed, seeing
+its type and system, or opening its full record.
+
+The **Group** controls are most useful here. Try **System → Type** for a
+system-led view or **Floor → Space → Type** for a location-led view.
+
+### Document View
+
+Select **Document View** to focus on manuals, certificates, drawings and other
+linked files. The same filters remain available, so you can quickly reduce a
+large document set to one building, space, system or asset type.
+
+Expand a result to see its document details. Web links can be opened directly,
+and file paths can be copied for use on your local network.
+
+### QA View
+
+Use **QA View** to check the workbook for common COBie problems, including
+missing references, unresolved relationships and incomplete records. Findings
+are grouped by check and marked as errors, warnings or information.
+
+The **Facility** filter controls which buildings are audited. Select a finding
+to inspect or edit the affected record, then return to QA View to see the
+updated results. A report of the findings can also be downloaded.
+
+## 4. Review, update and create records
+
+Open a record to update its properties and relationships. Depending on the
+record, you can change its type or space, update system membership, and add or
+remove linked documents.
+
+### Create a new item
+
+Select **Create**, choose the kind of item, and complete the form. You can add
+`Spaces`, `Types`, `Components`, `Systems` and `Contacts`.
+
+> [!TIP]
+> When several workbooks are open, choose the correct facility before saving.
+
+New items behave like edited records: they appear under **Unsaved Changes**
+until you update or download the workbook.
+
+## Save your work
+
+The **Unsaved Changes** button appears after an edit.
+
+| Action | What it does |
+| --- | --- |
+| **Refresh Display** | Rebuilds the dashboard using your latest values |
+| **Discard Changes** | Restores the workbook data from the start of the session |
+| **Save to New Files** | Downloads updated copies of the workbooks |
+| **Update Selected Files** | Updates files opened with **Open Editable XLSX** |
+
+> [!IMPORTANT]
+> Standard `.xlsx` files provide the best formatting fidelity. Legacy `.xls`
+> and macro-enabled `.xlsm` files use a compatibility export. Unmanaged
+> workbook sheets are retained.
+
+## Working with several buildings
+
+Load several workbooks or an entire folder and Guerrilla Ops combines them in
+one dashboard. Use the **Facility** filter or grouping control to move between
+buildings while keeping each workbook's information separate.
+
+## Good to know
+
+| | |
+| --- | --- |
+| **Supported files** | `.xlsx`, `.xls` and `.xlsm` |
+| **Direct updates** | Require a current Chromium browser such as Chrome or Edge |
+| **Internet access** | Needed to load the interface libraries |
+| **Application format** | One portable HTML file |
 
 ## Contributing
 
-Fork it, break it, improve it. Pull requests are welcome, and if you want to
-be an active contributor please get in touch through
+Ideas, fixes and pull requests are welcome. To get involved, visit
 [digital-guerrilla.scot](https://digital-guerrilla.scot).
