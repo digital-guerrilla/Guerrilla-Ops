@@ -13,6 +13,9 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+
+  <!-- #region CSS -->
+
   <style>
     :root {
       /* ── Layout ─────────────────────────────────── */
@@ -546,8 +549,13 @@
     .qa-clear { text-align: center; padding: 3rem 2rem; color: var(--text-muted); }
     .qa-clear i { font-size: 3rem; display: block; margin-bottom: .7rem; color: #137333; }
   </style>
+
+  <!-- #endregion -->
+
 </head>
 <body>
+
+<!-- #region HTML -->
 
 <!-- HEADER -->
 <header id="hdr">
@@ -859,14 +867,21 @@
   </div>
 </div>
 
+<!-- #endregion -->
+
+<!-- #region JavaScript -->
+
 <script>
 
+// #region Application state and workbook lifecycle
+
+// ── Application state and shared constants ───────────────────
 const db  = { types:[], components:[], spaces:[], floors:[], systems:[], documents:[], facilities:[], contacts:[], facility:null };
 const idx = {};
 let docStore = [];
 let cardCtr  = 0;
 
-// ── Shared icon / label lookup tables (hoisted to avoid per-call object creation) ──
+// Shared icon and label lookup tables used by grouped result views.
 const _GRP_ICONS  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'};
 const _GRP_LABELS = {type:'Type',system:'System',space:'Space',floor:'Floor',facility:'Facility'};
 
@@ -876,8 +891,10 @@ let searchQuery = '';
 let viewMode = 'asset';
 let _loadMode = null;
 
-// ── File loading ────────────────────────────────────────────
+// ── Workbook loading and session lifecycle ──────────────────
 const _excelRe = /\.(xlsx|xls|xlsm)$/i;
+
+// Register upload, editable-picker, unload, and drag-and-drop entry points.
 document.getElementById('fileInput')  .addEventListener('change', e => { if(e.target.files.length) loadFiles(e.target.files); });
 document.getElementById('folderInput').addEventListener('change', e => { if(e.target.files.length) loadFiles(e.target.files); });
 window.addEventListener('beforeunload', event => {
@@ -998,6 +1015,7 @@ function resetDb() {
   _updateChangesBtn();
 }
 
+// Return the single-page application to its initial upload state.
 function closeWorkbooks() {
   if (_changeLog.length && !confirm(
     'You have ' + _changeLog.length + ' unsaved change' + (_changeLog.length !== 1 ? 's' : '') +
@@ -1074,6 +1092,7 @@ function closeWorkbooks() {
   _updateLoaderControls();
 }
 
+// ── Session snapshots and rollback ───────────────────────────
 function _cloneRecord(row) {
   const copy = {};
   Object.entries(row).forEach(([key, value]) => {
@@ -1107,7 +1126,11 @@ function _restoreDbState() {
   _justCreated.clear();
 }
 
-// ── Parsing ─────────────────────────────────────────────────
+// #endregion
+
+// #region COBie parsing and indexes
+
+// ── COBie parsing and identity helpers ───────────────────────
 function readSheet(wb, name) {
   const k = Object.keys(wb.Sheets).find(k => k.toLowerCase() === name.toLowerCase());
   return k ? XLSX.utils.sheet_to_json(wb.Sheets[k], { defval:'', raw:false }) : [];
@@ -1144,6 +1167,7 @@ function parseCOBieInto(wb, fileName, sourceBuffer, fileHandle) {
   if (!db.facility) db.facility = facRow; // backward compat
 }
 
+// ── Derived indexes and document contexts ────────────────────
 function buildIdx() {
   // Documents
   idx.docs = {};
@@ -1376,7 +1400,11 @@ function _buildDocumentContexts() {
   return [...contexts.values()];
 }
 
-// ── Show app ─────────────────────────────────────────────────
+// #endregion
+
+// #region Application display and filtering
+
+// ── Application display lifecycle ────────────────────────────
 function showApp(filename) {
   document.getElementById('upload').style.display = 'none';
   document.getElementById('app').style.display    = 'flex';
@@ -1426,7 +1454,7 @@ function refreshDisplay(closeChangesModal = false) {
   }
 }
 
-// ── Filtering ────────────────────────────────────────────────
+// ── Filter model and cross-counts ────────────────────────────
 // Returns true if Set a and Set b share at least one element
 function _setHasAny(a, b) { for (const x of a) if (b.has(x)) return true; return false; }
 const _SUPPORTED_DOC_SHEETS = new Set(['component','type','space','floor','system','facility']);
@@ -1483,6 +1511,7 @@ function _documentContextEntry(context) {
   };
 }
 
+// ── Filter application and user actions ──────────────────────
 // Single-pass: builds filtered component list + cross-counts simultaneously.
 // Uses a 6-bit mask (one bit per dimension) so each component is visited once.
 function applyFilters() {
@@ -1583,7 +1612,7 @@ function setMode(mode) {
   applyFilters();
 }
 
-// ── Filter panels ────────────────────────────────────────────
+// ── Filter panel rendering and events ────────────────────────
 function renderPanels(counts) {
   renderPanel('fpl-facility','fb-facility', idx.facilityNames,'facility', counts.facility);
   renderPanel('fpl-floor',  'fb-floor',  idx.floors,  'floor',  counts.floor);
@@ -1718,7 +1747,7 @@ function toggleCategory(dim, catName) {
   applyFilters();
 }
 
-// ── Filter pills ─────────────────────────────────────────────
+// ── Active filter pills and expansion controls ───────────────
 const DIM_CFG = {
   facility: { label:'Facility',     cls:'pill-facility' },
   floor:    { label:'Floor',        cls:'pill-floor'    },
@@ -1862,7 +1891,11 @@ document.getElementById('pills').addEventListener('click', e => {
   applyFilters();
 });
 
-// ── Component rendering ──────────────────────────────────────
+// #endregion
+
+// #region Asset and document results
+
+// ── Result view state and dispatch ───────────────────────────
 let groupInfoStore = [];
 let collapseCounter = 0;
 let allExpanded = false;
@@ -1905,6 +1938,7 @@ function renderComps(comps, documentEntries = []) {
     : renderLeaf(comps);
 }
 
+// ── Asset result grouping and pagination ─────────────────────
 function groupNested(comps, dims, depth = 0) {
   if (!dims.length || !comps.length) return renderLeaf(comps);
   const [dim, ...rest] = dims;
@@ -1948,7 +1982,7 @@ function renderLeaf(comps) {
   </div>`;
 }
 
-// ── Document Mode ──────────────────────────────────────────
+// ── Document result grouping and cards ───────────────────────
 function collectDocsForComps(comps) {
   const seen=new Set(), entries=[];
   const doneT=new Set(), doneSp=new Set(), doneSy=new Set(), doneFl=new Set(), doneFac=new Set();
@@ -2087,6 +2121,7 @@ function docCard(entry) {
   </div>`;
 }
 
+// ── Shared group and asset card rendering ────────────────────
 function buildGroupMap(comps, dim) {
   const map = new Map();
   if (dim === 'facility') {
@@ -2288,7 +2323,7 @@ function _toggleGroupHeader(header, forceOpen) {
   return body;
 }
 
-
+// Result interactions are delegated because grouped bodies render lazily.
 document.getElementById('comp-list').addEventListener('click', e => {
   // Group info button
   const gb = e.target.closest('[data-grpidx]');
@@ -2350,7 +2385,11 @@ document.getElementById('comp-list').addEventListener('hide.bs.collapse', e => {
   if(btn) btn.innerHTML='<i class="bi bi-chevron-expand"></i> Details';
 });
 
-// ── QA View ─────────────────────────────────────────────────
+// #endregion
+
+// #region Workbook quality audit
+
+// ── Workbook quality audit ───────────────────────────────────
 // Audits the loaded workbook(s) for referential integrity and completeness.
 // Scope follows the Facility filter; other filters are ignored so the audit
 // always covers the whole facility rather than a filtered slice.
@@ -2656,6 +2695,7 @@ function runQA() {
   return out;
 }
 
+// ── QA rendering and report export ───────────────────────────
 function renderQAMode(list) {
   qaFindings = runQA();
   const bySev = { error:0, warning:0, info:0 };
@@ -2741,7 +2781,11 @@ function exportQAReport() {
   XLSX.writeFile(wb, 'QA-Report_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
-// ── Type detail modal ──────────────────────────────────────────
+// #endregion
+
+// #region Information modals and shared UI utilities
+
+// ── Entity information modal ─────────────────────────────────
 const TYPE_FIELDS = [
   ['Category',              ['Category']],
   ['Description',           ['Description']],
@@ -2911,7 +2955,7 @@ document.getElementById('type-modal').addEventListener('click', e => {
   } else { openDoc(d); }
 });
 
-// ── Document modal ───────────────────────────────────────────
+// ── Document information modal ───────────────────────────────
 function openDoc(doc) {
   const name=f(doc,'Name'), dir=f(doc,'Directory'),
         desc=f(doc,'Description'), cat=f(doc,'Category');
@@ -2952,7 +2996,7 @@ document.getElementById('mdoc-body').addEventListener('click', e => {
   });
 });
 
-// ── Utilities ────────────────────────────────────────────────
+// ── Formatting, escaping, and document path utilities ────────
 const _ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 function esc(s) { return String(s||'').replace(/[&<>"']/g, c => _ESC_MAP[c]); }
 function _docTarget(directory) {
@@ -2993,7 +3037,7 @@ function docIcon(fn) {
   return `<i class="bi ${_DOC_ICONS[ext]||'bi-file-earmark'}"></i>`;
 }
 
-// ── Group chip drag-and-drop ──────────────────────────────────
+// ── Result grouping controls ─────────────────────────────────
 let _gDrag = false;
 const _gList = document.getElementById('group-sortable');
 if (_gList && typeof Sortable !== 'undefined') {
@@ -3018,7 +3062,11 @@ _gList && _gList.addEventListener('click', e => {
   applyFilters();
 });
 
-// ── Edit / CRUD Engine ────────────────────────────────────────
+// #endregion
+
+// #region Editing and entity creation
+
+// ── Edit engine state and modal lifecycle ────────────────────
 let _editState = null;
 let _editDocRemovals = [];
 let _editDocRefs = new Map();
@@ -3080,7 +3128,7 @@ function _showEditModal() {
   new bootstrap.Modal(document.getElementById('edit-modal')).show();
 }
 
-// ── edit form helpers ─────────────────────────────────────────
+// ── Edit form controls and document rows ─────────────────────
 function _ef(label, fieldName, value) {
   return `<div class="mb-2">
     <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">${esc(label)}</label>
@@ -3298,7 +3346,7 @@ function _buildEditBody(entityType, entityName) {
   </div>`;
 }
 
-// Add/remove doc rows in edit modal
+// ── Edit modal events ─────────────────────────────────────────
 document.getElementById('edit-modal').addEventListener('click', e => {
   const rmBtn = e.target.closest('.rm-doc-btn');
   if (rmBtn) {
@@ -3364,6 +3412,7 @@ document.getElementById('edit-modal').addEventListener('change', e => {
     : 'Your browser hides the full local path. Paste the full path here if the file name alone is not enough.';
 });
 
+// ── Rename propagation and edit persistence ──────────────────
 function _setReference(row, aliases, oldName, newName) {
   if (f(row,...aliases).toLowerCase() !== oldName.toLowerCase()) return;
   const key = aliases.find(alias => v(row[alias]).toLowerCase() === oldName.toLowerCase())
@@ -3585,7 +3634,7 @@ function _updateSysComponents(sysName, newComps, fac) {
   }
 }
 
-// ── Create Modal ──────────────────────────────────────────────
+// ── Entity creation engine ───────────────────────────────────
 let _createType = 'space';
 
 function openCreateModal(entityType, prefillName, prefillFac) {
@@ -3801,7 +3850,11 @@ function saveCreate() {
   }
 }
 
-// ── Change Tracking & Export ─────────────────────────────────
+// #endregion
+
+// #region Change tracking and workbook export
+
+// ── Change tracking and review ───────────────────────────────
 function _logChange(entityType, entityName, facility, originalName = entityName) {
   let facNames = facility ? [facility] : [];
   if (!facNames.length && entityType === 'component') {
@@ -3890,6 +3943,7 @@ function openChangesModal() {
   new bootstrap.Modal(document.getElementById('changes-modal')).show();
 }
 
+// ── Workbook reconstruction and style preservation ───────────
 function _exportSheetData(facObj) {
   const fac     = facObj._facility;
   const cleanRows = (arr) => arr
@@ -4058,6 +4112,7 @@ function _writableCellStyle(style) {
   return copy;
 }
 
+// ── Save, download, and discard actions ──────────────────────
 async function saveToExistingFiles() {
   const writablePromises = new Map();
   try {
@@ -4103,7 +4158,11 @@ function discardChanges() {
   bootstrap.Modal.getInstance(document.getElementById('changes-modal'))?.hide();
 }
 
-// ── Filter bar resize ────────────────────────────────────────
+// #endregion
+
+// #region Filter bar resizing
+
+// ── Filter bar resize controls ───────────────────────────────
 (function() {
   const handle = document.getElementById('filter-resize');
   const bar    = document.getElementById('filter-bar');
@@ -4172,6 +4231,12 @@ function discardChanges() {
     }
   });
 })();
+
+// #endregion
+
 </script>
+
+<!-- #endregion -->
+
 </body>
 </html>
