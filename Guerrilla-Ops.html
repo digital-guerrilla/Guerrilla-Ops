@@ -499,6 +499,26 @@
       padding: .28rem .7rem; font-size: .8rem; cursor: pointer; transition: all .12s; }
     .create-type-btn:hover { background: var(--bg-hover); }
     .create-type-btn.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+
+    /* QA view */
+    #qa-summary {
+      display: flex; align-items: center; flex-wrap: wrap; gap: .6rem;
+      background: #fff; border: 1px solid var(--border-subtle);
+      border-radius: 9px; padding: .7rem .9rem; margin-bottom: .8rem;
+    }
+    #qa-summary .qa-scope { font-size: .78rem; color: var(--text-muted); flex: 1; min-width: 160px; }
+    .qa-sev {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .04em; border-radius: 8px; padding: .1rem .5rem; flex-shrink: 0;
+    }
+    .qa-sev-error   { background: var(--pill-type-bg);   color: var(--pill-type-text);   }
+    .qa-sev-warning { background: var(--pill-system-bg); color: var(--pill-system-text); }
+    .qa-sev-info    { background: var(--pill-floor-bg);  color: var(--pill-floor-text);  }
+    .cc.qa-error   { border-left: 3px solid var(--danger); }
+    .cc.qa-warning { border-left: 3px solid var(--amber);  }
+    .cc.qa-info    { border-left: 3px solid var(--accent); }
+    .qa-clear { text-align: center; padding: 3rem 2rem; color: var(--text-muted); }
+    .qa-clear i { font-size: 3rem; display: block; margin-bottom: .7rem; color: #137333; }
   </style>
 </head>
 <body>
@@ -639,6 +659,9 @@
       </button>
       <button class="mode-btn" id="btn-document" onclick="setMode('document')">
         <i class="bi bi-folder2-open me-1"></i>Document View
+      </button>
+      <button class="mode-btn" id="btn-qa" onclick="setMode('qa')">
+        <i class="bi bi-clipboard-check me-1"></i>QA View
       </button>
       <button class="mode-btn" id="btn-create" onclick="openCreateModal()">
         <i class="bi bi-plus-circle me-1"></i>Create
@@ -874,7 +897,8 @@ function f(row, ...names) {
 }
 
 function parseCOBieInto(wb, fileName) {
-  const facRow  = readSheet(wb,'Facility')[0] || {};
+  const facRows = readSheet(wb,'Facility');
+  const facRow  = facRows[0] || {};
   const facName = f(facRow,'Name') || fileName.replace(/\.[^.]+$/, '');
   const tag = rec => { rec._facility = facName; return rec; };
 
@@ -885,7 +909,7 @@ function parseCOBieInto(wb, fileName) {
   db.systems    .push(...readSheet(wb,'System')   .map(tag));
   db.documents  .push(...readSheet(wb,'Document') .map(tag));
   db.contacts   .push(...readSheet(wb,'Contact')  .map(tag));
-  db.facilities .push({ ...facRow, _facility: facName, _fileName: fileName });
+  db.facilities .push({ ...facRow, _facility: facName, _fileName: fileName, _facRowCount: facRows.length });
   if (!db.facility) db.facility = facRow; // backward compat
 }
 
@@ -1181,6 +1205,7 @@ function setMode(mode) {
   viewMode = mode;
   document.getElementById('btn-asset')   .classList.toggle('active', mode==='asset');
   document.getElementById('btn-document').classList.toggle('active', mode==='document');
+  document.getElementById('btn-qa')      .classList.toggle('active', mode==='qa');
   applyFilters();
 }
 
@@ -1369,7 +1394,9 @@ function toggleExpandAll() {
       delete pendingGroups[cid];
       const body = document.getElementById(cid);
       if (body) {
-        if (pg.isDocMode) {
+        if (pg.isQA) {
+          body.innerHTML = qaGroupBody(pg.qaItems);
+        } else if (pg.isDocMode) {
           body.innerHTML = pg.isCatLeaf
             ? pg.docEntries.map(e => docCard(e)).join('')
             : groupDocsNested(pg.docEntries, pg.dims || [], pg.depth || 0);
@@ -1481,6 +1508,11 @@ function renderComps(comps) {
   const eab = document.getElementById('expand-all-btn');
   if (eab) eab.innerHTML = '<i class="bi bi-arrows-expand"></i>Expand All';
   const list = document.getElementById('comp-list');
+
+  if (viewMode === 'qa') {
+    renderQAMode(list);
+    return;
+  }
 
   if (!comps.length) {
     list.innerHTML = `<div class="empty"><i class="bi bi-inbox"></i><p>No components match the current filters.</p></div>`;
@@ -1798,7 +1830,7 @@ function card(c) {
       </div>
       ${details.length?`<button class="xbtn" data-bs-toggle="collapse" data-bs-target="#${id}">
         <i class="bi bi-chevron-expand"></i> Details</button>`:''}
-      <button class="xbtn" data-edit-entity="component" data-edit-key="${esc(name)}" title="Edit component"><i class="bi bi-pencil"></i></button>
+      <button class="xbtn" data-edit-entity="component" data-edit-key="${esc(name)}" data-edit-fac="${esc(c._facility||'')}" title="Edit component"><i class="bi bi-pencil"></i></button>
     </div>
     ${badges?`<div class="mt-2">${badges}</div>`:''}
     ${details.length?`<div class="collapse mt-2" id="${id}"><hr class="my-2">
@@ -1839,7 +1871,7 @@ document.getElementById('comp-list').addEventListener('click', e => {
   }
   // Edit entity button (component cards + doc view)
   const eb = e.target.closest('[data-edit-entity]');
-  if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey); return; }
+  if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey, eb.dataset.editFac); return; }
   // Doc badge
   const docBtn = e.target.closest('[data-doc]');
   if (docBtn) { const d=docStore[+docBtn.dataset.doc]; if(d) openDoc(d); return; }
@@ -1878,7 +1910,9 @@ document.getElementById('comp-list').addEventListener('click', e => {
       if (pendingGroups[cid]) {
         const pg = pendingGroups[cid];
         delete pendingGroups[cid];
-        if (pg.isDocMode) {
+        if (pg.isQA) {
+          body.innerHTML = qaGroupBody(pg.qaItems);
+        } else if (pg.isDocMode) {
           body.innerHTML = pg.isCatLeaf
             ? pg.docEntries.map(e => docCard(e)).join('')
             : groupDocsNested(pg.docEntries, pg.dims || [], pg.depth || 0);
@@ -1900,6 +1934,397 @@ document.getElementById('comp-list').addEventListener('hide.bs.collapse', e => {
   const btn=document.querySelector(`[data-bs-target="#${e.target.id}"]`);
   if(btn) btn.innerHTML='<i class="bi bi-chevron-expand"></i> Details';
 });
+
+// ── QA View ─────────────────────────────────────────────────
+// Audits the loaded workbook(s) for referential integrity and completeness.
+// Scope follows the Facility filter; other filters are ignored so the audit
+// always covers the whole facility rather than a filtered slice.
+const QA_CHECKS = {
+  'facility-cardinality': { label:'Workbook does not have exactly one Facility row', sev:'error', sheet:'Facility', ico:'bi-building' },
+  'key-missing':       { label:'Rows with a blank Name',                sev:'error',   sheet:'Multiple',  ico:'bi-key' },
+  'comp-no-type':      { label:'Component has no Type',                 sev:'error',   sheet:'Component', ico:'bi-tools' },
+  'comp-bad-type':     { label:'Component references unknown Type',     sev:'error',   sheet:'Component', ico:'bi-tools' },
+  'comp-no-space':     { label:'Component has no Space',                sev:'error',   sheet:'Component', ico:'bi-tools' },
+  'comp-bad-space':    { label:'Component references unknown Space',    sev:'error',   sheet:'Component', ico:'bi-tools' },
+  'space-bad-floor':   { label:'Space has missing or unknown Floor',    sev:'error',   sheet:'Space',     ico:'bi-grid-fill' },
+  'sys-bad-comp':      { label:'System references unknown Component',   sev:'error',   sheet:'System',    ico:'bi-diagram-3-fill' },
+  'doc-bad-ref':       { label:'Document points at a missing row',      sev:'error',   sheet:'Document',  ico:'bi-file-earmark-text' },
+  'dup-names':         { label:'Duplicate names in one sheet',          sev:'error',   sheet:'Multiple',  ico:'bi-files' },
+  'createdby-missing': { label:'CreatedBy not in Contact sheet',        sev:'error',   sheet:'Multiple',  ico:'bi-person-fill' },
+  'comp-no-system':    { label:'Component belongs to no System',        sev:'warning', sheet:'Component', ico:'bi-diagram-3-fill' },
+  'type-no-category':  { label:'Type has no classification',            sev:'warning', sheet:'Type',      ico:'bi-tag-fill' },
+  'space-no-category': { label:'Space has no classification',           sev:'warning', sheet:'Space',     ico:'bi-grid-fill' },
+  'warranty-unit':     { label:'Warranty duration has no unit',         sev:'warning', sheet:'Type',      ico:'bi-tag-fill' },
+};
+// COBie sheets this app does not parse — a Document pointing at one of these
+// is unverifiable here, which is not the same as broken. Skip, never flag.
+const _QA_UNPARSED_SHEETS = new Set(['zone','assembly','spare','resource','job','impact','attribute','coordinate','connection','issue']);
+const _QA_EDITABLE = new Set(['component','type','space','system','floor','facility']);
+let qaFindings = [];
+let qaScopeCounts = { comps:0, spaces:0, types:0, docs:0 };
+
+// Raw field access: unlike v(), keeps an explicit "n/a" visible so required-field
+// checks can honour COBie's not-applicable convention instead of flagging it.
+function qaRaw(row, ...names) {
+  for (const n of names) { const s = String(row[n] ?? '').trim(); if (s) return s; }
+  return '';
+}
+function qaIsNA(s) { return s.toLowerCase() === 'n/a'; }
+
+function runQA() {
+  const facSel = sel.facility;
+  const inScope = r => !facSel.size || facSel.has((r._facility||'').toLowerCase());
+  const S = {
+    comps:    db.components.filter(inScope),
+    types:    db.types.filter(inScope),
+    spaces:   db.spaces.filter(inScope),
+    floors:   db.floors.filter(inScope),
+    systems:  db.systems.filter(inScope),
+    docs:     db.documents.filter(inScope),
+    contacts: (db.contacts||[]).filter(inScope),
+  };
+  qaScopeCounts = { comps: S.comps.length, spaces: S.spaces.length, types: S.types.length, docs: S.docs.length };
+
+  // Per-facility name sets — COBie names are unique within a facility, and a
+  // reference must resolve within its own workbook, not a neighbouring one.
+  const nameSet = rows => {
+    const m = {};
+    rows.forEach(r => {
+      const fac = (r._facility||'').toLowerCase();
+      const n = f(r,'Name').toLowerCase();
+      if (!n) return;
+      (m[fac] = m[fac] || new Set()).add(n);
+    });
+    return m;
+  };
+  const typeNames  = nameSet(S.types);
+  const spaceNames = nameSet(S.spaces);
+  const floorNames = nameSet(S.floors);
+  const compNames  = nameSet(S.comps);
+  // Email is the COBie 2.4 Contact key; a row's Name only stands in when that
+  // row has no Email, so display names cannot mask an invalid email reference.
+  const contactIds = {};
+  S.contacts.forEach(c => {
+    const fac = (c._facility||'').toLowerCase();
+    const set = (contactIds[fac] = contactIds[fac] || new Set());
+    const n = f(c,'Name').toLowerCase(), e = f(c,'Email').toLowerCase();
+    if (e) set.add(e); else if (n) set.add(n);
+  });
+
+  const out = [];
+  const add = (check, entityType, entityName, facility, detail) =>
+    out.push({ check, sev: QA_CHECKS[check].sev, entityType, entityName, facility, detail });
+
+  // Facility cardinality — the parser reads only the first Facility row, so a
+  // workbook carrying several loses data silently. Say so out loud.
+  db.facilities.filter(inScope).forEach(fac => {
+    const n = fac._facRowCount;
+    if (n === undefined) return;
+    if (n === 0)
+      add('facility-cardinality','facility',fac._facility||fac._fileName,fac._facility||'',
+        `"${fac._fileName}" has no Facility row.`);
+    else if (n > 1)
+      add('facility-cardinality','facility',fac._facility||'',fac._facility||'',
+        `"${fac._fileName}" has ${n} Facility rows; only the first is read.`);
+    if (n >= 1 && !f(fac,'Name'))
+      add('key-missing','sheet','Facility sheet',fac._facility||'',
+        `Facility row has a blank Name — the file name "${fac._fileName}" is standing in for it.`);
+  });
+
+  // Blank keys — a row without its key cannot be referenced, edited or exported
+  // meaningfully. Contact is keyed by Email in COBie 2.4 (Name accepted as a
+  // fallback for workbooks that use it).
+  [['Component',S.comps,null],['Type',S.types,null],['Space',S.spaces,null],['Floor',S.floors,null],
+   ['System',S.systems,null],['Document',S.docs,null],
+   ['Contact',S.contacts,r => f(r,'Email')||f(r,'Name')]]
+  .forEach(([sheetName, rows, keyFn]) => {
+    const blank = {};
+    rows.forEach(r => {
+      if (keyFn ? keyFn(r) : f(r,'Name')) return;
+      const fac = r._facility||'';
+      blank[fac] = (blank[fac]||0)+1;
+    });
+    Object.entries(blank).forEach(([fac, n]) =>
+      add('key-missing','sheet',sheetName+' sheet',fac,`${n} row${n!==1?'s':''} with a blank ${sheetName==='Contact'?'Email':'Name'}.`));
+  });
+
+  // A missing or empty target sheet must deny, not pass — but one absent sheet
+  // is one defect, so unresolvable references are aggregated per facility
+  // instead of flooding a finding per row.
+  const facDisp = {};
+  [S.comps,S.types,S.spaces,S.floors,S.systems,S.docs,S.contacts].forEach(rows =>
+    rows.forEach(r => { const l=(r._facility||'').toLowerCase(); if (l && !facDisp[l]) facDisp[l]=r._facility; }));
+  const missingRefs = {};
+  const tally = (facL, k, v) => {
+    const m = (missingRefs[facL] = missingRefs[facL] || { type:0, space:0, floor:0, syscomp:0, createdby:new Set() });
+    if (k === 'createdby') m.createdby.add(v); else m[k] += (v||1);
+  };
+
+  // Component checks. COBie allows an explicit "n/a" where a value is genuinely
+  // not applicable — that is a different defect to an accidentally blank cell
+  // for a required relationship, so the message says which one it found.
+  const noRefMsg = (field, raw) => raw
+    ? `${field} is explicitly "n/a" — this relationship cannot be n/a at handover.`
+    : `${field} is blank.`;
+  S.comps.forEach(c => {
+    const name = f(c,'Name'), fac = c._facility||'', facL = fac.toLowerCase();
+    if (!name) return; // reported by key-missing
+    const tn = qaRaw(c,'TypeName','Type Name');
+    if (!tn || qaIsNA(tn)) add('comp-no-type','component',name,fac,noRefMsg('TypeName',tn));
+    else if (!typeNames[facL]) tally(facL,'type');
+    else if (!typeNames[facL].has(tn.toLowerCase()))
+      add('comp-bad-type','component',name,fac,`TypeName "${tn}" is not in the Type sheet.`);
+
+    const spRaw = qaRaw(c,'Space');
+    if (!spRaw || qaIsNA(spRaw)) add('comp-no-space','component',name,fac,noRefMsg('Space',spRaw));
+    else if (!spaceNames[facL]) tally(facL,'space');
+    else if (!spaceNames[facL].has(spRaw.toLowerCase())) {
+      // Space may hold a comma-separated list; try the whole string first and
+      // only split when it does not match, so space names containing commas stay safe.
+      const missing = spRaw.split(',').map(x=>x.trim()).filter(Boolean)
+        .filter(t => !spaceNames[facL].has(t.toLowerCase()));
+      if (missing.length)
+        add('comp-bad-space','component',name,fac,`Space "${missing.join('", "')}" is not in the Space sheet.`);
+    }
+  });
+
+  // Space checks
+  const catMsg = raw => raw
+    ? 'Category is explicitly "n/a" — classification not available.'
+    : 'Category is blank.';
+  S.spaces.forEach(s => {
+    const name = f(s,'Name'), fac = s._facility||'', facL = fac.toLowerCase();
+    if (!name) return;
+    const fl = qaRaw(s,'FloorName','Floor Name','Floor');
+    if (!fl || qaIsNA(fl)) add('space-bad-floor','space',name,fac,noRefMsg('FloorName',fl));
+    else if (!floorNames[facL]) tally(facL,'floor');
+    else if (!floorNames[facL].has(fl.toLowerCase()))
+      add('space-bad-floor','space',name,fac,`FloorName "${fl}" is not in the Floor sheet.`);
+    const cat = qaRaw(s,'Category');
+    if (!cat || qaIsNA(cat)) add('space-no-category','space',name,fac,catMsg(cat));
+  });
+
+  // Type checks
+  S.types.forEach(t => {
+    const name = f(t,'Name'), fac = t._facility||'';
+    if (!name) return;
+    const cat = qaRaw(t,'Category');
+    if (!cat || qaIsNA(cat)) add('type-no-category','type',name,fac,catMsg(cat));
+    // A real duration (anything except blank / n/a) needs a real unit
+    const wd = [qaRaw(t,'WarrantyDurationParts','Warranty Duration Parts'),
+                qaRaw(t,'WarrantyDurationLabor','Warranty Duration Labor','WarrantyDurationLabour')]
+      .find(x => x && !qaIsNA(x));
+    const wu = qaRaw(t,'WarrantyDurationUnit','Warranty Duration Unit');
+    if (wd && (!wu || qaIsNA(wu)))
+      add('warranty-unit','type',name,fac,`Warranty duration "${wd}" has no WarrantyDurationUnit.`);
+  });
+
+  // System membership — components claimed by no system at all. A facility with
+  // no System sheet gets one aggregate warning rather than silence.
+  const inSystem = {};
+  S.systems.forEach(s => {
+    const facL = (s._facility||'').toLowerCase();
+    const set = (inSystem[facL] = inSystem[facL] || new Set());
+    qaRaw(s,'ComponentNames','Component Names').split(',').map(x=>x.trim()).filter(Boolean)
+      .forEach(cn => set.add(cn.toLowerCase()));
+  });
+  const noSysFacs = {};
+  S.comps.forEach(c => {
+    const name = f(c,'Name'), fac = c._facility||'', facL = fac.toLowerCase();
+    if (!name) return;
+    if (!inSystem[facL] || !inSystem[facL].size) { noSysFacs[facL] = (noSysFacs[facL]||0)+1; return; }
+    if (!inSystem[facL].has(name.toLowerCase()))
+      add('comp-no-system','component',name,fac,'Not listed in any System’s ComponentNames.');
+  });
+  Object.entries(noSysFacs).forEach(([facL, n]) =>
+    add('comp-no-system','sheet','System sheet',facDisp[facL]||facL,
+      `System sheet is missing or empty — none of the ${n} component${n!==1?'s':''} belongs to a system.`));
+
+  // System membership
+  const seenSysComp = new Set();
+  S.systems.forEach(s => {
+    const name = f(s,'Name'), fac = s._facility||'', facL = fac.toLowerCase();
+    if (!name) return;
+    const toks = qaRaw(s,'ComponentNames','Component Names').split(',').map(x=>x.trim())
+      .filter(Boolean).filter(cn => !qaIsNA(cn));
+    if (!compNames[facL]) { if (toks.length) tally(facL,'syscomp',toks.length); return; }
+    toks.forEach(cn => {
+      if (compNames[facL].has(cn.toLowerCase())) return;
+      const k = facL+'::'+name.toLowerCase()+'::'+cn.toLowerCase();
+      if (seenSysComp.has(k)) return;
+      seenSysComp.add(k);
+      add('sys-bad-comp','system',name,fac,`ComponentNames entry "${cn}" is not in the Component sheet.`);
+    });
+  });
+
+  // Document references
+  const rowSets = { facility: nameSet(db.facilities.filter(inScope).map(x=>({ Name:x._facility, _facility:x._facility }))),
+    floor: floorNames, space: spaceNames, type: typeNames, component: compNames, system: nameSet(S.systems),
+    contact: contactIds };
+  S.docs.forEach(d => {
+    const fac = d._facility||'', facL = fac.toLowerCase();
+    const sheetDisp = f(d,'SheetName','Sheet Name');
+    const sheet = sheetDisp.toLowerCase();
+    const row   = f(d,'RowName','Row Name');
+    if (!sheet || !row) return;
+    const docName = f(d,'Name')||f(d,'File')||'(Unnamed)';
+    if (sheet in rowSets) {
+      const set = rowSets[sheet][facL];
+      if (!set)
+        add('doc-bad-ref','document',docName,fac,
+          `References the ${sheetDisp} sheet, which is missing or empty.`);
+      else if (!set.has(row.toLowerCase()))
+        add('doc-bad-ref','document',docName,fac,
+          `SheetName "${sheetDisp}" has no row named "${row}".`);
+    } else if (!_QA_UNPARSED_SHEETS.has(sheet)) {
+      add('doc-bad-ref','document',docName,fac,
+        `SheetName "${sheetDisp}" is not a COBie sheet.`);
+    }
+    // A recognised sheet this app does not parse (Zone, Job, Attribute…) is
+    // unverifiable here — skipped rather than flagged.
+  });
+
+  // Duplicate names. System is excluded — its multi-row pattern is legitimate.
+  // Contact is keyed by Email (the COBie 2.4 contact key), falling back to Name.
+  [['Component',S.comps,'component',null],['Type',S.types,'type',null],
+   ['Space',S.spaces,'space',null],['Floor',S.floors,'floor',null],
+   ['Contact',S.contacts,'contact',r => f(r,'Email')||f(r,'Name')]]
+  .forEach(([sheetName, rows, etype, keyFn]) => {
+    const cnt = {};
+    rows.forEach(r => {
+      const n = keyFn ? keyFn(r) : f(r,'Name'); if (!n) return;
+      const k = (r._facility||'').toLowerCase()+'::'+n.toLowerCase();
+      cnt[k] = cnt[k] || { n, fac: r._facility||'', c: 0 };
+      cnt[k].c++;
+    });
+    Object.values(cnt).filter(x => x.c > 1).forEach(x =>
+      add('dup-names',etype,x.n,x.fac,`${sheetName} sheet has ${x.c} rows named "${x.n}".`));
+  });
+
+  // CreatedBy is a Contact foreign key in COBie 2.4. Aggregated per author so a
+  // missing contact reads as one finding, not one per row. A facility with no
+  // Contact sheet at all rolls up into one missing-sheet finding below.
+  const seenCB = new Set();
+  [['Component',S.comps],['Type',S.types],['Space',S.spaces],['Floor',S.floors],
+   ['System',S.systems],['Document',S.docs],['Contact',S.contacts],
+   ['Facility',db.facilities.filter(inScope)]]
+  .forEach(([sheetName, rows]) => {
+    rows.forEach(r => {
+      const fac = r._facility||'', facL = fac.toLowerCase();
+      const cb = qaRaw(r,'CreatedBy','Created By');
+      if (!cb || qaIsNA(cb)) return;
+      if (!contactIds[facL] || !contactIds[facL].size) { tally(facL,'createdby',cb.toLowerCase()); return; }
+      if (contactIds[facL].has(cb.toLowerCase())) return;
+      const k = facL+'::'+cb.toLowerCase();
+      if (seenCB.has(k)) return;
+      seenCB.add(k);
+      add('createdby-missing','contact',cb,fac,`Used as CreatedBy (first seen on the ${sheetName} sheet) but not in the Contact sheet.`);
+    });
+  });
+
+  // Emit the aggregated missing-sheet findings
+  Object.entries(missingRefs).forEach(([facL, m]) => {
+    const fac = facDisp[facL] || facL;
+    const plural = (n, w) => `${n} ${w}${n!==1?'s':''}`;
+    if (m.type)  add('comp-bad-type','sheet','Type sheet',fac,
+      `Type sheet is missing or empty — ${plural(m.type,'component reference')} cannot resolve.`);
+    if (m.space) add('comp-bad-space','sheet','Space sheet',fac,
+      `Space sheet is missing or empty — ${plural(m.space,'component reference')} cannot resolve.`);
+    if (m.floor) add('space-bad-floor','sheet','Floor sheet',fac,
+      `Floor sheet is missing or empty — ${plural(m.floor,'space')} cannot resolve a floor.`);
+    if (m.syscomp) add('sys-bad-comp','sheet','Component sheet',fac,
+      `Component sheet is missing or empty — ${plural(m.syscomp,'system reference')} cannot resolve.`);
+    if (m.createdby.size) add('createdby-missing','sheet','Contact sheet',fac,
+      `Contact sheet is missing or empty — ${plural(m.createdby.size,'distinct CreatedBy value')} cannot resolve.`);
+  });
+
+  return out;
+}
+
+function renderQAMode(list) {
+  qaFindings = runQA();
+  const bySev = { error:0, warning:0, info:0 };
+  qaFindings.forEach(x => bySev[x.sev]++);
+
+  const facSel = sel.facility;
+  const scopeTxt = facSel.size
+    ? 'Auditing: ' + [...facSel].map(k => idx.facilityNames.find(n=>n.toLowerCase()===k)||k).join(', ')
+    : 'Auditing all loaded facilities';
+  const summary = `<div id="qa-summary">
+    <span class="qa-sev qa-sev-error">${bySev.error} error${bySev.error!==1?'s':''}</span>
+    <span class="qa-sev qa-sev-warning">${bySev.warning} warning${bySev.warning!==1?'s':''}</span>
+    ${bySev.info?`<span class="qa-sev qa-sev-info">${bySev.info} info</span>`:''}
+    <span class="qa-scope">${esc(scopeTxt)} — the Facility filter sets the scope; edits re-run the audit.</span>
+    ${qaFindings.length?`<button class="xbtn" onclick="exportQAReport()"><i class="bi bi-download me-1"></i>Download Report</button>`:''}
+  </div>`;
+
+  if (!qaFindings.length) {
+    list.innerHTML = summary + `<div class="qa-clear"><i class="bi bi-patch-check"></i>
+      <p>No issues found across ${qaScopeCounts.comps} components, ${qaScopeCounts.spaces} spaces,
+      ${qaScopeCounts.types} types and ${qaScopeCounts.docs} documents.</p></div>`;
+    return;
+  }
+
+  const SEV_ORDER = { error:0, warning:1, info:2 };
+  const byCheck = new Map();
+  qaFindings.forEach(x => { if(!byCheck.has(x.check)) byCheck.set(x.check,[]); byCheck.get(x.check).push(x); });
+  const checks = [...byCheck.keys()].sort((a,b) =>
+    SEV_ORDER[QA_CHECKS[a].sev]-SEV_ORDER[QA_CHECKS[b].sev] || QA_CHECKS[a].label.localeCompare(QA_CHECKS[b].label));
+
+  // Group bodies are lazy (same pattern as the asset view) and capped, so a
+  // very unhealthy workbook cannot produce an unbounded synchronous render.
+  list.innerHTML = summary + checks.map(check => {
+    const cfg = QA_CHECKS[check];
+    const items = byCheck.get(check);
+    const cid = 'col_' + (collapseCounter++);
+    pendingGroups[cid] = { isQA: true, qaItems: items };
+    return `<div class="grp-block grp-d0">
+      <div class="grp-hdr grp-collapsed" data-cid="${cid}">
+        <i class="bi bi-chevron-down grp-chev"></i>
+        <i class="bi ${cfg.ico} me-1" style="opacity:.72;font-size:.82rem"></i>
+        <span class="grp-name">${esc(cfg.label)}</span>
+        <span class="grp-meta">${esc(cfg.sheet)} sheet</span>
+        <span class="qa-sev qa-sev-${cfg.sev}">${cfg.sev}</span>
+        <span class="grp-cnt">${items.length}</span>
+      </div>
+      <div class="grp-body grp-closed" id="${cid}"></div>
+    </div>`;
+  }).join('');
+}
+
+const QA_GROUP_CAP = 200;
+function qaGroupBody(items) {
+  const cards = items.slice(0, QA_GROUP_CAP).map(x => {
+    const editBtn = _QA_EDITABLE.has(x.entityType)
+      ? `<button class="xbtn" data-edit-entity="${esc(x.entityType)}" data-edit-key="${esc(x.entityName)}" data-edit-fac="${esc(x.facility)}" title="Edit and fix"><i class="bi bi-pencil"></i></button>`
+      : '';
+    return `<div class="cc qa-${x.sev}">
+      <div class="d-flex align-items-start gap-2">
+        <div style="flex:1;min-width:0">
+          <div class="cc-name">${esc(x.entityName)}</div>
+          <div class="cc-meta"><span>${esc(x.detail)}</span>${x.facility?`<span><i class="bi bi-building me-1"></i>${esc(x.facility)}</span>`:''}</div>
+        </div>
+        ${editBtn}
+      </div>
+    </div>`;
+  }).join('');
+  const rest = items.length - QA_GROUP_CAP;
+  return cards + (rest > 0
+    ? `<div class="load-more-wrap"><div class="load-more-btn" style="cursor:default">
+        Showing ${QA_GROUP_CAP} of ${items.length} — download the report for the full list.</div></div>`
+    : '');
+}
+
+function exportQAReport() {
+  if (!qaFindings.length) return;
+  const rows = qaFindings.map(x => ({
+    Severity: x.sev, Check: QA_CHECKS[x.check].label, Sheet: QA_CHECKS[x.check].sheet,
+    Item: x.entityName, Facility: x.facility, Detail: x.detail,
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'QA Findings');
+  XLSX.writeFile(wb, 'QA-Report_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
 
 // ── Type detail modal ──────────────────────────────────────────
 const TYPE_FIELDS = [
@@ -2056,7 +2481,7 @@ function buildFacilityBody(name) {
 
 document.getElementById('type-modal').addEventListener('click', e => {
   const eb = e.target.closest('[data-edit-entity]');
-  if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey); return; }
+  if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey, eb.dataset.editFac); return; }
   const b = e.target.closest('[data-doc]');
   if (!b) return;
   const d = docStore[+b.dataset.doc];
@@ -2166,8 +2591,15 @@ let _changeLog = []; // { entityType, entityName, facNames, timestamp }
 let _pendingNewType = null; // { name, facility } — queued when a component edit introduces a new TypeName
 const _justCreated = new Set(); // "dim::name" items created this session, visible in filter even at 0 count
 
-function openEditModal(entityType, entityName) {
-  _editState = { entityType, entityName };
+// Optional facility narrows name lookups so same-named rows in two loaded
+// workbooks cannot answer for each other; without it behaviour is unchanged.
+function _entRow(rows, name, facility) {
+  return (facility && rows.find(r => f(r,'Name') === name && r._facility === facility))
+      || rows.find(r => f(r,'Name') === name);
+}
+
+function openEditModal(entityType, entityName, facility) {
+  _editState = { entityType, entityName, facility: facility || '' };
   _editDocRemovals = [];
   const typeModalEl = document.getElementById('type-modal');
   const tm = bootstrap.Modal.getInstance(typeModalEl);
@@ -2223,7 +2655,8 @@ function _eauto(label, fieldName, currentVal, options, maxOpts=400) {
   </div>`;
 }
 function _editDocList(sheetName, rowName) {
-  const docs = docsFor(sheetName, rowName);
+  const _dfac = _editState?.facility || '';
+  const docs = docsFor(sheetName, rowName).filter(d => !_dfac || (d._facility||'') === _dfac);
   const rows = docs.map((d,i)=>{
     const nm=f(d,'Name'), fi=f(d,'File'), di=f(d,'Directory'), cat=f(d,'Category');
     return `<div class="edit-doc-row border rounded p-2 mb-1" data-doc-i="${i}" data-sheet="${esc(sheetName)}" data-row="${esc(rowName)}" data-orig-name="${esc(nm)}">
@@ -2270,9 +2703,10 @@ function _filterCheckboxList(inp) {
 
 function _buildEditBody(entityType, entityName) {
   let propsHtml = '', assocHtml = '';
+  const _fac = _editState?.facility || '';
 
   if (entityType === 'component') {
-    const obj = db.components.find(c => f(c,'Name') === entityName);
+    const obj = _entRow(db.components, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
     const shown = new Set(['typeName','type name','space']);
     Object.entries(obj).forEach(([k,v]) => {
@@ -2289,8 +2723,17 @@ function _buildEditBody(entityType, entityName) {
     const spaceDescs = [...spaceMap.entries()].map(([name,desc])=>({name,desc}));
     assocHtml += _eauto('Space', 'Space', f(obj,'Space'), spaceDescs);
     const cLow = entityName.toLowerCase();
-    const curSys = new Set(idx.compSys[cLow]||[]);
-    const sysChecks = idx.systems.map(sn=>{
+    // Build membership state and options from the edited row's facility, not the
+    // global indexes — same-named systems in another workbook must not appear
+    // here, or a no-op save would merge the two memberships.
+    const _sysRows = _fac ? db.systems.filter(x => x._facility === _fac) : db.systems;
+    const _sysNames = [...new Set(_sysRows.map(x=>f(x,'Name')).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    const curSys = new Set();
+    _sysRows.forEach(x => {
+      const list = ((x.ComponentNames !== undefined ? x.ComponentNames : x['Component Names'])||'');
+      if (list.split(',').map(t=>t.trim().toLowerCase()).includes(cLow)) curSys.add(f(x,'Name').toLowerCase());
+    });
+    const sysChecks = _sysNames.map(sn=>{
       return `<label class="d-flex align-items-center gap-1 mb-1" style="font-size:.79rem">
         <input type="checkbox" class="form-check-input sys-assoc-chk" value="${esc(sn)}" ${curSys.has(sn.toLowerCase())?'checked':''}> ${esc(sn)}
       </label>`;
@@ -2302,13 +2745,13 @@ function _buildEditBody(entityType, entityName) {
     assocHtml += _editDocList('Component', entityName);
 
   } else if (entityType === 'type') {
-    const obj = db.types.find(t => f(t,'Name') === entityName);
+    const obj = _entRow(db.types, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
     Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _ef(k,k,v); });
     assocHtml += _editDocList('Type', entityName);
 
   } else if (entityType === 'space') {
-    const obj = db.spaces.find(s => f(s,'Name') === entityName);
+    const obj = _entRow(db.spaces, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
     const flKeys = new Set(['floorname','floor name','floor']);
     assocHtml += _esel('Floor', 'FloorName', f(obj,'FloorName','Floor Name','Floor'), idx.floors);
@@ -2316,11 +2759,15 @@ function _buildEditBody(entityType, entityName) {
     assocHtml += _editDocList('Space', entityName);
 
   } else if (entityType === 'system') {
-    const obj = db.systems.find(s => f(s,'Name') === entityName);
+    const obj = _entRow(db.systems, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
     ['Name','Category','Description'].forEach(k => propsHtml += _ef(k, k, obj[k]||''));
-    const sysCompsLow = new Set((idx.bySys[entityName.toLowerCase()]||[]).map(c=>f(c,'Name').toLowerCase()));
-    const allComps = [...new Set(db.components.map(c=>f(c,'Name')))].sort();
+    const sysCompsLow = new Set();
+    db.systems.filter(x => f(x,'Name') === entityName && (!_fac || x._facility === _fac)).forEach(x => {
+      ((x.ComponentNames !== undefined ? x.ComponentNames : x['Component Names'])||'')
+        .split(',').forEach(t => { t = t.trim().toLowerCase(); if (t) sysCompsLow.add(t); });
+    });
+    const allComps = [...new Set(db.components.filter(c => !_fac || c._facility === _fac).map(c=>f(c,'Name')).filter(Boolean))].sort();
     const compChecks = allComps.map(cn=>{
       return `<label class="d-flex align-items-center gap-1 mb-1" style="font-size:.79rem">
         <input type="checkbox" class="form-check-input comp-assoc-chk" value="${esc(cn)}" ${sysCompsLow.has(cn.toLowerCase())?'checked':''}> ${esc(cn)}
@@ -2331,7 +2778,7 @@ function _buildEditBody(entityType, entityName) {
     assocHtml += _editDocList('System', entityName);
 
   } else if (entityType === 'floor') {
-    const obj = db.floors.find(x => f(x,'Name') === entityName);
+    const obj = _entRow(db.floors, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
     Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _ef(k,k,v); });
     assocHtml += _editDocList('Floor', entityName);
@@ -2393,6 +2840,7 @@ document.getElementById('edit-modal').addEventListener('click', e => {
 function saveEdit() {
   if (!_editState) return;
   const { entityType, entityName } = _editState;
+  const _fac = _editState.facility || '';
 
   // Collect direct field edits
   const fields = {};
@@ -2401,7 +2849,7 @@ function saveEdit() {
   });
 
   if (entityType === 'component') {
-    const obj = db.components.find(c => f(c,'Name') === entityName);
+    const obj = _entRow(db.components, entityName, _fac);
     if (obj) {
       Object.assign(obj, fields);
       const newTN = (fields.TypeName || fields['Type Name'] || '').trim();
@@ -2409,22 +2857,22 @@ function saveEdit() {
         _pendingNewType = { name: newTN, facility: obj._facility || '' };
       }
       const newSys = new Set([...document.querySelectorAll('#edit-modal-body .sys-assoc-chk:checked')].map(el=>el.value));
-      _updateCompSystems(entityName, newSys);
+      _updateCompSystems(entityName, newSys, obj._facility || _fac);
     }
   } else if (entityType === 'type') {
-    const obj = db.types.find(t => f(t,'Name') === entityName);
+    const obj = _entRow(db.types, entityName, _fac);
     if (obj) Object.assign(obj, fields);
   } else if (entityType === 'space') {
-    const obj = db.spaces.find(s => f(s,'Name') === entityName);
+    const obj = _entRow(db.spaces, entityName, _fac);
     if (obj) Object.assign(obj, fields);
   } else if (entityType === 'system') {
-    db.systems.filter(s => f(s,'Name') === entityName).forEach(s => {
+    db.systems.filter(s => f(s,'Name') === entityName && (!_fac || s._facility === _fac)).forEach(s => {
       ['Category','Description'].forEach(k => { if (fields[k]!==undefined) s[k]=fields[k]; });
     });
     const newComps = [...document.querySelectorAll('#edit-modal-body .comp-assoc-chk:checked')].map(el=>el.value);
-    _updateSysComponents(entityName, newComps);
+    _updateSysComponents(entityName, newComps, _fac);
   } else if (entityType === 'floor') {
-    const obj = db.floors.find(x => f(x,'Name') === entityName);
+    const obj = _entRow(db.floors, entityName, _fac);
     if (obj) Object.assign(obj, fields);
   } else if (entityType === 'facility') {
     const obj = db.facilities.find(x => x._facility === entityName);
@@ -2436,7 +2884,8 @@ function saveEdit() {
     const i = db.documents.findIndex(d =>
       f(d,'SheetName','Sheet Name').toLowerCase() === sheetName.toLowerCase() &&
       f(d,'RowName','Row Name').toLowerCase() === rowName.toLowerCase() &&
-      f(d,'Name') === docName
+      f(d,'Name') === docName &&
+      (!_fac || (d._facility||'') === _fac)
     );
     if (i !== -1) db.documents.splice(i, 1);
   });
@@ -2448,7 +2897,7 @@ function saveEdit() {
     row.querySelectorAll('[data-dfield]').forEach(el => { vals[el.dataset.dfield] = el.value; });
     if (row.classList.contains('new-doc-row')) {
       if (vals.Name || vals.File) {
-        const fac = (db.components.find(c=>f(c,'Name')===entityName)||db.facilities[0]||{})?._facility||'';
+        const fac = _fac || (db.components.find(c=>f(c,'Name')===entityName)||db.facilities[0]||{})?._facility||'';
         db.documents.push({ Name:vals.Name||'', File:vals.File||'', Category:vals.Category||'',
           Directory:vals.Directory||'', SheetName:sheet, RowName:rn,
           CreatedBy:'', CreatedOn:'', Description:'', ExtSystem:'', ExtObject:'', ExtIdentifier:'', Reference:'',
@@ -2458,7 +2907,8 @@ function saveEdit() {
       const doc = db.documents.find(d =>
         f(d,'SheetName','Sheet Name').toLowerCase() === sheet.toLowerCase() &&
         f(d,'RowName','Row Name').toLowerCase() === rn.toLowerCase() &&
-        f(d,'Name') === orig
+        f(d,'Name') === orig &&
+        (!_fac || (d._facility||'') === _fac)
       );
       if (doc) Object.keys(vals).forEach(k => { doc[k] = vals[k]; });
     }
@@ -2476,10 +2926,10 @@ function saveEdit() {
   bootstrap.Modal.getInstance(document.getElementById('edit-modal'))?.hide();
 }
 
-function _updateCompSystems(compName, newSystems) {
+function _updateCompSystems(compName, newSystems, fac) {
   const cLow = compName.toLowerCase();
   idx.systems.forEach(sysName => {
-    const rows = db.systems.filter(s => f(s,'Name') === sysName);
+    const rows = db.systems.filter(s => f(s,'Name') === sysName && (!fac || s._facility === fac));
     const shouldHave = newSystems.has(sysName);
     rows.forEach(s => {
       const ck = s.ComponentNames !== undefined ? 'ComponentNames' : 'Component Names';
@@ -2490,19 +2940,20 @@ function _updateCompSystems(compName, newSystems) {
       s[ck] = list.join(',');
     });
     if (shouldHave && !rows.length) {
-      const fac = (db.components.find(c=>f(c,'Name')===compName)||{})?._facility||'';
-      db.systems.push({ Name: sysName, ComponentNames: compName, _facility: fac });
+      const facVal = fac || (db.components.find(c=>f(c,'Name')===compName)||{})?._facility||'';
+      db.systems.push({ Name: sysName, ComponentNames: compName, _facility: facVal });
     }
   });
 }
 
-function _updateSysComponents(sysName, newComps) {
-  const sysRow = db.systems.find(s => f(s,'Name') === sysName);
+function _updateSysComponents(sysName, newComps, fac) {
+  const sysRow = (fac && db.systems.find(s => f(s,'Name') === sysName && s._facility === fac))
+              || (!fac && db.systems.find(s => f(s,'Name') === sysName)) || null;
   if (sysRow) {
     const ck = sysRow.ComponentNames !== undefined ? 'ComponentNames' : 'Component Names';
     sysRow[ck] = newComps.join(',');
   } else if (newComps.length) {
-    db.systems.push({ Name: sysName, ComponentNames: newComps.join(','), _facility: db.facilities[0]?._facility||'' });
+    db.systems.push({ Name: sysName, ComponentNames: newComps.join(','), _facility: fac || db.facilities[0]?._facility||'' });
   }
 }
 
