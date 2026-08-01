@@ -459,6 +459,7 @@
       border-radius: 6px; color: var(--text-muted);
       padding: .1rem .42rem; font-size: .75rem;
       cursor: pointer; flex-shrink: 0; transition: all .12s;
+      display: inline-flex; align-items: center; white-space: nowrap;
     }
     .xbtn:hover { background: var(--bg-hover); border-color: #aaa; }
     .type-info-btn {
@@ -489,6 +490,19 @@
     .dbadge:hover { background: var(--badge-hover); }
     .dbadge.tp { background: var(--badge-tp-bg); border-color: var(--badge-tp-bdr); color: var(--badge-tp-text); }
     .dbadge.tp:hover { background: var(--badge-tp-hover); }
+    .doc-list { display: grid; gap: .4rem; }
+    .doc-list-item {
+      display: flex; align-items: center; gap: .65rem; padding: .55rem .65rem;
+      border: 1px solid var(--border-subtle); border-radius: 7px; background: #fff;
+    }
+    .doc-list-copy { flex: 1; min-width: 0; cursor: pointer; }
+    .doc-list-number { font-size: .8rem; font-weight: 700; color: var(--navy); }
+    .doc-list-desc { font-size: .76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .doc-list-actions { display: flex; align-items: center; gap: .3rem; flex-shrink: 0; }
+    .doc-link-display { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+    .doc-link-display a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .doc-link-editor { padding: .55rem; background: var(--surf); border: 1px solid var(--border-subtle); border-radius: 6px; }
+    .edit-doc-list { max-height: 480px; overflow-y: auto; padding-right: .2rem; }
 
     /* Empty state */
     .empty { text-align: center; padding: 3.5rem 2rem; color: var(--text-subtle); }
@@ -795,7 +809,16 @@
         <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Unsaved Changes</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body" id="changes-modal-body"></div>
+      <div class="modal-body">
+        <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3" role="alert">
+          <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+          <div>
+            <strong>Save before refreshing.</strong>
+            Refreshing the browser page or closing this tab will discard all unsaved changes.
+          </div>
+        </div>
+        <div id="changes-modal-body"></div>
+      </div>
       <div class="modal-footer" style="background:#f8f9fa">
         <small class="text-muted me-auto" id="changes-save-note">Browsers download files — replace originals by saving to the same folder.</small>
         <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -857,8 +880,10 @@ document.getElementById('fileInput')  .addEventListener('change', e => { if(e.ta
 document.getElementById('folderInput').addEventListener('change', e => { if(e.target.files.length) loadFiles(e.target.files); });
 window.addEventListener('beforeunload', event => {
   if (!_changeLog.length) return;
+  const message = 'Refreshing or closing this page will discard your unsaved changes.';
   event.preventDefault();
-  event.returnValue = '';
+  event.returnValue = message;
+  return message;
 });
 document.querySelectorAll('.editable-picker-btn').forEach(btn => {
   btn.classList.toggle('d-none', typeof globalThis.showOpenFilePicker !== 'function');
@@ -1237,8 +1262,7 @@ function buildIdx() {
     const c = f(d,'Category'); if (!c) return;
     _dcDisp[c.toLowerCase()] = c;
   });
-  // Track which categories appear on facility docs vs component/type docs
-  const _facDocCats = {}; // facilityName.lower → Set<cat.lower>
+  // Track which categories appear on facility docs vs other supported entity docs
   const _catsOnFac  = new Set();
   const _catsOnComp = new Set();
   db.documents.forEach(d => {
@@ -1246,27 +1270,20 @@ function buildIdx() {
     const cv  = f(d,'Category'); if (!cv) return;
     const cvl = cv.toLowerCase();
     if (sn === 'facility') {
-      const fnl = f(d,'RowName','Row Name').toLowerCase();
-      if (!_facDocCats[fnl]) _facDocCats[fnl] = new Set();
-      _facDocCats[fnl].add(cvl);
       _catsOnFac.add(cvl);
-    } else if (sn === 'component' || sn === 'type') {
+    } else if (['component','type','space','floor','system'].includes(sn)) {
       _catsOnComp.add(cvl);
     }
   });
-  // Categories that ONLY exist on facility docs (not on component/type)
+  // Categories that ONLY exist on facility docs
   idx.docCatFacilityOnly = new Set([..._catsOnFac].filter(c => !_catsOnComp.has(c)));
+  idx.documentContexts = _buildDocumentContexts();
   idx.docCatByComp = {};
-  db.components.forEach(c => {
-    const cn = f(c,'Name').toLowerCase();
-    const tn = f(c,'TypeName','Type Name').toLowerCase();
-    const fn = (c._facility || '').toLowerCase();
-    const cats = new Set();
-    docsFor('component', cn, c._facility).forEach(d => { const cv=f(d,'Category'); if(cv) cats.add(cv.toLowerCase()); });
-    docsFor('type', tn, c._facility).forEach(d => { const cv=f(d,'Category'); if(cv) cats.add(cv.toLowerCase()); });
-    // Include facility-level doc categories so facility docs appear in the filter
-    if (fn && _facDocCats[fn]) _facDocCats[fn].forEach(cat => cats.add(cat));
-    if (cats.size) idx.docCatByComp[_rowKey(c, cn)] = cats;
+  idx.documentContexts.forEach(context => {
+    context.components.forEach(componentKey => {
+      const cats = idx.docCatByComp[componentKey] ||= new Set();
+      context.categories.forEach(category => cats.add(category));
+    });
   });
   idx.docCategories = Object.keys(_dcDisp).map(k => _dcDisp[k]).sort((a,b) => {
     const pa=a.startsWith('('), pb=b.startsWith('(');
@@ -1278,6 +1295,61 @@ function docsFor(sheet, name, facility) {
   if (facility) return idx.docs[_scopeKey(facility, sheet + '::' + name)] || [];
   const suffix = '::' + (sheet + '::' + name).toLowerCase();
   return Object.entries(idx.docs).filter(([key]) => key.endsWith(suffix)).flatMap(([,docs]) => docs);
+}
+
+function _buildDocumentContexts() {
+  const contexts = new Map();
+  const componentsByKey = {};
+  db.components.forEach(component => { componentsByKey[_rowKey(component, f(component,'Name'))] = component; });
+
+  const addComponentContext = (context, component) => {
+    if (!component) return;
+    const facility = (component._facility || '').toLowerCase();
+    const componentName = f(component,'Name').toLowerCase();
+    const typeName = f(component,'TypeName','Type Name').toLowerCase();
+    const spaceName = f(component,'Space').toLowerCase();
+    const floorName = idx.spFloor[_scopeKey(facility, spaceName)] || '';
+    context.components.add(_rowKey(component, componentName));
+    if (typeName) context.types.add(typeName);
+    if (spaceName) context.spaces.add(spaceName);
+    if (floorName) context.floors.add(floorName);
+    (idx.compSys[_rowKey(component, componentName)] || []).forEach(system => context.systems.add(system));
+  };
+
+  db.documents.forEach(doc => {
+    const linkedType = f(doc,'SheetName','Sheet Name').toLowerCase();
+    if (!_SUPPORTED_DOC_SHEETS.has(linkedType)) return;
+    const linkedName = f(doc,'RowName','Row Name');
+    const facility = (doc._facility || '').toLowerCase();
+    const category = f(doc,'Category').toLowerCase();
+    const contextKey = _docUniqueKey(doc);
+    let context = contexts.get(contextKey);
+    if (!context) {
+      context = {
+        key:contextKey, identity:_docUniqueKey(doc), doc, linkedType, linkedName,
+        categories:new Set(), facilities:new Set(), floors:new Set(), spaces:new Set(),
+        types:new Set(), systems:new Set(), components:new Set(),
+      };
+      contexts.set(contextKey, context);
+    }
+    if (category) context.categories.add(category);
+    if (facility) context.facilities.add(facility);
+    const linkedKey = linkedName.toLowerCase();
+    if (linkedType === 'component') {
+      addComponentContext(context, componentsByKey[_scopeKey(facility, linkedKey)]);
+    } else if (linkedType === 'type' && linkedKey) {
+      context.types.add(linkedKey);
+    } else if (linkedType === 'space' && linkedKey) {
+      context.spaces.add(linkedKey);
+      const floor = idx.spFloor[_scopeKey(facility, linkedKey)] || '';
+      if (floor) context.floors.add(floor);
+    } else if (linkedType === 'floor' && linkedKey) {
+      context.floors.add(linkedKey);
+    } else if (linkedType === 'system' && linkedKey) {
+      context.systems.add(linkedKey);
+    }
+  });
+  return [...contexts.values()];
 }
 
 // ── Show app ─────────────────────────────────────────────────
@@ -1323,6 +1395,59 @@ function refreshDisplay(closeChangesModal = false) {
 // ── Filtering ────────────────────────────────────────────────
 // Returns true if Set a and Set b share at least one element
 function _setHasAny(a, b) { for (const x of a) if (b.has(x)) return true; return false; }
+const _SUPPORTED_DOC_SHEETS = new Set(['component','type','space','floor','system','facility']);
+const _DOC_CONTEXT_DIMENSIONS = {
+  facility:'facilities', floor:'floors', space:'spaces', type:'types', system:'systems', doccat:'categories',
+};
+
+function _documentContextMatches(context, ignoredDimension = '') {
+  for (const [dimension, property] of Object.entries(_DOC_CONTEXT_DIMENSIONS)) {
+    if (dimension === ignoredDimension || !sel[dimension].size) continue;
+    if (!_setHasAny(sel[dimension], context[property])) return false;
+  }
+  if (searchQuery) {
+    const documentText = [
+      f(context.doc,'Name'), f(context.doc,'Description'), f(context.doc,'Category'),
+      f(context.doc,'Directory'), f(context.doc,'RowName','Row Name'),
+    ].join(' ').toLowerCase();
+    const componentMatch = [...context.components].some(key => (idx.searchText?.[key] || '').includes(searchQuery));
+    if (!documentText.includes(searchQuery) && !componentMatch) return false;
+  }
+  return true;
+}
+
+function _documentCrossCounts(contexts, counts, replaceAssetCounts) {
+  const countDimension = dimension => {
+    const property = _DOC_CONTEXT_DIMENSIONS[dimension];
+    const keysByValue = {};
+    contexts.forEach(context => {
+      if (!_documentContextMatches(context, dimension)) return;
+      context[property].forEach(value => (keysByValue[value] ||= new Set()).add(context.identity));
+    });
+    const result = {};
+    Object.entries(keysByValue).forEach(([value, keys]) => { result[value] = keys.size; });
+    return result;
+  };
+  counts.doccat = countDimension('doccat');
+  if (replaceAssetCounts) {
+    ['facility','floor','space','type','system'].forEach(dimension => { counts[dimension] = countDimension(dimension); });
+  }
+}
+
+function _documentContextEntry(context) {
+  const display = (dimension, key) => {
+    const values = dimension === 'facility' ? idx.facilityNames : idx[dimension + 's'];
+    return values?.find(value => value.toLowerCase() === key) || key;
+  };
+  return {
+    doc:context.doc, linkedType:context.linkedType, linkedName:context.linkedName,
+    facilityNames:[...context.facilities].map(key => display('facility',key)),
+    floorNames:[...context.floors].map(key => display('floor',key)),
+    spaceNames:[...context.spaces].map(key => display('space',key)),
+    typeNames:[...context.types].map(key => display('type',key)),
+    systemNames:[...context.systems].map(key => display('system',key)),
+  };
+}
 
 // Single-pass: builds filtered component list + cross-counts simultaneously.
 // Uses a 6-bit mask (one bit per dimension) so each component is visited once.
@@ -1360,16 +1485,20 @@ function applyFilters() {
     if ((bits | 4)  === ALL && sp)   c.space[sp]     = (c.space[sp]    ||0)+1;
     if ((bits | 8)  === ALL && tn)   c.type[tn]      = (c.type[tn]     ||0)+1;
     if ((bits | 16) === ALL) syss.forEach(sk => c.system[sk] = (c.system[sk]||0)+1);
-    if ((bits | 32) === ALL && cats) cats.forEach(cat => c.doccat[cat] = (c.doccat[cat]||0)+1);
   });
+
+  const contexts = idx.documentContexts || [];
+  const filteredDocumentContexts = contexts.filter(context => _documentContextMatches(context));
+  _documentCrossCounts(contexts, c, viewMode === 'document' || sel.doccat.size > 0);
 
   lastCounts = c;
   renderPanels(c);
   reapplyPanelSearches();
   renderPills();
-  renderComps(comps);
-  const n = comps.length;
-  document.getElementById('res-count').textContent = n + ' component' + (n!==1?'s':'');
+  renderComps(comps, filteredDocumentContexts.map(_documentContextEntry));
+  const n = viewMode === 'document' ? filteredDocumentContexts.length : comps.length;
+  const noun = viewMode === 'document' ? 'document' : 'component';
+  document.getElementById('res-count').textContent = n + ' ' + noun + (n!==1?'s':'');
 }
 
 function toggle(dim, key) {
@@ -1383,6 +1512,10 @@ function toggle(dim, key) {
       const chip = document.querySelector('#group-sortable [data-dim="facility"]');
       if (chip) chip.classList.add('gchip-active');
     }
+  }
+  if (dim === 'doccat' && sel.doccat.has(k) && viewMode === 'asset') {
+    setMode('document');
+    return;
   }
   applyFilters();
 }
@@ -1708,7 +1841,7 @@ const BATCH_SIZE = 200;
 let pendingGroups = {}; // cid → {comps, dims, depth} – lazy group bodies
 let pendingLeaf   = {}; // lcid → remaining component array
 
-function renderComps(comps) {
+function renderComps(comps, documentEntries = []) {
   docStore = []; groupInfoStore = [];
   pendingGroups = {}; pendingLeaf = {};
   collapseCounter = 0; cardCtr = 0;
@@ -1722,13 +1855,13 @@ function renderComps(comps) {
     return;
   }
 
-  if (!comps.length) {
-    list.innerHTML = `<div class="empty"><i class="bi bi-inbox"></i><p>No components match the current filters.</p></div>`;
+  if (viewMode === 'document') {
+    renderDocumentMode(list, documentEntries);
     return;
   }
 
-  if (viewMode === 'document') {
-    renderDocumentMode(list, collectDocsForComps(comps));
+  if (!comps.length) {
+    list.innerHTML = `<div class="empty"><i class="bi bi-inbox"></i><p>No components match the current filters.</p></div>`;
     return;
   }
 
@@ -1784,9 +1917,9 @@ function renderLeaf(comps) {
 // ── Document Mode ──────────────────────────────────────────
 function collectDocsForComps(comps) {
   const seen=new Set(), entries=[];
-  const doneT=new Set(), doneSp=new Set(), doneSy=new Set(), doneF=new Set();
+  const doneT=new Set(), doneSp=new Set(), doneSy=new Set(), doneFl=new Set(), doneFac=new Set();
   const addDoc = (doc, linkedType, linkedName, comp) => {
-    const key=f(doc,'Name')+'|||'+f(doc,'File')+'|||'+linkedType+'|||'+linkedName;
+    const key = _docUniqueKey(doc);
     if(seen.has(key))return; seen.add(key);
     const sp  = comp ? f(comp,'Space').toLowerCase() : (linkedType==='space'?linkedName.toLowerCase():'');
     const facility = comp?._facility || doc._facility || '';
@@ -1807,7 +1940,14 @@ function collectDocsForComps(comps) {
     docsFor('component',cn,c._facility).forEach(d=>addDoc(d,'component',f(c,'Name'),c));
     if(tn&&!doneT.has(tKey)){doneT.add(tKey);docsFor('type',tn,c._facility).forEach(d=>addDoc(d,'type',f(c,'TypeName','Type Name'),null));}
     if(sp&&!doneSp.has(spKey)){doneSp.add(spKey);docsFor('space',sp,c._facility).forEach(d=>addDoc(d,'space',f(c,'Space'),c));}
-    if(fn&&!doneF.has(fn)){doneF.add(fn);docsFor('facility',fn,c._facility).forEach(d=>addDoc(d,'facility',c._facility||'',null));}
+    const floorKey = idx.spFloor[_scopeKey(fn,sp)] || '';
+    const scopedFloorKey = _scopeKey(fn,floorKey);
+    if(floorKey&&!doneFl.has(scopedFloorKey)){
+      doneFl.add(scopedFloorKey);
+      const floorName=idx.floors.find(name=>name.toLowerCase()===floorKey)||floorKey;
+      docsFor('floor',floorKey,c._facility).forEach(d=>addDoc(d,'floor',floorName,c));
+    }
+    if(fn&&!doneFac.has(fn)){doneFac.add(fn);docsFor('facility',fn,c._facility).forEach(d=>addDoc(d,'facility',c._facility||'',null));}
     (idx.compSys[cKey]||[]).forEach(sk=>{
       const sysKey=_scopeKey(fn,sk);
       if(doneSy.has(sysKey))return; doneSy.add(sysKey);
@@ -1827,14 +1967,15 @@ function renderDocumentMode(list, entries) {
   list.innerHTML = dims.length ? groupDocsNested(entries, dims) : renderDocsByCat(entries);
 }
 
-function _docEntryVal(e, dim) {
-  if(dim==='type')     return e.typeName     ||'(No Type)';
-  if(dim==='space')    return e.spaceName     ||'(No Space)';
-  if(dim==='facility') return e.facilityName  ||'(No Facility)';
-  if(dim==='floor')    return e.floorName     ||'(No Floor)';
-  if(dim==='system')   return e.systemNames.length?e.systemNames[0]:'(No System)';
-  if(dim==='doccat')   return f(e.doc,'Category')||'(Uncategorised)';
-  return '(Unknown)';
+function _docEntryValues(entry, dimension) {
+  const values = {
+    type:entry.typeNames, space:entry.spaceNames, facility:entry.facilityNames,
+    floor:entry.floorNames, system:entry.systemNames,
+  }[dimension];
+  if (values?.length) return values;
+  if (dimension === 'doccat') return [f(entry.doc,'Category') || '(Uncategorised)'];
+  const labels = {type:'Type',space:'Space',facility:'Facility',floor:'Floor',system:'System'};
+  return [`(No ${labels[dimension] || 'Value'})`];
 }
 
 function groupDocsNested(entries, dims, depth = 0) {
@@ -1842,13 +1983,12 @@ function groupDocsNested(entries, dims, depth = 0) {
   const [dim,...rest] = dims;
   const map = new Map();
   entries.forEach(e => {
-    const ks = (dim==='system'&&e.systemNames.length>1) ? e.systemNames : [_docEntryVal(e,dim)];
+    const ks = _docEntryValues(e, dim);
     ks.forEach(k=>{ if(!map.has(k))map.set(k,[]); map.get(k).push(e); });
   });
   const ico = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building',doccat:'bi-folder2-open'}[dim]||'bi-folder';
   const lvl = Math.min(depth,3);
-  const pb = s=>s.startsWith('(');
-  return [...map.entries()].filter(([k])=>!pb(k)).sort(([a],[b])=>a.localeCompare(b)).map(([name,grpE])=>{
+  return [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,grpE])=>{
     const cid='col_'+(collapseCounter++);
     pendingGroups[cid]={docEntries:grpE,dims:rest,depth:depth+1,isDocMode:true};
     const sub=dim!=='doccat'?getGroupSubtitle(dim,name):'';
@@ -1889,30 +2029,26 @@ function renderDocsByCat(entries) {
 
 function docCard(entry) {
   const {doc,linkedType,linkedName}=entry;
-  const name=f(doc,'Name')||f(doc,'File')||'(Unnamed)';
-  const file=f(doc,'File'), dir=f(doc,'Directory'), desc=f(doc,'Description');
-  const cat=f(doc,'Category'), ref=f(doc,'Reference');
-  const isUrl=s=>/^https?:\/\//i.test(s);
-  const lpath = _docTarget(file, dir);
+  const name=f(doc,'Name')||'(Unnamed document)';
+  const dir=f(doc,'Directory'), desc=f(doc,'Description'), cat=f(doc,'Category');
+  const lpath = _docTarget(dir), href = _docHref(lpath);
   const LL={component:'Component',type:'Type',space:'Space',system:'System',facility:'Facility',floor:'Floor'};
   const di=docStore.length; docStore.push(doc);
   return `<div class="cc">
     <div class="d-flex align-items-start gap-2">
       <div style="flex:1;min-width:0">
-        <div class="cc-name">${docIcon(file||name)} ${esc(name)}</div>
+        <div class="cc-name">${docIcon(lpath||name)} ${esc(name)}</div>
+        ${desc?`<div class="cc-desc mt-1">${esc(desc)}</div>`:''}
         <div class="cc-meta">
           <span><i class="bi bi-link-45deg me-1"></i>${esc(LL[linkedType]||linkedType)}: ${esc(linkedName)}</span>
           ${cat?`<span><i class="bi bi-tag me-1"></i>${esc(cat)}</span>`:''}
         </div>
-        ${desc?`<div style="font-size:.78rem;color:#666;margin-top:.2rem">${esc(desc)}</div>`:''}
-        ${lpath?`<div style="font-size:.74rem;color:#888;margin-top:.25rem;display:flex;align-items:center;gap:.3rem">
-          <code style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lpath)}</code>
-          <button class="xbtn py-0 px-1 cp-btn-inline" data-p="${esc(lpath)}" title="Copy path"><i class="bi bi-clipboard"></i></button>
-          <a href="${esc(lpath)}" target="_blank" rel="noopener" class="xbtn py-0 px-1" title="Open in new tab"><i class="bi bi-box-arrow-up-right"></i></a>
-        </div>`:''}
-        ${isUrl(ref)?`<div style="font-size:.74rem;margin-top:.2rem"><a href="${esc(ref)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>${esc(ref)}</a></div>`:''}
       </div>
-      <button class="xbtn" data-doc="${di}" title="Document details"><i class="bi bi-info-circle"></i></button>
+      <div class="doc-list-actions">
+        ${lpath?`<a href="${esc(href)}" target="_blank" rel="noopener" class="xbtn" title="Open link"><i class="bi bi-box-arrow-up-right me-1"></i>Link</a>`:''}
+        <button class="xbtn" data-doc="${di}" title="View document details"><i class="bi bi-info-circle"></i></button>
+        ${_docEditButton(doc)}
+      </div>
     </div>
   </div>`;
 }
@@ -2061,16 +2197,37 @@ function badgesByCat(docs) {
   const cats = [...grp.keys()].sort((a,b) => { const pa=a.startsWith('('),pb=b.startsWith('('); return pa!==pb?(pa?1:-1):a.localeCompare(b); });
   return cats.map(cat =>
     (grp.size > 1 ? `<div class="doc-cat-label">${esc(cat)}</div>` : '') +
-    grp.get(cat).map(d => badge(d,false)).join('')
+    `<div class="doc-list">${grp.get(cat).map(d => badge(d,false)).join('')}</div>`
   ).join('');
 }
 
 function badge(doc, fromType) {
-  const i = docStore.length; docStore.push(doc);
-  const label = f(doc,'Name')||f(doc,'File')||f(doc,'Description')||'Document';
-  const file  = f(doc,'File');
-  const tip   = fromType ? 'title="Type-level document"' : '';
-  return `<span class="dbadge${fromType?' tp':''}" data-doc="${i}" ${tip}>${docIcon(file||label)} ${esc(label)}</span>`;
+  return _docListItem(doc, fromType);
+}
+
+function _docEditButton(doc, withText = false) {
+  const documentIndex = docStore.length;
+  docStore.push(doc);
+  return `<button class="xbtn" data-edit-doc="${documentIndex}" title="Edit document">
+    <i class="bi bi-pencil${withText?' me-1':''}"></i>${withText?'Edit':''}</button>`;
+}
+
+function _docListItem(doc, fromType = false) {
+  const index = docStore.length; docStore.push(doc);
+  const number = f(doc,'Name') || '(Unnamed document)';
+  const description = f(doc,'Description') || 'No description';
+  const path = _docTarget(f(doc,'Directory'));
+  const title = fromType ? 'Type-level document' : 'View document details';
+  return `<div class="doc-list-item"${fromType?' data-doc-level="type"':''}>
+    <div class="doc-list-copy" data-doc="${index}" title="${title}">
+      <div class="doc-list-number">${docIcon(path||number)} ${esc(number)}</div>
+      <div class="doc-list-desc">${esc(description)}</div>
+    </div>
+    <div class="doc-list-actions">
+      ${path?`<a href="${esc(_docHref(path))}" target="_blank" rel="noopener" class="xbtn" title="Open link"><i class="bi bi-box-arrow-up-right me-1"></i>Link</a>`:''}
+      ${_docEditButton(doc)}
+    </div>
+  </div>`;
 }
 
 
@@ -2104,6 +2261,12 @@ document.getElementById('comp-list').addEventListener('click', e => {
   if (gb) {
     const entry = groupInfoStore[+gb.dataset.grpidx];
     if (entry) openGroupInfo(entry.dim, entry.name, entry.facility);
+    return;
+  }
+  const documentEditButton = e.target.closest('[data-edit-doc]');
+  if (documentEditButton) {
+    const documentRow = docStore[+documentEditButton.dataset.editDoc];
+    if (documentRow) openDocumentEdit(documentRow);
     return;
   }
   // Edit entity button (component cards + doc view)
@@ -2585,11 +2748,7 @@ function buildDocSection(docs) {
   const cats = [...grp.keys()].sort((a,b) => { const pa=a.startsWith('('),pb=b.startsWith('('); return pa!==pb?(pa?1:-1):a.localeCompare(b); });
   let inner = cats.map(cat => {
     const catHdr = grp.size > 1 ? `<div class="doc-cat-label">${esc(cat)}</div>` : '';
-    return catHdr + grp.get(cat).map(d => {
-      const di = docStore.length; docStore.push(d);
-      const label = f(d,'Name')||f(d,'File')||f(d,'Description')||'Document';
-      return `<span class="dbadge tp" data-doc="${di}">${docIcon(f(d,'File')||label)} ${esc(label)}</span>`;
-    }).join('');
+    return catHdr + `<div class="doc-list">${grp.get(cat).map(d => _docListItem(d, true)).join('')}</div>`;
   }).join('');
   return `<div class="mt-3 pt-2 border-top">
     <div style="font-size:.78rem;font-weight:600;color:var(--navy);margin-bottom:.5rem">
@@ -2699,6 +2858,12 @@ function buildFacilityBody(name) {
 }
 
 document.getElementById('type-modal').addEventListener('click', e => {
+  const documentEditButton = e.target.closest('[data-edit-doc]');
+  if (documentEditButton) {
+    const documentRow = docStore[+documentEditButton.dataset.editDoc];
+    if (documentRow) openDocumentEdit(documentRow);
+    return;
+  }
   const eb = e.target.closest('[data-edit-entity]');
   if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey, eb.dataset.editFac); return; }
   const b = e.target.closest('[data-doc]');
@@ -2714,39 +2879,37 @@ document.getElementById('type-modal').addEventListener('click', e => {
 
 // ── Document modal ───────────────────────────────────────────
 function openDoc(doc) {
-  const name=f(doc,'Name'), file=f(doc,'File'), dir=f(doc,'Directory'),
-        desc=f(doc,'Description'), cat=f(doc,'Category'),
-        ref=f(doc,'Reference'),   ext=f(doc,'ExtSystem','Ext System');
+  const name=f(doc,'Name'), dir=f(doc,'Directory'),
+        desc=f(doc,'Description'), cat=f(doc,'Category');
 
-  document.getElementById('mdoc-title').textContent = name||file||'Document';
-  const isUrl = s => /^https?:\/\//i.test(s);
-  const fCell = isUrl(file) ? `<a href="${esc(file)}" target="_blank" rel="noopener">${esc(file)}</a>`
-                            : (file?`<code>${esc(file)}</code>`:'');
-  const rCell = isUrl(ref)  ? `<a href="${esc(ref)}"  target="_blank" rel="noopener">${esc(ref)}</a>`
-                            : esc(ref);
-  const lpath = _docTarget(file, dir);
+  document.getElementById('mdoc-title').textContent = name||'Document';
+  const lpath = _docTarget(dir), href = _docHref(lpath);
 
   const tRows = [
-    ['Name',name&&esc(name)], ['Category',cat&&esc(cat)], ['Description',desc&&esc(desc)],
-    ['File',fCell], ['Directory',dir&&`<code>${esc(dir)}</code>`],
-    ['Reference',ref&&rCell], ['System',ext&&esc(ext)],
+    ['Name',name&&esc(name)], ['Description',desc&&esc(desc)], ['Category',cat&&esc(cat)],
   ].filter(([,v])=>v).map(([k,v])=>
     `<tr><th style="width:110px;font-weight:500;color:#555">${k}</th><td>${v}</td></tr>`
   ).join('');
 
   const pathBlock = lpath ? `<div class="alert alert-secondary py-2 px-3 mt-3 d-flex align-items-center gap-2 mb-0" style="font-size:.79rem">
-    <i class="bi bi-folder2-open"></i>
-    <code style="flex:1;word-break:break-all">${esc(lpath)}</code>
+    <i class="bi bi-link-45deg"></i>
+    <a href="${esc(href)}" target="_blank" rel="noopener" title="${esc(lpath)}" style="flex:1">Open document link</a>
     <button class="btn btn-sm btn-outline-secondary py-0 px-2 cp-btn" data-p="${esc(lpath)}" title="Copy path">
       <i class="bi bi-clipboard"></i></button>
-    <a href="${esc(lpath)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Open in new tab">
-      <i class="bi bi-box-arrow-up-right"></i></a></div>` : '';
+    </div>` : '<p class="text-muted small mt-3 mb-0">No link has been added.</p>';
 
   document.getElementById('mdoc-body').innerHTML =
-    `<table class="table table-sm mb-0"><tbody>${tRows}</tbody></table>${pathBlock}`;
+    `<table class="table table-sm mb-0"><tbody>${tRows}</tbody></table>${pathBlock}
+     <div class="d-flex justify-content-end mt-3">${_docEditButton(doc, true)}</div>`;
   new bootstrap.Modal(document.getElementById('doc-modal')).show();
 }
 document.getElementById('mdoc-body').addEventListener('click', e => {
+  const editBtn = e.target.closest('[data-edit-doc]');
+  if (editBtn) {
+    const documentRow = docStore[+editBtn.dataset.editDoc];
+    if (documentRow) openDocumentEdit(documentRow);
+    return;
+  }
   const b=e.target.closest('.cp-btn');
   if (!b) return;
   navigator.clipboard.writeText(b.dataset.p).then(()=>{
@@ -2758,13 +2921,23 @@ document.getElementById('mdoc-body').addEventListener('click', e => {
 // ── Utilities ────────────────────────────────────────────────
 const _ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 function esc(s) { return String(s||'').replace(/[&<>"']/g, c => _ESC_MAP[c]); }
-function _docTarget(file, directory) {
-  if (/^https?:\/\//i.test(file)) return file;
-  if (!directory) return file || '';
-  if (!file) return directory;
-  if (/[\\\/]$/.test(directory)) return directory + file;
-  const separator = directory.includes('\\') ? '\\' : '/';
-  return directory + separator + file;
+function _docTarget(directory) {
+  return v(directory);
+}
+function _docUniqueKey(doc) {
+  const facility = String(doc?._facility || '').trim().toLowerCase();
+  const path = f(doc,'Directory').toLowerCase();
+  const fallback = f(doc,'Name').toLowerCase() || [
+    f(doc,'Description'), f(doc,'Category'),
+    f(doc,'SheetName','Sheet Name'), f(doc,'RowName','Row Name'),
+  ].join('::').toLowerCase();
+  return facility + '::' + (path ? 'path::' + path : 'name::' + fallback);
+}
+function _docHref(path) {
+  if (!path || /^(https?:|file:)/i.test(path)) return path || '';
+  if (/^\\\\/.test(path)) return 'file:' + path.replace(/\\/g,'/');
+  if (/^[a-z]:[\\\/]/i.test(path)) return 'file:///' + path.replace(/\\/g,'/');
+  return path;
 }
 function fmtDate(x) {
   if (!x) return '';
@@ -2814,6 +2987,8 @@ _gList && _gList.addEventListener('click', e => {
 // ── Edit / CRUD Engine ────────────────────────────────────────
 let _editState = null;
 let _editDocRemovals = [];
+let _editDocRefs = new Map();
+let _editDocRefCounter = 0;
 let _changeLog = []; // { entityType, entityName, facNames, timestamp }
 let _originalDbState = null;
 let _pendingNewType = null; // { name, facility } — queued when a component edit introduces a new TypeName
@@ -2829,6 +3004,8 @@ function _entRow(rows, name, facility) {
 function openEditModal(entityType, entityName, facility) {
   _editState = { entityType, entityName, facility: facility || '' };
   _editDocRemovals = [];
+  _editDocRefs = new Map();
+  _editDocRefCounter = 0;
   const typeModalEl = document.getElementById('type-modal');
   const tm = bootstrap.Modal.getInstance(typeModalEl);
   // Only wait for hide if the modal is actually visible right now
@@ -2840,11 +3017,29 @@ function openEditModal(entityType, entityName, facility) {
   }
 }
 
+function openDocumentEdit(documentRow) {
+  _editState = {
+    entityType:'document', entityName:f(documentRow,'Name') || 'Document',
+    facility:documentRow._facility || '', document:documentRow,
+  };
+  _editDocRemovals = [];
+  _editDocRefs = new Map([['doc-direct', documentRow]]);
+  _editDocRefCounter = 1;
+  const visibleModal = ['type-modal','doc-modal'].map(id => document.getElementById(id))
+    .find(element => element.classList.contains('show'));
+  if (visibleModal) {
+    bootstrap.Modal.getInstance(visibleModal)?.hide();
+    visibleModal.addEventListener('hidden.bs.modal', _showEditModal, { once:true });
+  } else {
+    _showEditModal();
+  }
+}
+
 function _showEditModal() {
   if (!_editState) return;
   const { entityType, entityName } = _editState;
-  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building'};
-  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility'};
+  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building',document:'bi-file-earmark-text'};
+  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility',document:'Document'};
   document.getElementById('edit-modal-icon').className  = `bi ${icons[entityType]||'bi-pencil'} me-2`;
   document.getElementById('edit-modal-label').textContent = `${labels[entityType]||entityType}: ${entityName}`;
   document.getElementById('edit-modal-body').innerHTML = _buildEditBody(entityType, entityName);
@@ -2882,24 +3077,54 @@ function _eauto(label, fieldName, currentVal, options, maxOpts=400) {
     <datalist id="${lid}">${opts}</datalist>
   </div>`;
 }
+function _docEditRow(doc, sheetName, rowName, isNew = false, docRef = '') {
+  const name = doc ? f(doc,'Name') : '';
+  const description = doc ? f(doc,'Description') : '';
+  const category = doc ? f(doc,'Category') : '';
+  const path = doc ? f(doc,'Directory') : '';
+  const field = (label, key, value) => `<div class="mb-2">
+    <label class="form-label mb-1" style="font-size:.71rem;font-weight:700;color:#666">${label}</label>
+    <input class="form-control form-control-sm" value="${esc(value)}" data-dfield="${key}">
+  </div>`;
+  return `<div class="edit-doc-row${isNew?' new-doc-row':''} border rounded p-2 mb-2"
+      data-sheet="${esc(sheetName)}" data-row="${esc(rowName)}" data-orig-name="${esc(name)}" data-doc-ref="${esc(docRef)}">
+    <div class="d-flex align-items-center mb-2">
+      <span class="small fw-semibold text-muted"><i class="bi bi-file-earmark-text me-1"></i>${isNew?'New document':'Document'}</span>
+      <button class="btn btn-sm btn-outline-danger ms-auto py-0 px-2 rm-doc-btn" type="button" title="Remove document">
+        <i class="bi bi-trash3"></i>
+      </button>
+    </div>
+    ${field('Name', 'Name', name)}
+    ${field('Description', 'Description', description)}
+    ${field('Category', 'Category', category)}
+    <div class="mb-1">
+      <label class="form-label mb-1" style="font-size:.71rem;font-weight:700;color:#666">Link</label>
+      <div class="doc-link-display${isNew?' d-none':''}">
+        ${path?`<a href="${esc(_docHref(path))}" target="_blank" rel="noopener" title="Open link">${esc(path)}</a>`:'<span class="text-muted small">No link added</span>'}
+        <button class="btn btn-sm btn-outline-secondary ms-auto py-0 px-2 edit-doc-link-btn" type="button">
+          <i class="bi bi-pencil me-1"></i>Edit
+        </button>
+      </div>
+      <div class="doc-link-editor${isNew?'':' d-none'}">
+        <input class="form-control form-control-sm doc-link-input mb-2" value="${esc(path)}" data-dfield="Directory"
+          placeholder="Paste a web link or full file path">
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-outline-secondary paste-doc-link-btn" type="button"><i class="bi bi-clipboard me-1"></i>Paste</button>
+          <button class="btn btn-sm btn-outline-secondary browse-doc-link-btn" type="button"><i class="bi bi-folder2-open me-1"></i>Browse</button>
+          <input type="file" class="doc-file-picker d-none">
+        </div>
+        <div class="doc-link-note text-muted mt-1" style="font-size:.68rem"></div>
+      </div>
+    </div>
+  </div>`;
+}
 function _editDocList(sheetName, rowName) {
   const _dfac = _editState?.facility || '';
   const docs = docsFor(sheetName, rowName, _dfac);
-  const rows = docs.map((d,i)=>{
-    const nm=f(d,'Name'), fi=f(d,'File'), di=f(d,'Directory'), cat=f(d,'Category');
-    return `<div class="edit-doc-row border rounded p-2 mb-1" data-doc-i="${i}" data-sheet="${esc(sheetName)}" data-row="${esc(rowName)}" data-orig-name="${esc(nm)}">
-      <div class="row g-1 mb-1">
-        <div class="col-5"><input class="form-control form-control-sm" placeholder="Name" value="${esc(nm)}" data-dfield="Name"></div>
-        <div class="col-4"><input class="form-control form-control-sm" placeholder="Category" value="${esc(cat)}" data-dfield="Category"></div>
-        <div class="col-3 d-flex align-items-center gap-1">
-          <button class="btn btn-sm btn-outline-danger ms-auto py-0 px-1 rm-doc-btn" title="Remove document"><i class="bi bi-trash3"></i></button>
-        </div>
-      </div>
-      <div class="row g-1">
-        <div class="col-6"><input class="form-control form-control-sm" placeholder="File / URL" value="${esc(fi)}" data-dfield="File"></div>
-        <div class="col-6"><input class="form-control form-control-sm" placeholder="Directory" value="${esc(di)}" data-dfield="Directory"></div>
-      </div>
-    </div>`;
+  const rows = docs.map(d => {
+    const docRef = 'doc-' + (_editDocRefCounter++);
+    _editDocRefs.set(docRef, d);
+    return _docEditRow(d, sheetName, rowName, false, docRef);
   }).join('');
   return `<div class="mt-3 pt-2 border-top">
     <div class="d-flex align-items-center mb-1">
@@ -2908,7 +3133,7 @@ function _editDocList(sheetName, rowName) {
         <i class="bi bi-plus-circle me-1"></i>Add
       </button>
     </div>
-    <div id="doc-rows-${sheetName.toLowerCase()}">${rows}</div>
+    <div class="edit-doc-list" id="doc-rows-${sheetName.toLowerCase()}">${rows}</div>
   </div>`;
 }
 
@@ -2932,6 +3157,14 @@ function _filterCheckboxList(inp) {
 function _buildEditBody(entityType, entityName) {
   let propsHtml = '', assocHtml = '';
   const _fac = _editState?.facility || '';
+
+  if (entityType === 'document') {
+    const documentRow = _editState?.document;
+    if (!documentRow) return '<p class="text-muted">Document not found.</p>';
+    return `<div style="max-width:720px;margin:0 auto">
+      ${_docEditRow(documentRow, f(documentRow,'SheetName','Sheet Name'), f(documentRow,'RowName','Row Name'), false, 'doc-direct')}
+    </div>`;
+  }
 
   if (entityType === 'component') {
     const obj = _entRow(db.components, entityName, _fac);
@@ -3037,7 +3270,10 @@ document.getElementById('edit-modal').addEventListener('click', e => {
   if (rmBtn) {
     const row = rmBtn.closest('.edit-doc-row');
     if (row) {
-      _editDocRemovals.push({ sheetName: row.dataset.sheet, rowName: row.dataset.row, docName: row.dataset.origName });
+      _editDocRemovals.push({
+        sheetName:row.dataset.sheet, rowName:row.dataset.row,
+        docName:row.dataset.origName, docRef:row.dataset.docRef,
+      });
       row.remove();
     }
     return;
@@ -3046,23 +3282,52 @@ document.getElementById('edit-modal').addEventListener('click', e => {
   if (addBtn) {
     const cont = document.getElementById('doc-rows-' + addBtn.dataset.sheet.toLowerCase());
     if (cont) {
-      const nr = document.createElement('div');
-      nr.className = 'edit-doc-row new-doc-row border rounded p-2 mb-1';
-      nr.dataset.sheet = addBtn.dataset.sheet; nr.dataset.row = addBtn.dataset.row; nr.dataset.origName = '';
-      nr.innerHTML = `<div class="row g-1 mb-1">
-        <div class="col-5"><input class="form-control form-control-sm" placeholder="Name" data-dfield="Name"></div>
-        <div class="col-4"><input class="form-control form-control-sm" placeholder="Category" data-dfield="Category"></div>
-        <div class="col-3 d-flex align-items-center">
-          <button class="btn btn-sm btn-outline-danger ms-auto py-0 px-1 rm-doc-btn"><i class="bi bi-trash3"></i></button>
-        </div>
-      </div>
-      <div class="row g-1">
-        <div class="col-6"><input class="form-control form-control-sm" placeholder="File / URL" data-dfield="File"></div>
-        <div class="col-6"><input class="form-control form-control-sm" placeholder="Directory" data-dfield="Directory"></div>
-      </div>`;
-      cont.appendChild(nr);
+      cont.insertAdjacentHTML('beforeend', _docEditRow(null, addBtn.dataset.sheet, addBtn.dataset.row, true));
     }
+    return;
   }
+  const editLinkBtn = e.target.closest('.edit-doc-link-btn');
+  if (editLinkBtn) {
+    const row = editLinkBtn.closest('.edit-doc-row');
+    row?.querySelector('.doc-link-display')?.classList.add('d-none');
+    const editor = row?.querySelector('.doc-link-editor');
+    editor?.classList.remove('d-none');
+    editor?.querySelector('.doc-link-input')?.focus();
+    return;
+  }
+  const pasteBtn = e.target.closest('.paste-doc-link-btn');
+  if (pasteBtn) {
+    const row = pasteBtn.closest('.edit-doc-row');
+    const input = row?.querySelector('.doc-link-input');
+    const note = row?.querySelector('.doc-link-note');
+    navigator.clipboard.readText().then(text => {
+      if (input) input.value = text;
+      if (note) note.textContent = '';
+    }).catch(() => {
+      input?.focus();
+      if (note) note.textContent = 'Press Ctrl+V to paste into the link field.';
+    });
+    return;
+  }
+  const browseBtn = e.target.closest('.browse-doc-link-btn');
+  if (browseBtn) {
+    browseBtn.closest('.edit-doc-row')?.querySelector('.doc-file-picker')?.click();
+  }
+});
+
+document.getElementById('edit-modal').addEventListener('change', e => {
+  const picker = e.target.closest('.doc-file-picker');
+  if (!picker?.files?.length) return;
+  const row = picker.closest('.edit-doc-row');
+  const input = row?.querySelector('.doc-link-input');
+  const note = row?.querySelector('.doc-link-note');
+  const file = picker.files[0];
+  const exposedPath = file.path || file.webkitRelativePath ||
+    (!/fakepath/i.test(picker.value) ? picker.value : '');
+  if (input) input.value = exposedPath || file.name;
+  if (note) note.textContent = exposedPath
+    ? ''
+    : 'Your browser hides the full local path. Paste the full path here if the file name alone is not enough.';
 });
 
 function _setReference(row, aliases, oldName, newName) {
@@ -3152,6 +3417,12 @@ function saveEdit() {
   const _fac = _editState.facility || '';
   let changedEntityName = entityName;
 
+  if (entityType === 'document') {
+    const nameInput = document.querySelector('#edit-modal-body .edit-doc-row [data-dfield="Name"]');
+    if (!nameInput?.value.trim()) { alert('Name is required.'); return; }
+    nameInput.value = nameInput.value.trim();
+  }
+
   // Collect direct field edits
   const fields = {};
   document.querySelectorAll('#edit-modal-body .edit-field').forEach(el => {
@@ -3199,12 +3470,12 @@ function saveEdit() {
   }
 
   // Apply doc removals
-  _editDocRemovals.forEach(({ sheetName, rowName, docName }) => {
-    const i = db.documents.findIndex(d =>
+  _editDocRemovals.forEach(({ sheetName, rowName, docName, docRef }) => {
+    const exactDoc = _editDocRefs.get(docRef);
+    const i = exactDoc ? db.documents.indexOf(exactDoc) : db.documents.findIndex(d =>
       f(d,'SheetName','Sheet Name').toLowerCase() === sheetName.toLowerCase() &&
       f(d,'RowName','Row Name').toLowerCase() === rowName.toLowerCase() &&
-      f(d,'Name') === docName &&
-      (!_fac || (d._facility||'') === _fac)
+      f(d,'Name') === docName && (!_fac || (d._facility||'') === _fac)
     );
     if (i !== -1) db.documents.splice(i, 1);
   });
@@ -3215,15 +3486,15 @@ function saveEdit() {
     const vals = {};
     row.querySelectorAll('[data-dfield]').forEach(el => { vals[el.dataset.dfield] = el.value; });
     if (row.classList.contains('new-doc-row')) {
-      if (vals.Name || vals.File) {
+      if (vals.Name || vals.Description || vals.Directory) {
         const fac = _fac || (db.components.find(c=>f(c,'Name')===entityName)||db.facilities[0]||{})?._facility||'';
-        db.documents.push({ Name:vals.Name||'', File:vals.File||'', Category:vals.Category||'',
-          Directory:vals.Directory||'', SheetName:sheet, RowName:rn,
-          CreatedBy:'', CreatedOn:'', Description:'', ExtSystem:'', ExtObject:'', ExtIdentifier:'', Reference:'',
+        db.documents.push({ Name:vals.Name||'', Description:vals.Description||'', Category:vals.Category||'',
+          File:'', Directory:vals.Directory||'', SheetName:sheet, RowName:rn,
+          CreatedBy:'', CreatedOn:'', ExtSystem:'', ExtObject:'', ExtIdentifier:'', Reference:'',
           _facility: fac });
       }
     } else if (orig) {
-      const doc = db.documents.find(d =>
+      const doc = _editDocRefs.get(row.dataset.docRef) || db.documents.find(d =>
         f(d,'SheetName','Sheet Name').toLowerCase() === sheet.toLowerCase() &&
         f(d,'RowName','Row Name').toLowerCase() === rn.toLowerCase() &&
         f(d,'Name') === orig &&
@@ -3233,7 +3504,10 @@ function saveEdit() {
     }
   });
 
-  const changedFacility = _cascadeEntityRename(entityType, entityName, changedEntityName, _fac);
+  if (entityType === 'document') changedEntityName = f(_editState.document,'Name') || entityName;
+  const changedFacility = entityType === 'document'
+    ? _fac
+    : _cascadeEntityRename(entityType, entityName, changedEntityName, _fac);
   _logChange(entityType, changedEntityName, changedFacility, entityName);
   refreshDisplay();
   if (_pendingNewType) {
@@ -3543,8 +3817,8 @@ function openChangesModal() {
   _changeLog.forEach(entry => {
     entry.facNames.forEach(fn => { (byFac[fn] = byFac[fn] || []).push(entry); });
   });
-  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility'};
-  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building'};
+  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility',document:'Document'};
+  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building',document:'bi-file-earmark-text'};
   let html = '';
   if (!_changeLog.length) {
     html = '<p class="text-muted small mb-0">No changes recorded.</p>';
