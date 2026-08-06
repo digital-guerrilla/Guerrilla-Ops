@@ -1,0 +1,304 @@
+// ── Change tracking and review ────────────────────────────────
+function _logChange(entityType, entityName, facility, originalName = entityName) {
+  let facNames = facility ? [facility] : [];
+  if (!facNames.length && entityType === 'component') {
+    const o = db.components.find(c => f(c,'Name') === entityName);
+    if (o?._facility) facNames = [o._facility];
+  } else if (!facNames.length && entityType === 'type') {
+    facNames = [...new Set(db.types.filter(t=>f(t,'Name')===entityName).map(t=>t._facility).filter(Boolean))];
+  } else if (!facNames.length && entityType === 'space') {
+    const o = db.spaces.find(s => f(s,'Name') === entityName);
+    if (o?._facility) facNames = [o._facility];
+  } else if (!facNames.length && entityType === 'system') {
+    facNames = [...new Set(db.systems.filter(s=>f(s,'Name')===entityName).map(s=>s._facility).filter(Boolean))];
+  } else if (!facNames.length && entityType === 'floor') {
+    const o = db.floors.find(x => f(x,'Name') === entityName);
+    if (o?._facility) facNames = [o._facility];
+  } else if (!facNames.length && entityType === 'facility') {
+    facNames = [entityName];
+  }
+  if (!facNames.length) facNames = db.facilities.map(x=>x._facility).filter(Boolean);
+  const facKey = [...facNames].sort().join();
+  const previous = _changeLog.find(entry =>
+    entry.entityType === entityType &&
+    [...entry.facNames].sort().join() === facKey &&
+    entry.entityName.toLowerCase() === originalName.toLowerCase()
+  );
+  const rootName = previous?.originalName || originalName;
+  _changeLog = _changeLog.filter(entry => !(
+    entry.entityType === entityType &&
+    [...entry.facNames].sort().join() === facKey &&
+    (entry.entityName.toLowerCase() === entityName.toLowerCase() ||
+     entry.originalName.toLowerCase() === rootName.toLowerCase())
+  ));
+  _changeLog.push({ entityType, entityName, originalName:rootName, facNames, timestamp: Date.now() });
+  _updateChangesBtn();
+}
+
+function _updateChangesBtn() {
+  const btn = document.getElementById('changes-btn');
+  const cnt = document.getElementById('changes-count');
+  if (!btn || !cnt) return;
+  cnt.textContent = _changeLog.length;
+  btn.classList.toggle('d-none', _changeLog.length === 0);
+}
+
+function openChangesModal() {
+  const byFac = {};
+  _changeLog.forEach(entry => {
+    entry.facNames.forEach(fn => { (byFac[fn] = byFac[fn] || []).push(entry); });
+  });
+  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility',document:'Document'};
+  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building',document:'bi-file-earmark-text'};
+  let html = '';
+  if (!_changeLog.length) {
+    html = '<p class="text-muted small mb-0">No changes recorded.</p>';
+  } else {
+    Object.entries(byFac).forEach(([facName, entries]) => {
+      const facObj = db.facilities.find(x => x._facility === facName);
+      const fileName = facObj?._fileName || (facName + '.xlsx');
+      html += `<div class="mb-3 border rounded p-2">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <i class="bi bi-file-earmark-excel text-success"></i>
+          <strong style="font-size:.88rem">${esc(facName)}</strong>
+          <code style="font-size:.74rem;color:#888">${esc(fileName)}</code>
+          <span class="badge bg-secondary ms-auto">${entries.length} change${entries.length!==1?'s':''}</span>
+        </div>
+        <ul class="mb-0 small ps-3">
+          ${entries.map(e=>`<li><i class="bi ${icons[e.entityType]||'bi-pencil'} me-1 text-muted"></i>${esc(labels[e.entityType]||e.entityType)}: <strong>${esc(e.entityName)}</strong></li>`).join('')}
+        </ul>
+      </div>`;
+    });
+  }
+  document.getElementById('changes-modal-body').innerHTML = html;
+  const editableCount = db.facilities.filter(fac => fac._fileHandle).length;
+  const saveBtn = document.getElementById('save-existing-btn');
+  const saveNote = document.getElementById('changes-save-note');
+  if (editableCount === db.facilities.length && editableCount > 0) {
+    saveBtn.innerHTML = '<i class="bi bi-floppy me-1"></i>Update Selected Files';
+    saveNote.textContent = 'These XLSX files were opened with write permission and will be updated directly.';
+  } else if (editableCount > 0) {
+    saveBtn.innerHTML = '<i class="bi bi-download me-1"></i>Update / Download Files';
+    saveNote.textContent = 'Editable XLSX files will be updated; other workbooks will be downloaded.';
+  } else {
+    saveBtn.innerHTML = '<i class="bi bi-download me-1"></i>Download with Original Names';
+    saveNote.textContent = 'Browsers download files opened by upload, folder selection, or drag and drop.';
+  }
+  new bootstrap.Modal(document.getElementById('changes-modal')).show();
+}
+
+// ── Workbook reconstruction and style preservation ────────────
+function _exportSheetData(facObj) {
+  const fac     = facObj._facility;
+  const cleanRows = (arr) => arr
+    .filter(r => r._facility === fac)
+    .map(r => { const o={}; Object.entries(r).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return o; });
+  const cleanFac = () => { const o={}; Object.entries(facObj).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return [o]; };
+  return [['Facility',cleanFac()],['Contact',cleanRows(db.contacts||[])],['Floor',cleanRows(db.floors)],
+   ['Space',cleanRows(db.spaces)],['Type',cleanRows(db.types)],['Component',cleanRows(db.components)],
+   ['System',cleanRows(db.systems)],['Document',cleanRows(db.documents)],['Attribute',cleanRows(db.attributes||[])],
+   ['Coordinate',cleanRows(db.coordinates||[])]];
+}
+
+async function _buildPreservedXlsx(facObj) {
+  const workbook = await XlsxPopulate.fromDataAsync(facObj._sourceBuffer.slice(0));
+  _exportSheetData(facObj).forEach(([name, data]) => {
+    const populatedSheet = workbook.sheets().find(sheet => sheet.name().toLowerCase() === name.toLowerCase());
+    const sourceName = facObj._workbook.SheetNames.find(sheetName => sheetName.toLowerCase() === name.toLowerCase());
+    const sourceSheet = sourceName ? facObj._workbook.Sheets[sourceName] : null;
+    if (!populatedSheet && !data.length) return;
+    _syncPopulatedSheet(populatedSheet || workbook.addSheet(name), data, sourceSheet);
+  });
+  const output = await workbook.outputAsync();
+  const blob = output instanceof Blob ? output : new Blob([output], {
+    type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  return { blob, buffer:await blob.arrayBuffer() };
+}
+
+function _syncPopulatedSheet(sheet, rows, sourceSheet) {
+  const sourceGrid = sourceSheet ? XLSX.utils.sheet_to_json(sourceSheet, { header:1, defval:'', raw:false }) : [];
+  const headers = (sourceGrid[0] || []).map(String).filter(Boolean);
+  rows.forEach(row => Object.keys(row).forEach(key => { if (!headers.includes(key)) headers.push(key); }));
+  if (!headers.length) return;
+
+  const oldRowCount = Math.max(1, sourceGrid.length);
+  const newRowCount = rows.length + 1;
+  const outputRowCount = Math.max(oldRowCount, newRowCount);
+  const values = [headers, ...rows.map(row => headers.map(key => row[key] ?? ''))];
+  while (values.length < outputRowCount) values.push(headers.map(() => ''));
+  sheet.range(1, 1, outputRowCount, headers.length).value(values);
+
+  if (newRowCount > oldRowCount) {
+    for (let row = Math.max(2, oldRowCount + 1); row <= newRowCount; row++) {
+      for (let col = 1; col <= headers.length; col++) {
+        _copyPopulatedStyle(sheet.cell(2, col), sheet.cell(row, col));
+      }
+    }
+  }
+}
+
+const _POPULATE_STYLE_KEYS = [
+  'bold','italic','underline','strikethrough','subscript','superscript',
+  'fontSize','fontFamily','fontColor','horizontalAlignment','verticalAlignment',
+  'wrapText','shrinkToFit','textDirection','textRotation','indent','fill','border',
+  'numberFormat','locked','hidden'
+];
+function _copyPopulatedStyle(source, target) {
+  _POPULATE_STYLE_KEYS.forEach(key => {
+    try {
+      const value = source.style(key);
+      if (value !== undefined && value !== null) target.style(key, value);
+    } catch (_) {}
+  });
+}
+
+function _buildFallbackWorkbook(facObj) {
+  const sourceWb = facObj._workbook;
+  const wb = sourceWb
+    ? { ...sourceWb, SheetNames:[...sourceWb.SheetNames], Sheets:{...sourceWb.Sheets} }
+    : XLSX.utils.book_new();
+  _exportSheetData(facObj).forEach(([name,data]) => {
+    const existingName = wb.SheetNames.find(n => n.toLowerCase() === name.toLowerCase());
+    if (!existingName && !data.length) return;
+    const sheetName = existingName || name;
+    const oldSheet = existingName ? wb.Sheets[existingName] : null;
+    wb.Sheets[sheetName] = _syncSheet(data, oldSheet);
+    if (!existingName) wb.SheetNames.push(sheetName);
+  });
+  return wb;
+}
+
+async function _buildExport(facObj) {
+  const isXlsx = /\.xlsx$/i.test(facObj._fileName || '');
+  if (isXlsx && facObj._sourceBuffer && typeof XlsxPopulate !== 'undefined') {
+    return _buildPreservedXlsx(facObj);
+  }
+  const bookType = /\.xlsm$/i.test(facObj._fileName || '') ? 'xlsm'
+    : (/\.xls$/i.test(facObj._fileName || '') ? 'xls' : 'xlsx');
+  const bytes = XLSX_STYLE.write(_buildFallbackWorkbook(facObj), {
+    type:'array', bookType, bookVBA:true
+  });
+  const blob = new Blob([bytes], { type:'application/octet-stream' });
+  return { blob, buffer:await blob.arrayBuffer() };
+}
+
+function _downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = fileName; link.style.display = 'none';
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function _exportFacility(facObj, asNew, updateOriginal = false, writablePromise = null) {
+  const fac = facObj._facility;
+  const origName = facObj._fileName || (fac.replace(/[^a-z0-9_\-]/gi,'_') + '.xlsx');
+  const outName = asNew ? origName.replace(/\.(xlsx|xls|xlsm)$/i, '_modified.$1') : origName;
+  const directWritable = updateOriginal && facObj._fileHandle
+    ? (writablePromise || facObj._fileHandle.createWritable())
+    : null;
+  const result = await _buildExport(facObj);
+
+  if (directWritable) {
+    const writable = await directWritable;
+    try {
+      await writable.write(result.blob);
+      await writable.close();
+    } catch (err) {
+      try { await writable.abort(); } catch (_) {}
+      throw err;
+    }
+  } else {
+    _downloadBlob(result.blob, outName);
+  }
+  facObj._sourceBuffer = result.buffer;
+  facObj._workbook = XLSX.read(new Uint8Array(result.buffer), {
+    type:'array', cellDates:true, cellStyles:true, bookVBA:true
+  });
+}
+
+function _syncSheet(rows, oldSheet) {
+  const oldGrid = oldSheet ? XLSX.utils.sheet_to_json(oldSheet, { header:1, defval:'' }) : [];
+  const headers = (oldGrid[0] || []).map(String).filter(Boolean);
+  rows.forEach(row => Object.keys(row).forEach(key => { if (!headers.includes(key)) headers.push(key); }));
+  const grid = [headers, ...rows.map(row => headers.map(key => row[key] ?? ''))];
+  const sheet = XLSX.utils.aoa_to_sheet(grid);
+  if (!oldSheet) return sheet;
+
+  const columnTemplates = {};
+  const oldRange = XLSX.utils.decode_range(oldSheet['!ref'] || 'A1');
+  for (let col = oldRange.s.c; col <= oldRange.e.c; col++) {
+    for (let row = Math.max(1, oldRange.s.r); row <= oldRange.e.r; row++) {
+      const cell = oldSheet[XLSX.utils.encode_cell({ r:row, c:col })];
+      if (cell?.s) { columnTemplates[col] = cell; break; }
+    }
+  }
+
+  Object.keys(sheet).filter(key => key[0] !== '!').forEach(key => {
+    const oldCell = oldSheet[key];
+    const address = XLSX.utils.decode_cell(key);
+    const styleCell = oldCell || (address.r > 0 ? columnTemplates[address.c] : null);
+    if (styleCell?.s) sheet[key].s = _writableCellStyle(styleCell.s);
+    if (!oldCell) return;
+    ['z','l','c'].forEach(prop => { if (oldCell[prop] !== undefined) sheet[key][prop] = oldCell[prop]; });
+    if (oldCell.f && oldCell.v === sheet[key].v) sheet[key].f = oldCell.f;
+  });
+  ['!cols','!rows','!merges','!autofilter','!margins','!protect','!outline'].forEach(prop => {
+    if (oldSheet[prop] !== undefined) sheet[prop] = oldSheet[prop];
+  });
+  return sheet;
+}
+
+function _writableCellStyle(style) {
+  const copy = JSON.parse(JSON.stringify(style));
+  if (copy.fill || copy.font || copy.border || copy.alignment || copy.numFmt) return copy;
+  if (copy.patternType || copy.fgColor || copy.bgColor) return { fill:copy };
+  return copy;
+}
+
+// ── Save, download, and discard actions ──────────────────────
+async function saveToExistingFiles() {
+  const writablePromises = new Map();
+  try {
+    db.facilities.forEach(fac => {
+      if (fac._facility && fac._fileHandle) {
+        writablePromises.set(fac, fac._fileHandle.createWritable());
+      }
+    });
+    for (const fac of db.facilities) {
+      if (fac._facility) {
+        await _exportFacility(fac, false, !!fac._fileHandle, writablePromises.get(fac) || null);
+      }
+    }
+    _afterSave();
+  } catch (err) {
+    for (const promise of writablePromises.values()) {
+      try { const writable = await promise; await writable.abort(); } catch (_) {}
+    }
+    alert('Could not save the workbook: ' + err.message);
+  }
+}
+async function saveToNewFiles() {
+  try {
+    for (const fac of db.facilities) {
+      if (fac._facility) await _exportFacility(fac, true, false);
+    }
+    _afterSave();
+  } catch (err) {
+    alert('Could not create the workbook: ' + err.message);
+  }
+}
+function _afterSave() {
+  _captureDbState();
+  _changeLog = []; _updateChangesBtn();
+  bootstrap.Modal.getInstance(document.getElementById('changes-modal'))?.hide();
+}
+function discardChanges() {
+  if (!_changeLog.length) return;
+  if (!confirm('Discard all ' + _changeLog.length + ' recorded change' + (_changeLog.length!==1?'s':'') + '?')) return;
+  _restoreDbState();
+  _changeLog = []; _updateChangesBtn();
+  refreshDisplay();
+  bootstrap.Modal.getInstance(document.getElementById('changes-modal'))?.hide();
+}

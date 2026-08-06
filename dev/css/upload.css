@@ -1,0 +1,27 @@
+/* ── Upload landing screen ───────────────────────────────────── */
+#upload {
+  flex: 1; display: flex;
+  align-items: center; justify-content: center;
+}
+.up-card {
+  background: var(--card-bg); border-radius: 14px;
+  padding: 3rem 2.5rem; text-align: center;
+  box-shadow: 0 6px 28px var(--shadow-sm);
+  max-width: 440px; width: 100%;
+}
+.up-card .ico { font-size: 4rem; color: var(--navy); margin-bottom: .9rem; }
+.up-card h4   { color: var(--navy); margin-bottom: .4rem; }
+.up-card p    { color: var(--text-muted); font-size: .88rem; }
+.editable-picker-card {
+  background: var(--navy); border-color: var(--navy); color: var(--on-dark);
+}
+.editable-picker-card:hover, .editable-picker-card:focus-visible {
+  background: var(--card-bg); border-color: var(--navy); color: var(--navy);
+}
+#drop-zone.drag-over { outline: 3px dashed var(--accent); outline-offset: 4px; }
+
+/* ── App shell ───────────────────────────────────────────────── */
+#app {
+  flex: 1; display: none; flex-direction: column;
+  min-height: 0; overflow: hidden;
+}

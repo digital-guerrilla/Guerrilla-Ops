@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guerrilla Ops</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script>globalThis.XLSX_CORE = globalThis.XLSX;</script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <script>globalThis.XLSX_STYLE = globalThis.XLSX; globalThis.XLSX = globalThis.XLSX_CORE;</script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-populate@1.21.0/browser/xlsx-populate.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/header.css">
+  <link rel="stylesheet" href="css/upload.css">
+  <link rel="stylesheet" href="css/filter.css">
+  <link rel="stylesheet" href="css/results.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="hdr" style="display:none">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1.2rem;height:1.2rem;vertical-align:middle">
+    <circle cx="256" cy="256" r="248" fill="#fff"/>
+    <g transform="translate(256 256) scale(0.6) translate(-250 -315)">
+      <path d="M40 300V40h140s139.6.6 210 70 70 190 70 190"
+            fill="none"
+            stroke="#323232"
+            stroke-width="75"/>
+      <path d="M275.5 370h184.5v188.2s-134.5 61.2-277 14.9S40 330 40 330"
+            fill="none"
+            stroke="#0ad"
+            stroke-width="75"/>
+    </g>
+  </svg><span class="title">Guerrilla Ops</span>
+  <span class="file-lbl d-none" id="file-lbl"></span>
+  <div id="search-wrap" class="d-none">
+    <i class="bi bi-search" style="opacity:.5;font-size:.8rem;flex-shrink:0"></i>
+    <input type="search" id="search-input" placeholder="Search all fields…" oninput="onSearch(this.value)" autocomplete="off">
+    <button id="s-clear" onclick="clearSearch()" style="display:none" title="Clear search"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <button id="changes-btn" class="d-none" onclick="openChangesModal()">
+    <i class="bi bi-pencil-square"></i>
+    <span id="changes-count">0</span> unsaved
+  </button>
+  <button id="close-btn" class="d-none" onclick="closeWorkbooks()" title="Close all workbooks and return home">
+    <i class="bi bi-x-lg"></i> Close
+  </button>
+  <button id="edit-files-btn" class="editable-picker-btn" onclick="openEditableFiles()" title="Open XLSX files with permission to update them directly">
+    <i class="bi bi-file-earmark-lock2"></i> Open Editable
+  </button>
+  <label id="load-lbl" for="fileInput">
+    <i class="bi bi-file-earmark-excel"></i> Load Files
+  </label>
+  <label id="load-folder-lbl" for="folderInput" title="Load all COBie files from a folder">
+    <i class="bi bi-folder2-open"></i> Load Folder
+  </label>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm" multiple class="d-none">
+  <input type="file" id="folderInput" webkitdirectory class="d-none">
+</header>
+
+<!-- UPLOAD -->
+<div id="upload">
+  <div class="up-card" id="drop-zone">
+    <div class="ico"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 630" width="100" height="100"><path d="M40 300V40h140s139.6.6 210 70 70 190 70 190" fill="none" stroke="#323232" stroke-width="75"/><path d="M275.5 370h184.5v188.2s-134.5 61.2-277 14.9S40 330 40 330" fill="none" stroke="#0ad" stroke-width="75"/></svg></div>
+    <h4>Guerrilla Ops</h4>
+    <p>Select individual files, open a whole folder, or drag &amp; drop Excel files here.</p>
+    <div class="d-flex gap-2 justify-content-center flex-wrap">
+      <label class="btn btn-primary" for="fileInput" style="background:var(--navy);border-color:var(--navy);cursor:pointer">
+        <i class="bi bi-file-earmark-excel me-1"></i>Select Files
+      </label>
+      <label class="btn btn-outline-secondary" for="folderInput" style="cursor:pointer">
+        <i class="bi bi-folder2-open me-1"></i>Open Folder
+      </label>
+      <button class="btn editable-picker-btn editable-picker-card" onclick="openEditableFiles()">
+        <i class="bi bi-file-earmark-lock2 me-1"></i>Open Editable XLSX
+      </button>
+    </div>
+    <p id="load-progress" style="font-size:.8rem;color:var(--accent);margin-top:.9rem;margin-bottom:0;min-height:1.2em"></p>
+    <p class="mt-2 mb-0" style="font-size:.74rem;color:#bbb">Runs entirely in your browser. Nothing is uploaded.</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+    <div id="summary-section-header">
+      <span class="summary-section-title"><i class="bi bi-list-ul"></i><span>Summary</span></span>
+      <div id="summary-toggle-btns">
+        <button class="frb" id="stats-min-btn" type="button" title="Hide summary bar" aria-label="Hide summary bar"><i class="bi bi-chevron-up"></i></button>
+        <button class="frb" id="stats-max-btn" type="button" title="Show summary bar" aria-label="Show summary bar"><i class="bi bi-chevron-down"></i></button>
+      </div>
+    </div>
+    <div id="stats">
+      <div class="fac">
+        <div class="fac-name" id="fac-name">-</div>
+        <div class="fac-desc" id="fac-desc"></div>
+      </div>
+      <div class="s-chip"><div class="n" id="st-facilities">0</div><div class="l">Facilities</div></div>
+      <div class="s-chip"><div class="n" id="st-floors">0</div><div class="l">Floors</div></div>
+      <div class="s-chip"><div class="n" id="st-spaces">0</div><div class="l">Spaces</div></div>
+      <div class="s-chip"><div class="n" id="st-sys">0</div><div class="l">Systems</div></div>
+      <div class="s-chip"><div class="n" id="st-types">0</div><div class="l">Types</div></div>
+      <div class="s-chip"><div class="n" id="st-comps">0</div><div class="l">Components</div></div>
+      <div class="s-chip"><div class="n" id="st-docs">0</div><div class="l">Documents</div></div>
+    </div>
+  <div id="filter-section-header">
+    <span class="filter-section-title"><i class="bi bi-funnel-fill"></i><span>Filters</span></span>
+    <div id="filter-resize-btns">
+      <button class="frb" id="frb-min" title="Minimise filter pane"><i class="bi bi-chevron-up"></i></button>
+      <button class="frb" id="frb-max" title="Maximise filter pane"><i class="bi bi-chevron-down"></i></button>
+    </div>
+  </div>
+
+  <!-- 6-panel filter bar -->
+  <div id="filter-bar">
+    <div class="fp fp-facility">
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Facility</span><span class="fp-badge d-none" id="fb-facility"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-facility"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Facility</span></div>
+    </div>
+    <div class="fp fp-floor">
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Floor</span><span class="fp-badge d-none" id="fb-floor"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-floor"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Floor</span></div>
+    </div>
+    <div class="fp fp-space">
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Space</span><span class="fp-badge d-none" id="fb-space"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-space"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Space</span></div>
+    </div>
+    <div class="fp fp-type">
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Type</span><span class="fp-badge d-none" id="fb-type"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-type"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Type</span></div>
+    </div>
+    <div class="fp fp-system">
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>System</span><span class="fp-badge d-none" id="fb-system"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-system"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">System</span></div>
+    </div>
+    <div class="fp fp-doccat">
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>Document Category</span><span class="fp-badge d-none" id="fb-doccat"></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-doccat"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Doc Cat.</span></div>
+    </div>
+  </div>
+
+  <div id="filter-resize" title="Drag to resize"></div>
+
+  <!-- Results -->
+  <div id="content">
+
+    <div id="mode-toggle">
+      <button class="mode-btn active" id="btn-asset" onclick="setMode('asset')">
+        <i class="bi bi-tools me-1"></i>Asset View
+      </button>
+      <button class="mode-btn" id="btn-document" onclick="setMode('document')">
+        <i class="bi bi-folder2-open me-1"></i>Document View
+      </button>
+      <button class="mode-btn" id="btn-qa" onclick="setMode('qa')">
+        <i class="bi bi-clipboard-check me-1"></i>QA View
+      </button>
+      <button class="mode-btn" id="btn-create" onclick="openCreateModal()">
+        <i class="bi bi-plus-circle me-1"></i>Create
+      </button>
+    </div>
+
+    <div id="active-bar">
+      <span class="lbl">Filters:</span>
+      <div id="pills"></div>
+      <button id="clear-btn" class="d-none" onclick="clearAll()">Clear all</button>
+      <button id="clear-highlights-btn" class="d-none" onclick="clearAllHighlights()">Remove all highlights</button>
+      <div class="res-row">
+        <span id="res-count">-</span>
+        <div id="group-config">
+          <span class="grp-cfg-lbl">Group:</span>
+          <ul id="group-sortable">
+            <li class="group-chip" data-dim="facility"><i class="bi bi-grip-vertical gchip-grip"></i>Facility</li>
+            <li class="group-chip gchip-active" data-dim="type"><i class="bi bi-grip-vertical gchip-grip"></i>Type</li>
+            <li class="group-chip" data-dim="system"><i class="bi bi-grip-vertical gchip-grip"></i>System</li>
+            <li class="group-chip" data-dim="space"><i class="bi bi-grip-vertical gchip-grip"></i>Space</li>
+            <li class="group-chip" data-dim="floor"><i class="bi bi-grip-vertical gchip-grip"></i>Floor</li>
+            <li class="group-chip" data-dim="doccat" id="chip-doccat"><i class="bi bi-grip-vertical gchip-grip"></i>Doc Category</li>
+          </ul>
+        </div>
+        <button id="expand-all-btn" onclick="toggleExpandAll()">
+          <i class="bi bi-arrows-expand"></i>Expand All
+        </button>
+      </div>
+    </div>
+
+    <div id="results-layout">
+      <div id="results-main">
+        <div id="comp-list"></div>
+      </div>
+      <aside id="svg-floor-panel" class="d-none" aria-label="Floor SVG panel">
+        <button class="svgp-edge-toggle" id="svgp-edge-toggle" type="button" title="Collapse floor plan panel" aria-expanded="true">
+          <i class="bi bi-chevron-right"></i>
+          <span>Plan</span>
+        </button>
+        <div class="svgp-content">
+          <div class="svgp-body">
+            <input class="d-none" id="svgp-upload-input" type="file" accept=".svg,image/svg+xml">
+            <div id="svg-floor-stage"></div>
+          </div>
+        </div>
+      </aside>
+      <aside id="viewer-3d-panel" class="d-none" aria-label="3D viewer panel">
+        <button class="viewer3d-edge-toggle" id="viewer3d-edge-toggle" type="button" title="Collapse 3D viewer panel" aria-expanded="true">
+          <i class="bi bi-chevron-right"></i>
+          <span>3D</span>
+        </button>
+        <div class="viewer3d-content">
+          <div class="viewer3d-body">
+            <canvas id="viewer-3d-canvas"></canvas>
+            <div class="viewer3d-empty d-none" id="viewer-3d-empty">No coordinate data available for the current view.</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- TYPE DETAIL MODAL -->
+<div class="modal fade" id="type-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i id="mtype-icon" class="bi bi-tag-fill me-2"></i><span id="mtype-title">Type</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="mtype-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DOCUMENT MODAL -->
+<div class="modal fade" id="doc-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i><span id="mdoc-title">Document</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="mdoc-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE MODAL -->
+<div class="modal fade" id="create-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title">
+          <i class="bi bi-plus-circle me-2" id="create-modal-icon"></i>
+          <span id="create-modal-title">Create New</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex gap-2 flex-wrap mb-3" id="create-type-picker">
+          <button class="create-type-btn" data-etype="space" onclick="switchCreateType('space')">
+            <i class="bi bi-grid-fill me-1"></i>Space
+          </button>
+          <button class="create-type-btn" data-etype="type" onclick="switchCreateType('type')">
+            <i class="bi bi-tag-fill me-1"></i>Type
+          </button>
+          <button class="create-type-btn" data-etype="component" onclick="switchCreateType('component')">
+            <i class="bi bi-tools me-1"></i>Component
+          </button>
+          <button class="create-type-btn" data-etype="system" onclick="switchCreateType('system')">
+            <i class="bi bi-diagram-3-fill me-1"></i>System
+          </button>
+          <button class="create-type-btn" data-etype="contact" onclick="switchCreateType('contact')">
+            <i class="bi bi-person-fill me-1"></i>Contact
+          </button>
+        </div>
+        <hr class="mt-0 mb-3">
+        <div id="create-fac-row" class="mb-3 d-none">
+          <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">Facility</label>
+          <select class="form-select form-select-sm" id="create-fac-sel"></select>
+        </div>
+        <div id="create-form-body"></div>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fa">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-primary" onclick="saveCreate()" style="background:var(--navy);border-color:var(--navy)">
+          <i class="bi bi-plus-circle me-1"></i>Create
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGES MODAL -->
+<div class="modal fade" id="changes-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Unsaved Changes</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3" role="alert">
+          <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+          <div>
+            <strong>Save before refreshing.</strong>
+            Refreshing the browser page or closing this tab will discard all unsaved changes.
+          </div>
+        </div>
+        <div id="changes-modal-body"></div>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fa">
+        <small class="text-muted me-auto" id="changes-save-note">Browsers download files — replace originals by saving to the same folder.</small>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshDisplay(true)">
+          <i class="bi bi-arrow-clockwise me-1"></i>Refresh Display
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="discardChanges()">
+          <i class="bi bi-trash me-1"></i>Discard All
+        </button>
+        <button class="btn btn-sm btn-outline-primary" onclick="saveToNewFiles()">
+          <i class="bi bi-file-earmark-plus me-1"></i>Download Modified Copies
+        </button>
+        <button class="btn btn-sm btn-primary" id="save-existing-btn" onclick="saveToExistingFiles()" style="background:var(--navy);border-color:var(--navy)">
+          <i class="bi bi-download me-1"></i>Download with Original Names
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal fade" id="edit-modal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i id="edit-modal-icon" class="bi bi-pencil me-2"></i><span id="edit-modal-label">Edit</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3" id="edit-modal-body"></div>
+      <div class="modal-footer" style="background:#f8f9fa">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="saveEdit()" style="background:var(--navy);border-color:var(--navy)">
+          <i class="bi bi-check2 me-1"></i>Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JS modules loaded in dependency order -->
+<script src="javascript/state.js"></script>
+<script src="javascript/utils.js"></script>
+<script src="javascript/cobie-parser.js"></script>
+<script src="javascript/app-lifecycle.js"></script>
+<script src="javascript/filters.js"></script>
+<script src="javascript/panels.js"></script>
+<script src="javascript/pills.js"></script>
+<script src="javascript/results.js"></script>
+<script src="javascript/floor-svg-panel.js"></script>
+<script src="javascript/three-d-viewer.js"></script>
+<script src="javascript/documents.js"></script>
+<script src="javascript/qa.js"></script>
+<script src="javascript/modals.js"></script>
+<script src="javascript/edit.js"></script>
+<script src="javascript/create.js"></script>
+<script src="javascript/export.js"></script>
+<script src="javascript/resize.js"></script>
+<script src="javascript/init.js"></script>
+</body>
+</html>

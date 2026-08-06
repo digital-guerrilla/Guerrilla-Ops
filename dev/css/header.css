@@ -1,0 +1,62 @@
+/* ── Header bar ─────────────────────────────────────────────── */
+#hdr {
+  flex-shrink: 0; height: var(--hh);
+  background: var(--navy); color: var(--on-dark);
+  display: flex; align-items: center; gap: .7rem;
+  padding: 0 1.2rem;
+  box-shadow: 0 2px 8px var(--shadow-md);
+  z-index: 200;
+}
+#hdr .title { font-size: 1.05rem; font-weight: 600; letter-spacing: .02em; flex: 1; }
+#hdr .file-lbl {
+  font-size: .78rem; opacity: .6; max-width: 280px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Header buttons */
+#load-lbl, #load-folder-lbl, #edit-files-btn, #close-btn {
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.4);
+  color: var(--on-dark); padding: .3rem .8rem;
+  border-radius: 6px; font-size: .8rem;
+  display: flex; align-items: center; gap: .35rem;
+  transition: background .15s;
+}
+#load-lbl:hover, #load-folder-lbl:hover, #edit-files-btn:hover, #close-btn:hover { background: rgba(255,255,255,.12); }
+#edit-files-btn { background: var(--navy); }
+#close-btn { border-color: rgba(255,255,255,.28); background: rgba(var(--danger-rgb),.16); }
+
+/* Unsaved-changes button */
+#changes-btn {
+  cursor: pointer; border: 1px solid rgba(var(--amber-rgb),.55);
+  background: rgba(var(--amber-rgb),.15); color: var(--on-dark);
+  padding: .3rem .8rem; border-radius: 6px; font-size: .8rem;
+  display: flex; align-items: center; gap: .35rem;
+  transition: background .15s;
+}
+#changes-btn:hover { background: rgba(var(--amber-rgb),.35); }
+#changes-count {
+  background: rgba(var(--amber-rgb),.85); color: var(--text-dark);
+  border-radius: 8px; padding: 0 .4rem; font-size: .67rem; font-weight: 700;
+}
+
+/* Global search */
+#search-wrap {
+  display: flex; align-items: center; gap: .4rem;
+  background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.2);
+  border-radius: 6px; padding: .22rem .7rem;
+  flex: 1; max-width: 340px; min-width: 150px;
+  transition: background .15s, border-color .15s;
+}
+#search-wrap:focus-within { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.42); }
+#search-wrap input {
+  background: none; border: none; color: var(--on-dark);
+  font-size: .82rem; outline: none; flex: 1; min-width: 0;
+}
+#search-wrap input::placeholder { color: rgba(255,255,255,.4); }
+#s-clear {
+  background: none; border: none; color: rgba(255,255,255,.55);
+  font-size: .88rem; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0;
+}
+#s-clear:hover { color: var(--on-dark); }
+.search-active #search-wrap { background: rgba(255,255,255,.18); border-color: var(--accent); }

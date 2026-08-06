@@ -1,0 +1,168 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   BRAND PALETTE — the only values you need to edit.
+   9 colours define the entire visual identity.
+   Everything else is calculated from these via color-mix().
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+:root {
+  /* ── Core brand ───────────────────────────────────────────── */
+  --brand-dark:    #323232;   /* slate-800: headers, navbars, buttons  */
+  --brand-accent:  #0ea5e9;   /* sky-500:   interactive / links        */
+  --brand-surface: #dfdfdf;   /* slate-50:  page background            */
+  --brand-warn:    #f59e0b;   /* amber-500: unsaved changes / warning  */
+  --brand-danger:  #ef4444;   /* red-500:   destructive / errors       */
+
+  /* ── Dimension category colours (for pills) ───────────────── */
+  --cat-blue:   #3b82f6;   /* floor    */
+  --cat-green:  #22c55e;   /* space    */
+  --cat-purple: #a855f7;   /* facility */
+  --cat-cyan:   #06b6d4;   /* doc cat  */
+  /* type pill uses --brand-danger, system pill uses --brand-warn */
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SEMANTIC TOKENS — computed from brand palette.
+   Mixing with var(--brand-surface) means tokens auto-adapt
+   when the surface switches to dark in the dark-mode block.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+:root {
+  /* legacy aliases so existing CSS files need no changes */
+  --navy:   var(--brand-dark);
+  --accent: var(--brand-accent);
+  --surf:   var(--brand-surface);
+  --amber:  var(--brand-warn);
+  --danger: var(--brand-danger);
+
+  /* rgb helpers for rgba() */
+  --accent-rgb:  14, 165, 233;
+  --amber-rgb:   245, 158, 11;
+  --danger-rgb:  239, 68, 68;
+
+  /* layout */
+  --hh: 54px;
+  --fh: 500px;
+
+  /* ── Text (mixed from brand-dark toward white) ────────────── */
+  --text-dark:     color-mix(in srgb, var(--brand-dark), black 20%);
+  --text-medium:   color-mix(in srgb, var(--brand-dark), white 58%);
+  --text-muted:    color-mix(in srgb, var(--brand-dark), white 68%);
+  --text-dim:      color-mix(in srgb, var(--brand-dark), white 77%);
+  --text-lighter:  color-mix(in srgb, var(--brand-dark), white 77%);
+  --text-lightest: color-mix(in srgb, var(--brand-dark), white 85%);
+  --text-subtle:   color-mix(in srgb, var(--brand-dark), white 85%);
+
+  /* ── Card & page surfaces ─────────────────────────────────── */
+  --card-bg:       white;
+  --bg-light:      color-mix(in srgb, var(--brand-surface), var(--brand-dark) 3%);
+  --bg-hover:      color-mix(in srgb, var(--brand-surface), var(--brand-dark) 8%);
+  --border:        var(--brand-dark);
+  --border-light:  color-mix(in srgb, var(--brand-dark), white 50%);
+  --border-subtle: color-mix(in srgb, var(--brand-dark), white 82%);
+  --scrollbar:     color-mix(in srgb, var(--brand-dark), white 82%);
+  --success:       color-mix(in srgb, var(--cat-green),  black 25%);
+  --on-dark:       #fff;                  /* text/icons on brand-dark backgrounds */
+  --shadow-sm:     rgba(0,0,0,.09);       /* card elevation */
+  --shadow-md:     rgba(0,0,0,.3);        /* header elevation */
+
+  /* ── Group-by sortable chips ──────────────────────────────── */
+  --chip-bg:           color-mix(in srgb, var(--brand-dark)  8%, var(--brand-surface));
+  --chip-border:       color-mix(in srgb, var(--brand-dark) 16%, var(--brand-surface));
+  --chip-text:         color-mix(in srgb, var(--brand-dark), white 60%);
+  --chip-hover-bg:     color-mix(in srgb, var(--brand-dark) 16%, var(--brand-surface));
+  --chip-hover-border: color-mix(in srgb, var(--brand-dark) 28%, var(--brand-surface));
+
+  /* ── Filter panel ─────────────────────────────────────────── */
+  --fp-hd-bg:    var(--brand-dark);
+  --fp-hd-hover: var(--brand-accent);
+  --fp-hover:    color-mix(in srgb, var(--brand-accent)  8%, var(--brand-surface));
+  --fp-sel-bg:   color-mix(in srgb, var(--brand-accent) 16%, var(--brand-surface));
+  --fp-cnt-text: var(--brand-dark);
+  --fp-item-bdr: color-mix(in srgb, var(--brand-dark)  20%, var(--brand-surface));
+  --fp-cat-bg:   var(--brand-dark);
+  --fp-cat-hover:color-mix(in srgb, var(--brand-dark), black 30%);
+  --fp-cat-bdr:  color-mix(in srgb, var(--brand-accent) 28%, var(--brand-surface));
+  --fp-cat-text: white;
+  --fp-cat-cnt:  white;
+
+  /* ── Group header depth tints ─────────────────────────────── */
+  --grp-d0-bg:    var(--brand-dark);
+  --grp-d2-bg:    color-mix(in srgb, var(--brand-dark), var(--brand-accent) 38%);
+  --grp-d3-bg:    color-mix(in srgb, var(--brand-dark), var(--brand-accent) 58%);
+  --grp-body-bg:  color-mix(in srgb, var(--brand-accent)  6%, var(--brand-surface));
+  --grp-body-bdr: color-mix(in srgb, var(--brand-accent) 24%, var(--brand-surface));
+
+  /* ── Load-more pagination bar ─────────────────────────────── */
+  --lm-bg:        color-mix(in srgb, var(--brand-accent)  6%, var(--brand-surface));
+  --lm-text:      color-mix(in srgb, var(--brand-accent), black 20%);
+  --lm-border:    color-mix(in srgb, var(--brand-accent) 24%, var(--brand-surface));
+  --lm-hover-bg:  color-mix(in srgb, var(--brand-accent) 12%, var(--brand-surface));
+  --lm-hover-bdr: color-mix(in srgb, var(--brand-accent) 45%, var(--brand-surface));
+
+  /* ── Filter pills (light fills + dark text) */
+  --pill-floor-bg:    color-mix(in srgb, var(--cat-blue)    20%, var(--brand-surface));
+  --pill-floor-text:  var(--text-dark);
+  --pill-space-bg:    color-mix(in srgb, var(--cat-green)   20%, var(--brand-surface));
+  --pill-space-text:  var(--text-dark);
+  --pill-type-bg:     color-mix(in srgb, var(--brand-danger) 20%, var(--brand-surface));
+  --pill-type-text:   var(--text-dark);
+  --pill-system-bg:   color-mix(in srgb, var(--brand-warn)  20%, var(--brand-surface));
+  --pill-system-text: var(--text-dark);
+  --pill-fac-bg:      color-mix(in srgb, var(--cat-purple)  20%, var(--brand-surface));
+  --pill-fac-text:    var(--text-dark);
+  --pill-doc-bg:      color-mix(in srgb, var(--cat-cyan)    20%, var(--brand-surface));
+  --pill-doc-text:    var(--text-dark);
+
+  /* ── Document badges ──────────────────────────────────────── */
+  --badge-bg:       color-mix(in srgb, var(--brand-accent) 10%, var(--brand-surface));
+  --badge-bdr:      color-mix(in srgb, var(--brand-accent) 26%, var(--brand-surface));
+  --badge-text:     color-mix(in srgb, var(--brand-accent), black 22%);
+  --badge-hover:    color-mix(in srgb, var(--brand-accent) 16%, var(--brand-surface));
+  --badge-tp-bg:    color-mix(in srgb, var(--cat-green)   10%, var(--brand-surface));
+  --badge-tp-bdr:   color-mix(in srgb, var(--cat-green)   26%, var(--brand-surface));
+  --badge-tp-text:  color-mix(in srgb, var(--cat-green),   black 28%);
+  --badge-tp-hover: color-mix(in srgb, var(--cat-green)   16%, var(--brand-surface));
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   DARK MODE — add class="dark" to <html> to activate.
+   Light mode is always the default regardless of OS setting.
+   To also follow OS preference automatically, duplicate these
+   rules inside @media (prefers-color-scheme: dark) { html:not(.light) { … } }
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+html.dark {
+    --brand-dark:    #334155;   /* slate-700 */
+    --brand-accent:  #38bdf8;   /* sky-400   */
+    --brand-surface: #0f172a;   /* slate-900 */
+    --brand-warn:    #fbbf24;   /* amber-400 */
+    --brand-danger:  #f87171;   /* red-400   */
+
+    --accent-rgb:  56, 189, 248;
+    --amber-rgb:   251, 191, 36;
+    --danger-rgb:  248, 113, 113;
+
+    /* text must invert: high white% = readable light text on dark bg */
+    --text-dark:     color-mix(in srgb, var(--brand-dark), white 93%);
+    --text-medium:   color-mix(in srgb, var(--brand-dark), white 76%);
+    --text-muted:    color-mix(in srgb, var(--brand-dark), white 60%);
+    --text-dim:      color-mix(in srgb, var(--brand-dark), white 42%);
+    --text-lighter:  color-mix(in srgb, var(--brand-dark), white 42%);
+    --text-lightest: color-mix(in srgb, var(--brand-dark), white 26%);
+    --text-subtle:   color-mix(in srgb, var(--brand-dark), white 16%);
+
+    /* card is lighter than the very dark surface in dark mode */
+    --card-bg:     color-mix(in srgb, var(--brand-surface), var(--brand-dark) 55%);
+
+    /* filter count text needs to be light on dark panel headers */
+    --fp-cnt-text: color-mix(in srgb, var(--brand-dark), white 86%);
+
+  /* load-more text: accent toward light rather than toward black */
+  --lm-text:     color-mix(in srgb, var(--brand-accent), white 30%);
+}
+
+/* ── Base layout reset ──────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body {
+  display: flex; flex-direction: column;
+  background: var(--surf);
+  font-family: Verdana, Geneva, sans-serif;
+}
