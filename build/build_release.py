@@ -7,18 +7,14 @@ self-contained HTML file written to release/Guerrilla-Ops.html.
 Usage:
     python build_release.py
 """
+import importlib
 import os
 import re
 
 try:
-    from rcssmin import cssmin
+    cssmin = importlib.import_module('rcssmin').cssmin
 except ImportError:
     cssmin = None
-
-try:
-    from rjsmin import jsmin
-except ImportError:
-    jsmin = None
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR   = os.path.dirname(SCRIPT_DIR)
@@ -56,26 +52,36 @@ def validate_source(path):
 
 
 def minify_html(html):
-    def minify_block(match):
-        tag = match.group(1).lower()
-        attrs = match.group(2) or ''
-        body = match.group(3) or ''
+    protected_blocks = []
 
-        if tag == 'script':
-            if jsmin is not None and body.strip():
-                body = jsmin(body)
-        else:
-            if cssmin is not None and body.strip():
-                body = cssmin(body)
+    def protect_block(match):
+        opening, tag, body, closing = match.groups()
+        if tag.lower() == 'style' and cssmin is not None and body.strip():
+            body = cssmin(body)
+        token = f'\x00PROTECTED_BLOCK_{len(protected_blocks)}\x00'
+        protected_blocks.append(opening + body + closing)
+        return token
 
-        return f'<{tag}{attrs}>{body}</{tag}>'
-
-    html = re.sub(r'<(script|style)([^>]*)>(.*?)</\1>', minify_block, html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(
+        r'(<(script|style)\b[^>]*>)(.*?)(</\2>)',
+        protect_block,
+        html,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
     html = re.sub(r'<!--(?!\s*\[if).*?-->', '', html, flags=re.DOTALL)
     html = re.sub(r'>\s+<', '><', html)
-    html = re.sub(r'\s{2,}', ' ', html)
     html = html.strip()
+    for index, block in enumerate(protected_blocks):
+        html = html.replace(f'\x00PROTECTED_BLOCK_{index}\x00', block)
     return html
+
+
+def validate_compacted_html(source, compacted):
+    script_pattern = r'<script\b[^>]*>(.*?)</script>'
+    source_scripts = re.findall(script_pattern, source, flags=re.DOTALL | re.IGNORECASE)
+    compacted_scripts = re.findall(script_pattern, compacted, flags=re.DOTALL | re.IGNORECASE)
+    if source_scripts != compacted_scripts:
+        raise ValueError('HTML compaction changed JavaScript or embedded SVG content')
 
 
 def build():
@@ -124,10 +130,12 @@ def build():
     # ── Write output ───────────────────────────────────────────
     output_path = os.path.join(RELEASE_DIR, 'Guerrilla-Ops.html')
     root_path   = os.path.join(ROOT_DIR, 'index.html')
+    root_html = minify_html(html)
+    validate_compacted_html(html, root_html)
     with open(output_path, 'w', encoding='utf-8') as fh:
         fh.write(html)
     with open(root_path, 'w', encoding='utf-8') as fh:
-        fh.write(minify_html(html))
+        fh.write(root_html)
 
     css_kb   = sum(len(p.encode('utf-8')) for p in css_parts) / 1024
     js_kb    = len(combined_js.encode('utf-8')) / 1024
