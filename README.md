@@ -7,7 +7,7 @@
 Turn an Excel workbook into a searchable view of your buildings, assets,
 systems and documents. No installation. No account. No data upload.
 
-[![Open Guerrilla Ops](https://img.shields.io/badge/Open_Guerrilla_Ops-00ADED?style=for-the-badge&logo=googlechrome&logoColor=white)](https://digital-guerrilla.github.io/Guerrilla-Ops)
+[![Open Guerrilla Ops](https://img.shields.io/badge/Open_Guerrilla_Ops-00ADED?style=for-the-badge&logo=googlechrome&logoColor=white)](https://digital-guerrilla.github.io/Guerrilla-Ops/index.hmtl)
 
 ![Single HTML file](https://img.shields.io/badge/Single_HTML_File-323232?style=flat-square)
 ![Runs in your browser](https://img.shields.io/badge/Runs_in_Your_Browser-323232?style=flat-square)
