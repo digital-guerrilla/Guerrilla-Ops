@@ -4,22 +4,99 @@ function readSheet(wb, name) {
   return k ? XLSX.utils.sheet_to_json(wb.Sheets[k], { defval:'', raw:false }) : [];
 }
 
+function classificationParts(value) {
+  const text = String(value || '').trim();
+  const separator = text.indexOf(':');
+  const code = (separator >= 0 ? text.slice(0, separator) : text).trim();
+  return { code, label:text || code };
+}
+
+function classificationAncestors(code) {
+  const parts = String(code || '').split('_').filter(Boolean);
+  if (parts.length < 2) return parts;
+  return parts.slice(1).map((_, index) => parts.slice(0, index + 2).join('_'));
+}
+
+function picklistCategoryValues(entityType) {
+  const specs = {
+    facility:{ column:'Category-Facility', rows:db.facilities },
+    space:{ column:'Category-Space', rows:db.spaces },
+    type:{ column:'Category-Product', rows:db.types },
+    system:{ column:'Category-Element', rows:db.systems },
+    document:{ column:'DocumentType', rows:db.documents },
+    doccat:{ column:'DocumentType', rows:db.documents },
+  };
+  const spec = specs[entityType];
+  if (!spec) return [];
+  const values = new Map();
+  (db.picklists || []).forEach(row => {
+    const value = f(row, spec.column).trim();
+    if (value && !values.has(value.toLowerCase())) values.set(value.toLowerCase(), value);
+  });
+  spec.rows.forEach(row => {
+    const value = f(row, 'Category').trim();
+    if (value && !values.has(value.toLowerCase())) values.set(value.toLowerCase(), value);
+  });
+  return [...values.values()].sort((a, b) => {
+    const aCode = classificationParts(a).code;
+    const bCode = classificationParts(b).code;
+    return aCode.localeCompare(bCode, undefined, { numeric:true }) || a.localeCompare(b);
+  });
+}
+function _mergeRowData(target, source) {
+  if (!target || !source) return target;
+  Object.entries(source).forEach(([key, value]) => {
+    if (key.startsWith('_')) return;
+    if (value === undefined || value === null || value === '') return;
+    if (target[key] === undefined || target[key] === null || target[key] === '') target[key] = value;
+  });
+  return target;
+}
+
+function _readProjectCode(wb, facRow) {
+  const projectRows = readSheet(wb, 'Project');
+  const projectRow = projectRows[0] || {};
+  return f(projectRow,
+    'ProjectCode', 'Project Code',
+    'ProjectName', 'Project Name',
+    'ProjectId', 'Project ID',
+    'Code', 'Name'
+  ) || f(facRow, 'ProjectCode', 'Project Code', 'ProjectName', 'Project Name') || '';
+}
+
 function parseCOBieInto(wb, fileName, sourceBuffer, fileHandle) {
   const facRows = readSheet(wb,'Facility');
   const facRow  = facRows[0] || {};
   const facName = f(facRow,'Name') || fileName.replace(/\.[^.]+$/, '');
-  const tag = rec => { rec._facility = facName; return rec; };
+  const projectCode = _readProjectCode(wb, facRow);
+  const tag = rec => { rec._facility = facName; rec._fileName = fileName; rec._projectCode = projectCode; return rec; };
 
   db.types      .push(...readSheet(wb,'Type')     .map(tag));
   db.components .push(...readSheet(wb,'Component').map(tag));
   db.spaces     .push(...readSheet(wb,'Space')    .map(tag));
-  db.floors     .push(...readSheet(wb,'Floor')    .map(tag));
+  readSheet(wb,'Floor').map(tag).forEach(row => {
+    const floorName = f(row, 'Name');
+    if (!floorName) {
+      db.floors.push(row);
+      return;
+    }
+    const existing = db.floors.find(floor =>
+      floor._facility === facName && f(floor, 'Name').toLowerCase() === floorName.toLowerCase()
+    );
+    if (existing) {
+      _mergeRowData(existing, row);
+    } else {
+      db.floors.push(row);
+    }
+  });
   db.systems    .push(...readSheet(wb,'System')   .map(tag));
   db.documents  .push(...readSheet(wb,'Document') .map(tag));
   db.contacts   .push(...readSheet(wb,'Contact')  .map(tag));
   db.attributes .push(...readSheet(wb,'Attribute').map(tag));
   db.coordinates.push(...readSheet(wb,'Coordinate').map(tag));
+  (db.picklists ||= []).push(...readSheet(wb,'Picklist').map(tag));
   db.facilities .push({ ...facRow, _facility: facName, _fileName: fileName,
+    _projectCode: projectCode,
     _facRowCount: facRows.length, _workbook: wb,
     _sourceBuffer: sourceBuffer ? sourceBuffer.slice(0) : null, _fileHandle: fileHandle });
   if (!db.facility) db.facility = facRow; // backward compat
@@ -77,8 +154,8 @@ function _bindAttributeData() {
   });
 
   db.attributes.forEach(attr => {
-    const sheetName = f(attr,'SheetName','Sheet Name').toLowerCase();
-    const rowName = f(attr,'RowName','Row Name');
+    const sheetName = _cobieField(attr, 'sheetName').toLowerCase();
+    const rowName = _cobieField(attr, 'rowName');
     const attrName = f(attr,'Name');
     const rawValue = f(attr,'Value','AttributeValue','Attribute Value','NominalValue','Nominal Value');
     const unit = f(attr,'Unit','UnitName','Unit Name');
@@ -111,8 +188,8 @@ function buildIdx() {
   // Documents
   idx.docs = {};
   db.documents.forEach(d => {
-    const s = f(d,'SheetName','Sheet Name').toLowerCase();
-    const r = f(d,'RowName','Row Name').toLowerCase();
+    const s = _cobieField(d, 'sheetName').toLowerCase();
+    const r = _cobieField(d, 'rowName').toLowerCase();
     const key = _scopeKey(d._facility, s + '::' + r);
     if (s && r) (idx.docs[key] = idx.docs[key] || []).push(d);
   });
@@ -121,7 +198,7 @@ function buildIdx() {
   idx.spFloor = {};
   db.spaces.forEach(s => {
     const sp = f(s,'Name').toLowerCase();
-    const fl = f(s,'FloorName','Floor Name','Floor').toLowerCase();
+    const fl = _cobieField(s, 'floorName').toLowerCase();
     if (sp) idx.spFloor[_rowKey(s, sp)] = fl;
   });
 
@@ -129,7 +206,7 @@ function buildIdx() {
   idx.byType  = {};
   idx.bySpace = {};
   db.components.forEach(c => {
-    const tn = f(c,'TypeName','Type Name').toLowerCase();
+    const tn = _cobieField(c, 'typeName').toLowerCase();
     const typeKey = _rowKey(c, tn);
     (idx.byType[typeKey] = idx.byType[typeKey] || []).push(c);
     const sp = f(c,'Space').toLowerCase();
@@ -174,7 +251,7 @@ function buildIdx() {
   idx.floors = [...new Set(
     db.floors.length
       ? db.floors.map(x => f(x,'Name'))
-      : db.spaces.map(x => f(x,'FloorName','Floor Name','Floor'))
+      : db.spaces.map(x => _cobieField(x, 'floorName'))
   )].filter(Boolean).sort();
 
   idx.spaces  = [...new Set(db.spaces .map(s=>f(s,'Name')).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
@@ -195,33 +272,65 @@ function buildIdx() {
   });
 
   // Category groups for Space, Type, System filter panels
+  // Classification hierarchy from the Picklist master columns.
   idx.catGroups = {};
-  ['type','space','system'].forEach(dim => {
+  idx.categoryTrees = {};
+  const categorySpecs = {
+    facility:{ column:'Category-Facility', rows:db.facilities, names:row => row._facility || f(row,'Name') },
+    space:{ column:'Category-Space', rows:db.spaces, names:row => f(row,'Name') },
+    type:{ column:'Category-Product', rows:db.types, names:row => f(row,'Name') },
+    system:{ column:'Category-Element', rows:db.systems, names:row => f(row,'Name') },
+    doccat:{ column:'DocumentType', rows:db.documents, names:row => f(row,'Category') },
+  };
+  Object.entries(categorySpecs).forEach(([dim, spec]) => {
+    const labels = new Map();
+    (db.picklists || []).forEach(row => {
+      const value = f(row, spec.column);
+      const { code, label } = classificationParts(value);
+      if (code && !labels.has(code.toLowerCase())) labels.set(code.toLowerCase(), label);
+    });
+
+    const direct = new Map();
+    spec.rows.forEach(row => {
+      const name = spec.names(row);
+      const category = dim === 'doccat' ? name : f(row,'Category');
+      if (!name) return;
+      const { code, label } = classificationParts(category || '(Uncategorised)');
+      const key = (code || '(Uncategorised)').toLowerCase();
+      if (!labels.has(key)) labels.set(key, label || code || '(Uncategorised)');
+      const values = direct.get(key) || new Set();
+      values.add(name);
+      direct.set(key, values);
+    });
+
+    [...labels.keys()].forEach(key => {
+      if (key.startsWith('(')) return;
+      classificationAncestors(key).forEach(parent => {
+        const parentKey = parent.toLowerCase();
+        if (!labels.has(parentKey)) labels.set(parentKey, parent);
+      });
+    });
+
     const groups = {};
-    if (dim === 'type') {
-      db.types.forEach(t => {
-        const name = f(t,'Name'); if (!name) return;
-        const cat = f(t,'Category') || '(Uncategorised)';
-        (groups[cat] = groups[cat] || []).push(name);
+    const nodes = [...labels.entries()].map(([key, label]) => {
+      const names = new Set();
+      direct.forEach((values, categoryKey) => {
+        if (categoryKey === key || categoryKey.startsWith(key + '_')) values.forEach(name => names.add(name));
       });
-    } else if (dim === 'space') {
-      db.spaces.forEach(s => {
-        const name = f(s,'Name'); if (!name) return;
-        const cat = f(s,'Category') || '(Uncategorised)';
-        (groups[cat] = groups[cat] || []).push(name);
+      groups[key] = [...names].sort((a,b) => a.localeCompare(b));
+      return {
+        key,
+        label,
+        depth:key.startsWith('(') ? 0 : Math.max(0, key.split('_').length - 2),
+        direct:[...(direct.get(key) || [])].sort((a,b) => a.localeCompare(b)),
+      };
+    }).filter(node => groups[node.key].length > 0)
+      .sort((a,b) => {
+        const uncategorised = Number(a.key.startsWith('(')) - Number(b.key.startsWith('('));
+        return uncategorised || a.key.localeCompare(b.key, undefined, { numeric:true });
       });
-    } else {
-      const seen = new Set();
-      db.systems.forEach(s => {
-        const name = f(s,'Name'); if (!name) return;
-        if (seen.has(name.toLowerCase())) return;
-        seen.add(name.toLowerCase());
-        const cat = f(s,'Category') || '(Uncategorised)';
-        (groups[cat] = groups[cat] || []).push(name);
-      });
-    }
-    Object.keys(groups).forEach(c => { groups[c] = [...new Set(groups[c])].sort((a,b)=>a.localeCompare(b)); });
     idx.catGroups[dim] = groups;
+    idx.categoryTrees[dim] = nodes;
   });
 
   // Search text cache — one lowercase string per component covering all relevant fields
@@ -230,14 +339,14 @@ function buildIdx() {
   db.spaces.forEach(s => { sByN[_rowKey(s, f(s,'Name'))] = s; });
   idx.searchText = {};
   db.components.forEach(c => {
-    const tn = f(c,'TypeName','Type Name').toLowerCase();
+    const tn = _cobieField(c, 'typeName').toLowerCase();
     const sp = f(c,'Space').toLowerCase();
     const t2 = tByN[_rowKey(c, tn)], s2 = sByN[_rowKey(c, sp)];
     const cAttr = Object.entries(c._attrs || {}).map(([k,val]) => k + ' ' + val).join(' ');
     const tAttr = t2 ? Object.entries(t2._attrs || {}).map(([k,val]) => k + ' ' + val).join(' ') : '';
     const sAttr = s2 ? Object.entries(s2._attrs || {}).map(([k,val]) => k + ' ' + val).join(' ') : '';
     idx.searchText[_rowKey(c, f(c,'Name'))] = [
-      f(c,'Name'), f(c,'TypeName','Type Name'), f(c,'Space'),
+      f(c,'Name'), _cobieField(c, 'typeName'), f(c,'Space'),
       f(c,'Description'), f(c,'SerialNumber','Serial Number'),
       f(c,'TagNumber','Tag Number'), f(c,'BarCode','Bar Code'),
       f(c,'AssetIdentifier','Asset Identifier'),
@@ -257,7 +366,7 @@ function buildIdx() {
   const _catsOnFac  = new Set();
   const _catsOnComp = new Set();
   db.documents.forEach(d => {
-    const sn  = f(d,'SheetName','Sheet Name').toLowerCase();
+    const sn  = _cobieField(d, 'sheetName').toLowerCase();
     const cv  = f(d,'Category'); if (!cv) return;
     const cvl = cv.toLowerCase();
     if (sn === 'facility') {
@@ -297,7 +406,7 @@ function _buildDocumentContexts() {
     if (!component) return;
     const facility = (component._facility || '').toLowerCase();
     const componentName = f(component,'Name').toLowerCase();
-    const typeName = f(component,'TypeName','Type Name').toLowerCase();
+    const typeName = _cobieField(component, 'typeName').toLowerCase();
     const spaceName = f(component,'Space').toLowerCase();
     const floorName = idx.spFloor[_scopeKey(facility, spaceName)] || '';
     context.components.add(_rowKey(component, componentName));
@@ -308,9 +417,9 @@ function _buildDocumentContexts() {
   };
 
   db.documents.forEach(doc => {
-    const linkedType = f(doc,'SheetName','Sheet Name').toLowerCase();
+    const linkedType = _cobieField(doc, 'sheetName').toLowerCase();
     if (!_SUPPORTED_DOC_SHEETS.has(linkedType)) return;
-    const linkedName = f(doc,'RowName','Row Name');
+    const linkedName = _cobieField(doc, 'rowName');
     const facility = (doc._facility || '').toLowerCase();
     const category = f(doc,'Category').toLowerCase();
     const contextKey = _docUniqueKey(doc);

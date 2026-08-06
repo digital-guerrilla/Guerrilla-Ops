@@ -73,14 +73,14 @@ function runQA() {
     const n = fac._facRowCount;
     if (n === undefined) return;
     if (n === 0)
-      add('facility-cardinality','facility',fac._facility||fac._fileName,fac._facility||'',
-        `"${fac._fileName}" has no Facility row.`);
+        add('facility-cardinality','facility',fac._facility||_facilityWorkbookSourceInfo(fac).value || fac._fileName,fac._facility||'',
+        `"${_facilityWorkbookSourceInfo(fac).value || fac._fileName}" has no Facility row.`);
     else if (n > 1)
       add('facility-cardinality','facility',fac._facility||'',fac._facility||'',
-        `"${fac._fileName}" has ${n} Facility rows; only the first is read.`);
+        `"${_facilityWorkbookSourceInfo(fac).value || fac._fileName}" has ${n} Facility rows; only the first is read.`);
     if (n >= 1 && !f(fac,'Name'))
       add('key-missing','sheet','Facility sheet',fac._facility||'',
-        `Facility row has a blank Name — the file name "${fac._fileName}" is standing in for it.`);
+        `Facility row has a blank Name — ${_facilityWorkbookSourceInfo(fac).kind.toLowerCase()} "${_facilityWorkbookSourceInfo(fac).value || fac._fileName}" is standing in for it.`);
   });
 
   // Blank keys
@@ -198,9 +198,9 @@ function runQA() {
     contact: contactIds };
   S.docs.forEach(d => {
     const fac = d._facility||'', facL = fac.toLowerCase();
-    const sheetDisp = f(d,'SheetName','Sheet Name');
+    const sheetDisp = _cobieField(d, 'sheetName');
     const sheet = sheetDisp.toLowerCase();
-    const row   = f(d,'RowName','Row Name');
+    const row   = _cobieField(d, 'rowName');
     if (!sheet || !row) return;
     const docName = f(d,'Name')||f(d,'File')||'(Unnamed)';
     if (sheet in rowSets) {

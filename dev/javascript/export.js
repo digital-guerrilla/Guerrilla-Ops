@@ -48,20 +48,20 @@ function openChangesModal() {
   _changeLog.forEach(entry => {
     entry.facNames.forEach(fn => { (byFac[fn] = byFac[fn] || []).push(entry); });
   });
-  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility',document:'Document'};
-  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building',document:'bi-file-earmark-text'};
+  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility',document:'Document',attribute:'Attribute',coordinate:'Coordinate'};
+  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building',document:'bi-file-earmark-text',attribute:'bi-list-check',coordinate:'bi-crosshair'};
   let html = '';
   if (!_changeLog.length) {
     html = '<p class="text-muted small mb-0">No changes recorded.</p>';
   } else {
     Object.entries(byFac).forEach(([facName, entries]) => {
       const facObj = db.facilities.find(x => x._facility === facName);
-      const fileName = facObj?._fileName || (facName + '.xlsx');
+      const sourceInfo = _facilityWorkbookSourceInfo(facObj);
       html += `<div class="mb-3 border rounded p-2">
         <div class="d-flex align-items-center gap-2 mb-2">
           <i class="bi bi-file-earmark-excel text-success"></i>
           <strong style="font-size:.88rem">${esc(facName)}</strong>
-          <code style="font-size:.74rem;color:#888">${esc(fileName)}</code>
+          ${sourceInfo.value ? `<code style="font-size:.74rem;color:#888">${esc(sourceInfo.kind)}: ${esc(sourceInfo.value)}</code>` : ''}
           <span class="badge bg-secondary ms-auto">${entries.length} change${entries.length!==1?'s':''}</span>
         </div>
         <ul class="mb-0 small ps-3">

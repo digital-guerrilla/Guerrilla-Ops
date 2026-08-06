@@ -91,7 +91,9 @@ async function loadFiles(fileList, handleMap = new Map()) {
 function resetDb() {
   db.types=[]; db.components=[]; db.spaces=[];
   db.floors=[]; db.systems=[]; db.documents=[];
-  db.facilities=[]; db.contacts=[]; db.attributes=[]; db.coordinates=[]; db.facility=null;
+  db.facilities=[]; db.contacts=[]; db.attributes=[]; db.coordinates=[]; db.picklists=[]; db.facility=null;
+  Object.values(selectedCategoryLevels).forEach(levels => levels.clear());
+  collapsedFilterCategories.clear();
   _justCreated.clear();
   _originalDbState = null;
   _changeLog = [];
@@ -167,6 +169,7 @@ function closeWorkbooks() {
   document.querySelectorAll('.fp').forEach(panel => panel.classList.remove('fp-collapsed'));
   document.querySelectorAll('.fp-search').forEach(input => { input.value = ''; });
   document.getElementById('filter-bar').style.removeProperty('height');
+  document.getElementById('filter-bar').dataset.userSized = '';
   document.getElementById('content').scrollTop = 0;
   document.getElementById('btn-asset').classList.add('active');
   document.getElementById('btn-document').classList.remove('active');
@@ -195,19 +198,20 @@ function _captureDbState() {
     systems: db.systems.map(_cloneRecord), documents: db.documents.map(_cloneRecord),
     facilities: db.facilities.map(_cloneRecord), contacts: db.contacts.map(_cloneRecord),
     attributes: db.attributes.map(_cloneRecord), coordinates: db.coordinates.map(_cloneRecord),
+    picklists: db.picklists.map(_cloneRecord),
   };
 }
 
 function _appendDbState(previousLengths) {
   if (!_originalDbState) { _captureDbState(); return; }
-  ['types','components','spaces','floors','systems','documents','facilities','contacts','attributes','coordinates'].forEach(key => {
+  ['types','components','spaces','floors','systems','documents','facilities','contacts','attributes','coordinates','picklists'].forEach(key => {
     db[key].slice(previousLengths[key]).forEach(row => _originalDbState[key].push(_cloneRecord(row)));
   });
 }
 
 function _restoreDbState() {
   if (!_originalDbState) return;
-  ['types','components','spaces','floors','systems','documents','facilities','contacts','attributes','coordinates'].forEach(key => {
+  ['types','components','spaces','floors','systems','documents','facilities','contacts','attributes','coordinates','picklists'].forEach(key => {
     db[key] = _originalDbState[key].map(_cloneRecord);
   });
   db.facility = db.facilities[0] || null;

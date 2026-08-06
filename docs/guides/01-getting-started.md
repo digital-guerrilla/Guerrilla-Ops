@@ -15,6 +15,8 @@ You need:
 
 Open the [live application](https://digital-guerrilla.github.io/Guerrilla-Ops/Guerrilla-Ops.html) or open `Guerrilla-Ops.html` locally.
 
+On first load, the page opens to the upload screen. The top header appears after at least one workbook is loaded.
+
 ## Choose a loading mode
 
 ![Workbook selection screen](../images/01-open-workbook.png)
@@ -63,6 +65,7 @@ The screen is arranged from top to bottom:
 3. **Filter panels**: Facility, Floor, Space, Type, System, and Document Category.
 4. **Results toolbar**: Asset View, Document View, QA View, Create, active filters, and grouping controls.
 5. **Results panel**: grouped components, documents, or QA findings.
+6. **Footer**: project attribution, license reference, and **Terms of use** popup link.
 
 ## Privacy and session safety
 

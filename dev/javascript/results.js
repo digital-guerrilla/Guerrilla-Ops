@@ -126,7 +126,7 @@ function buildGroupMap(comps, dim) {
     });
   } else if (dim === 'type') {
     comps.forEach(c => {
-      const k = f(c,'TypeName','Type Name') || '(Unassigned)';
+      const k = _cobieField(c, 'typeName') || '(Unassigned)';
       if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
     });
   } else if (dim === 'space') {
@@ -167,21 +167,21 @@ function getGroupSubtitle(dim, name, facility) {
     return fac ? f(fac,'Description') : '';
   }
   if (dim === 'type') {
-    const t = db.types.find(x => f(x,'Name').toLowerCase() === name.toLowerCase() && (!facility || x._facility === facility));
+    const t = _findEntity(db.types, name, facility);
     return t ? [f(t,'Manufacturer'),f(t,'ModelNumber','Model Number')].filter(Boolean).join(' – ') : '';
   }
   if (dim === 'system') {
-    const s = db.systems.find(x => f(x,'Name').toLowerCase() === name.toLowerCase() && (!facility || x._facility === facility));
+    const s = _findEntity(db.systems, name, facility);
     return s ? f(s,'Category') : '';
   }
   if (dim === 'space') {
-    const s = db.spaces.find(x => f(x,'Name').toLowerCase() === name.toLowerCase() && (!facility || x._facility === facility));
+    const s = _findEntity(db.spaces, name, facility);
     if (!s) return '';
     const fl = f(s,'FloorName','Floor Name');
     return fl ? 'Floor: '+fl : '';
   }
   if (dim === 'floor') {
-    const fl = db.floors.find(x => f(x,'Name').toLowerCase() === name.toLowerCase() && (!facility || x._facility === facility));
+    const fl = _findEntity(db.floors, name, facility);
     if (!fl) return '';
     const elev = f(fl,'Elevation');
     return elev ? 'Elev: '+elev : '';
@@ -237,7 +237,7 @@ function _groupHighlightMatchComponent(comp, dim, name, facility) {
   if (facility && compFacility !== facility) return false;
 
   if (dim === 'facility') return compFacility === name;
-  if (dim === 'type') return f(comp, 'TypeName', 'Type Name').toLowerCase() === name;
+  if (dim === 'type') return _cobieField(comp, 'typeName').toLowerCase() === name;
   if (dim === 'space') return f(comp, 'Space').toLowerCase() === name;
   if (dim === 'floor') {
     const floor = idx.spFloor[_scopeKey(comp._facility, f(comp, 'Space'))] || '';
@@ -319,7 +319,7 @@ function highlightGroupSelection(button, additive = false) {
 // ── Component card ────────────────────────────────────────────
 function card(c) {
   const name = f(c,'Name');
-  const tn   = f(c,'TypeName','Type Name');
+  const tn   = _cobieField(c, 'typeName');
   const sp   = f(c,'Space');
   const desc = f(c,'Description');
   const sn   = f(c,'SerialNumber','Serial Number');
@@ -406,8 +406,8 @@ function _toggleGroupHeader(header, forceOpen) {
     if (pending.isQA) {
       body.innerHTML = qaGroupBody(pending.qaItems);
     } else if (pending.isDocMode) {
-      body.innerHTML = pending.isCatLeaf
-        ? pending.docEntries.map(entry => docCard(entry)).join('')
+      body.innerHTML = pending.isDocCategory
+        ? groupDocsByClassification(pending.docEntries, pending.dims || [], pending.depth || 0, pending.categoryKey)
         : groupDocsNested(pending.docEntries, pending.dims || [], pending.depth || 0);
     } else {
       body.innerHTML = groupNested(pending.comps, pending.dims, pending.depth, pending.parentPath || '');

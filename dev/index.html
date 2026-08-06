@@ -23,19 +23,7 @@
 
 <!-- HEADER -->
 <header id="hdr" style="display:none">
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1.2rem;height:1.2rem;vertical-align:middle">
-    <circle cx="256" cy="256" r="248" fill="#fff"/>
-    <g transform="translate(256 256) scale(0.6) translate(-250 -315)">
-      <path d="M40 300V40h140s139.6.6 210 70 70 190 70 190"
-            fill="none"
-            stroke="#323232"
-            stroke-width="75"/>
-      <path d="M275.5 370h184.5v188.2s-134.5 61.2-277 14.9S40 330 40 330"
-            fill="none"
-            stroke="#0ad"
-            stroke-width="75"/>
-    </g>
-  </svg><span class="title">Guerrilla Ops</span>
+  <span id="go-logo-hdr" class="go-logo go-logo-hdr" aria-hidden="true"></span><span class="title">Guerrilla Ops</span>
   <span class="file-lbl d-none" id="file-lbl"></span>
   <div id="search-wrap" class="d-none">
     <i class="bi bi-search" style="opacity:.5;font-size:.8rem;flex-shrink:0"></i>
@@ -65,7 +53,7 @@
 <!-- UPLOAD -->
 <div id="upload">
   <div class="up-card" id="drop-zone">
-    <div class="ico"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 630" width="100" height="100"><path d="M40 300V40h140s139.6.6 210 70 70 190 70 190" fill="none" stroke="#323232" stroke-width="75"/><path d="M275.5 370h184.5v188.2s-134.5 61.2-277 14.9S40 330 40 330" fill="none" stroke="#0ad" stroke-width="75"/></svg></div>
+    <div class="ico"><span id="go-logo-upload" class="go-logo go-logo-upload" aria-hidden="true"></span></div>
     <h4>Guerrilla Ops</h4>
     <p>Select individual files, open a whole folder, or drag &amp; drop Excel files here.</p>
     <div class="d-flex gap-2 justify-content-center flex-wrap">
@@ -118,7 +106,7 @@
   <div id="filter-bar">
     <div class="fp fp-facility">
       <div class="fp-inner">
-        <div class="fp-hd-top"><span>Facility</span><span class="fp-badge d-none" id="fb-facility"></span></div>
+        <div class="fp-hd-top"><span>Facility</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="facility" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="facility" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-facility"></span></span></div>
         <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
         <div class="fp-body" id="fpl-facility"></div>
       </div>
@@ -134,7 +122,7 @@
     </div>
     <div class="fp fp-space">
       <div class="fp-inner">
-        <div class="fp-hd-top"><span>Space</span><span class="fp-badge d-none" id="fb-space"></span></div>
+        <div class="fp-hd-top"><span>Space</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="space" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="space" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-space"></span></span></div>
         <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
         <div class="fp-body" id="fpl-space"></div>
       </div>
@@ -142,7 +130,7 @@
     </div>
     <div class="fp fp-type">
       <div class="fp-inner">
-        <div class="fp-hd-top"><span>Type</span><span class="fp-badge d-none" id="fb-type"></span></div>
+        <div class="fp-hd-top"><span>Type</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="type" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="type" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-type"></span></span></div>
         <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
         <div class="fp-body" id="fpl-type"></div>
       </div>
@@ -150,7 +138,7 @@
     </div>
     <div class="fp fp-system">
       <div class="fp-inner">
-        <div class="fp-hd-top"><span>System</span><span class="fp-badge d-none" id="fb-system"></span></div>
+        <div class="fp-hd-top"><span>System</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="system" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="system" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-system"></span></span></div>
         <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
         <div class="fp-body" id="fpl-system"></div>
       </div>
@@ -158,7 +146,7 @@
     </div>
     <div class="fp fp-doccat">
       <div class="fp-inner">
-        <div class="fp-hd-top"><span>Document Category</span><span class="fp-badge d-none" id="fb-doccat"></span></div>
+        <div class="fp-hd-top"><span>Document Category</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="doccat" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="doccat" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-doccat"></span></span></div>
         <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
         <div class="fp-body" id="fpl-doccat"></div>
       </div>
@@ -238,6 +226,28 @@
           </div>
         </div>
       </aside>
+    </div>
+  </div>
+</div>
+
+<footer id="app-footer" role="contentinfo">
+  <span class="ftr-attrib"><strong>Guerrilla Ops</strong> is open source software, licensed under <a class="ftr-link" href="https://github.com/digital-guerrilla/Guerrilla-Ops?tab=GPL-3.0-1-ov-file" target="_blank" rel="noopener noreferrer">GPL-3.0</a>, maintained by <a class="ftr-link" href="https://digital-guerrilla.scot" target="_blank" rel="noopener noreferrer">Digital Guerrilla</a> with contributions from the open source community. For full attributions refer to the <a class="ftr-link" href="https://github.com/digital-guerrilla/Guerrilla-Ops" target="_blank" rel="noopener noreferrer">GitHub repo</a>.<br>Please refer to the <button class="ftr-link ftr-disclaimer-link" type="button" data-bs-toggle="modal" data-bs-target="#disclaimer-modal" aria-label="Open terms of use">Terms of use</button> before using.</span>
+</footer>
+
+<!-- DISCLAIMER MODAL -->
+<div class="modal fade" id="disclaimer-modal" tabindex="-1" aria-labelledby="disclaimer-modal-title" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title" id="disclaimer-modal-title"><i class="bi bi-exclamation-circle me-2"></i>Disclaimer</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" style="font-size:.86rem;line-height:1.5">
+        <p>This single HTML tool runs locally in your browser and keeps edits in memory until you save.</p>
+        <p>Refreshing or closing can discard unsaved work. Standard sessions download updated files and do not overwrite originals automatically. Editable mode updates selected <code>.xlsx</code> files with your explicit permission.</p>
+        <p>Always work from backups, verify outputs in Excel (including managed and unmanaged sheets, formulas, formatting, and document links), and independently validate COBie data before formal issue, construction, or operational use.</p>
+        <p class="mb-0">External links open under your browser and organisation security policies. Results are provided as-is and do not replace professional judgement, project information requirements, or independent quality assurance.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -352,6 +362,53 @@
   </div>
 </div>
 
+<!-- FLOOR PLAN ALIGNMENT MODAL -->
+<div class="modal fade" id="floor-align-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-fullscreen">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <div>
+          <h5 class="modal-title mb-0"><i class="bi bi-arrows-move me-2"></i><span id="floor-align-title">Align Floor Plans</span></h5>
+          <div id="floor-align-subtitle" style="font-size:.76rem;opacity:.85">Floor plan alignment</div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0 overflow-hidden">
+        <div class="d-flex flex-column h-100">
+          <div class="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-bottom bg-light">
+            <div class="text-muted" style="font-size:.78rem">Left-drag the plan to move. Right-drag to rotate. Drag the corner handle to resize.</div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Flip alignment">
+              <button type="button" class="btn btn-outline-secondary" data-floor-align-flip="horizontal" title="Flip horizontally">
+                <i class="bi bi-symmetry-horizontal me-1"></i>Flip H
+              </button>
+              <button type="button" class="btn btn-outline-secondary" data-floor-align-flip="vertical" title="Flip vertically">
+                <i class="bi bi-symmetry-vertical me-1"></i>Flip V
+              </button>
+            </div>
+            <label class="d-flex align-items-center gap-2 mb-0 px-2" for="floor-align-fill-opacity" style="font-size:.76rem;white-space:nowrap">
+              <span>Plan fill</span>
+              <input id="floor-align-fill-opacity" type="range" min="0" max="100" step="5" value="35"
+                data-floor-align-fill-opacity style="width:120px" aria-label="Floor plan fill opacity">
+              <output id="floor-align-fill-opacity-value" for="floor-align-fill-opacity" style="width:2.5rem;text-align:right">35%</output>
+            </label>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-floor-align-reset>
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+            </button>
+            <div class="ms-auto text-muted" id="floor-align-status" style="font-size:.78rem">No project alignment available.</div>
+          </div>
+          <div id="floor-align-stage" class="position-relative flex-grow-1 overflow-hidden" style="background:linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fa">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" data-floor-align-save style="background:var(--navy);border-color:var(--navy)">
+          <i class="bi bi-save me-1"></i>Save Alignment
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- EDIT MODAL -->
 <div class="modal fade" id="edit-modal" tabindex="-1">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -371,9 +428,56 @@
   </div>
 </div>
 
+<!-- COMPONENT PLACEMENT MODAL -->
+<div class="modal fade" id="component-placement-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-fullscreen">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--navy);color:#fff">
+        <h5 class="modal-title"><i class="bi bi-geo-alt me-2"></i>Locate Component</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0 overflow-hidden">
+        <div class="d-flex flex-column h-100">
+          <div class="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-bottom bg-light">
+            <div class="col-md-5">
+              <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">Floor</label>
+              <select class="form-select form-select-sm" id="component-placement-floor" data-component-placement-floor></select>
+            </div>
+            <div class="col-md-3">
+              <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">Height above floor</label>
+              <div class="d-flex align-items-center gap-2">
+                <input type="number" min="0" step="1" class="form-control form-control-sm" id="component-placement-height" value="1000" style="width:105px;flex:0 0 105px">
+                <input type="range" min="0" max="10000" step="50" value="1000" class="form-range flex-grow-1" id="component-placement-height-slider" aria-label="Height above floor slider">
+              </div>
+            </div>
+            <div class="ms-auto text-muted" id="component-placement-status" style="font-size:.78rem">Click a room in the SVG to choose the placement space.</div>
+          </div>
+          <div class="d-flex flex-grow-1 overflow-hidden">
+            <div class="flex-grow-1 p-3" style="min-width:0;min-height:0">
+              <div id="component-placement-stage" class="h-100"></div>
+            </div>
+            <div class="flex-shrink-0 p-3" style="width:min(40vw,540px);min-width:340px;min-height:0">
+              <div id="component-placement-preview" class="border rounded bg-white p-2 h-100">
+                <canvas id="component-placement-preview-canvas" class="w-100 h-100" style="min-height:320px;display:block"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fa">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" data-component-placement-apply style="background:var(--navy);border-color:var(--navy)">
+          <i class="bi bi-check2-circle me-1"></i>Use Location
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- JS modules loaded in dependency order -->
 <script src="javascript/state.js"></script>
 <script src="javascript/utils.js"></script>
+<script src="javascript/logo-theme.js"></script>
 <script src="javascript/cobie-parser.js"></script>
 <script src="javascript/app-lifecycle.js"></script>
 <script src="javascript/filters.js"></script>
@@ -388,6 +492,7 @@
 <script src="javascript/edit.js"></script>
 <script src="javascript/create.js"></script>
 <script src="javascript/export.js"></script>
+<script src="javascript/component-placement.js"></script>
 <script src="javascript/resize.js"></script>
 <script src="javascript/init.js"></script>
 </body>

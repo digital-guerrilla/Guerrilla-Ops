@@ -8,7 +8,7 @@ Guerrilla Ops keeps changes in browser memory until you explicitly save or disca
 
 After an edit or creation, an **Unsaved Changes** button appears in the header with the number of recorded changes.
 
-![Unsaved Changes for Demo Civic Centre example records](../images/08-unsaved-changes.png)
+![Unsaved Changes example](../images/08-unsaved-changes.png)
 
 Open it to review changes grouped by Facility and source workbook.
 

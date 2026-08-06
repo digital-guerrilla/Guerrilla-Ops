@@ -43,7 +43,8 @@ Each filter panel has its own search field. This changes only the visible choice
 ### Resize the filter area
 
 - Drag the dark resize bar below the panels.
-- Use the up and down controls on the bar to maximise or minimise it.
+- Use the up and down controls in the **Filters** header to maximise or minimise it.
+- Select the **Filters** header itself to toggle minimise/restore.
 - Select a panel's narrow heading to collapse or expand that panel.
 
 ## Understand relationship-aware document filtering
@@ -65,7 +66,7 @@ Selecting a **Document Category** from Asset View automatically opens Document V
 
 The **Group** row controls the hierarchy in the results panel.
 
-![Floor, Space, and Type grouping using the Demo Civic Centre example data](../images/06-grouped-hierarchy.png)
+![Floor, Space, and Type grouping example](../images/06-grouped-hierarchy.png)
 
 1. Select a group chip to activate it.
 2. Select more chips to add levels.

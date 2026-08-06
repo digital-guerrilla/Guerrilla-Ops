@@ -10,43 +10,23 @@ Usage:
 import os
 import re
 
+try:
+    from rcssmin import cssmin
+except ImportError:
+    cssmin = None
+
+try:
+    from rjsmin import jsmin
+except ImportError:
+    jsmin = None
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR   = os.path.dirname(SCRIPT_DIR)
 DEV_DIR     = os.path.join(ROOT_DIR, 'dev')
 CSS_DIR     = os.path.join(DEV_DIR, 'css')
 JS_DIR      = os.path.join(DEV_DIR, 'javascript')
 RELEASE_DIR = os.path.join(ROOT_DIR, 'release')
-
-# CSS files in load order (must match <link> order in index.html)
-CSS_FILES = [
-    'theme.css',
-    'header.css',
-    'upload.css',
-    'filter.css',
-    'results.css',
-]
-
-# JS modules in load order (must match the <script src="..."> order in index.html)
-JS_MODULES = [
-    'state.js',
-    'utils.js',
-    'cobie-parser.js',
-    'app-lifecycle.js',
-    'filters.js',
-    'panels.js',
-    'pills.js',
-    'results.js',
-    'floor-svg-panel.js',
-    'three-d-viewer.js',
-    'documents.js',
-    'qa.js',
-    'modals.js',
-    'edit.js',
-    'create.js',
-    'export.js',
-    'resize.js',
-    'init.js',
-]
+SVG_SOURCE = os.path.join(DEV_DIR, 'svgs', 'Guerrilla-Ops.svg')
 
 
 def read(path):
@@ -54,26 +34,82 @@ def read(path):
         return fh.read()
 
 
+def js_string_literal(text):
+    return repr(text)
+
+
+def local_assets(html):
+    css_files = re.findall(r'<link\b[^>]*href="css/([^"]+\.css)"', html, flags=re.IGNORECASE)
+    js_modules = re.findall(r'<script\b[^>]*src="javascript/([^"]+\.js)"[^>]*></script>', html, flags=re.IGNORECASE)
+    if not css_files:
+        raise ValueError('No local CSS files found in dev/index.html')
+    if not js_modules:
+        raise ValueError('No local JavaScript modules found in dev/index.html')
+    return css_files, js_modules
+
+
+def validate_source(path):
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f'Missing build source: {path}')
+    if os.path.getsize(path) == 0:
+        raise ValueError(f'Empty build source: {path}')
+
+
+def minify_html(html):
+    def minify_block(match):
+        tag = match.group(1).lower()
+        attrs = match.group(2) or ''
+        body = match.group(3) or ''
+
+        if tag == 'script':
+            if jsmin is not None and body.strip():
+                body = jsmin(body)
+        else:
+            if cssmin is not None and body.strip():
+                body = cssmin(body)
+
+        return f'<{tag}{attrs}>{body}</{tag}>'
+
+    html = re.sub(r'<(script|style)([^>]*)>(.*?)</\1>', minify_block, html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<!--(?!\s*\[if).*?-->', '', html, flags=re.DOTALL)
+    html = re.sub(r'>\s+<', '><', html)
+    html = re.sub(r'\s{2,}', ' ', html)
+    html = html.strip()
+    return html
+
+
 def build():
     os.makedirs(RELEASE_DIR, exist_ok=True)
 
     # ── Load template ──────────────────────────────────────────
-    html = read(os.path.join(DEV_DIR, 'index.html'))
+    template_path = os.path.join(DEV_DIR, 'index.html')
+    validate_source(template_path)
+    validate_source(SVG_SOURCE)
+    html = read(template_path)
+    css_files, js_modules = local_assets(html)
+    for filename in css_files:
+        validate_source(os.path.join(CSS_DIR, filename))
+    for filename in js_modules:
+        validate_source(os.path.join(JS_DIR, filename))
+    svg_markup = read(SVG_SOURCE).strip()
 
     # ── Inline CSS ─────────────────────────────────────────────
-    css_parts = [read(os.path.join(CSS_DIR, f)) for f in CSS_FILES]
+    css_parts = [read(os.path.join(CSS_DIR, filename)) for filename in css_files]
     css = '\n\n'.join(css_parts)
     # Replace the first CSS link and remove the rest
-    first_link = f'<link rel="stylesheet" href="css/{CSS_FILES[0]}">'
+    first_link = f'<link rel="stylesheet" href="css/{css_files[0]}">'
     html = html.replace(first_link, f'<style>\n{css}\n  </style>')
-    for f in CSS_FILES[1:]:
-        html = html.replace(f'\n  <link rel="stylesheet" href="css/{f}">', '')
+    for filename in css_files[1:]:
+        html = html.replace(f'\n  <link rel="stylesheet" href="css/{filename}">', '')
 
     # ── Concatenate JS modules ─────────────────────────────────
     js_parts = []
-    for module in JS_MODULES:
+    for module in js_modules:
         path = os.path.join(JS_DIR, module)
-        js_parts.append(f'// ── {module} {"─" * max(1, 50 - len(module))}\n\n' + read(path))
+        module_source = read(path)
+        if module == 'logo-theme.js':
+            module_source = module_source.replace("const EMBEDDED_LOGO_SVG = '';", f"const EMBEDDED_LOGO_SVG = {js_string_literal(svg_markup)};")
+        js_parts.append(f'// ── {module} {"─" * max(1, 50 - len(module))}\n\n' + module_source)
     combined_js = '\n\n'.join(js_parts)
 
     # Remove all individual <script src="javascript/..."> tags
@@ -91,7 +127,7 @@ def build():
     with open(output_path, 'w', encoding='utf-8') as fh:
         fh.write(html)
     with open(root_path, 'w', encoding='utf-8') as fh:
-        fh.write(html)
+        fh.write(minify_html(html))
 
     css_kb   = sum(len(p.encode('utf-8')) for p in css_parts) / 1024
     js_kb    = len(combined_js.encode('utf-8')) / 1024
@@ -99,7 +135,8 @@ def build():
     print(f'Built:  {output_path}')
     print(f'  copy: {root_path}')
     print(f'  CSS:  {css_kb:.1f} KB')
-    print(f'  JS:   {js_kb:.1f} KB  ({len(JS_MODULES)} modules)')
+    print(f'  JS:   {js_kb:.1f} KB  ({len(js_modules)} modules)')
+    print('  SVG:  embedded into bundled JS')
     print(f'  Total:{total_kb:.1f} KB')
 
 

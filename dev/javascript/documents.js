@@ -12,17 +12,17 @@ function collectDocsForComps(comps) {
     const syss = comp ? (idx.compSys[_rowKey(comp, f(comp,'Name'))]||[]).map(sk=>idx.systems.find(n=>n.toLowerCase()===sk)||sk)
                       : (linkedType==='system'?[linkedName]:[]);
     entries.push({ doc, linkedType, linkedName,
-      typeName:     comp?f(comp,'TypeName','Type Name'):(linkedType==='type'?linkedName:''),
+      typeName:     comp?_cobieField(comp, 'typeName'):(linkedType==='type'?linkedName:''),
       spaceName:    comp?f(comp,'Space'):(linkedType==='space'?linkedName:''),
       facilityName: comp?(comp._facility||''):(linkedType==='facility'?linkedName:(doc._facility||'')),
       floorName:    flN, systemNames: syss });
   };
   comps.forEach(c => {
-    const cn=f(c,'Name').toLowerCase(), tn=f(c,'TypeName','Type Name').toLowerCase();
+    const cn=f(c,'Name').toLowerCase(), tn=_cobieField(c, 'typeName').toLowerCase();
     const sp=f(c,'Space').toLowerCase(), fn=(c._facility||'').toLowerCase();
     const cKey=_rowKey(c,cn), tKey=_scopeKey(fn,tn), spKey=_scopeKey(fn,sp);
     docsFor('component',cn,c._facility).forEach(d=>addDoc(d,'component',f(c,'Name'),c));
-    if(tn&&!doneT.has(tKey)){doneT.add(tKey);docsFor('type',tn,c._facility).forEach(d=>addDoc(d,'type',f(c,'TypeName','Type Name'),null));}
+    if(tn&&!doneT.has(tKey)){doneT.add(tKey);docsFor('type',tn,c._facility).forEach(d=>addDoc(d,'type',_cobieField(c, 'typeName'),null));}
     if(sp&&!doneSp.has(spKey)){doneSp.add(spKey);docsFor('space',sp,c._facility).forEach(d=>addDoc(d,'space',f(c,'Space'),c));}
     const floorKey = idx.spFloor[_scopeKey(fn,sp)] || '';
     const scopedFloorKey = _scopeKey(fn,floorKey);
@@ -65,6 +65,7 @@ function _docEntryValues(entry, dimension) {
 function groupDocsNested(entries, dims, depth = 0) {
   if(!dims.length||!entries.length) return renderDocsByCat(entries);
   const [dim,...rest] = dims;
+  if (dim === 'doccat') return groupDocsByClassification(entries, rest, depth);
   const map = new Map();
   entries.forEach(e => {
     const ks = _docEntryValues(e, dim);
@@ -90,25 +91,46 @@ function groupDocsNested(entries, dims, depth = 0) {
 }
 
 function renderDocsByCat(entries) {
-  if(!entries.length) return '';
-  const bycat=new Map();
-  entries.forEach(e=>{ const c=f(e.doc,'Category')||'(Uncategorised)'; if(!bycat.has(c))bycat.set(c,[]); bycat.get(c).push(e); });
-  const cats=[...bycat.keys()].sort((a,b)=>{const pa=a.startsWith('('),pb=b.startsWith('(');return pa!==pb?(pa?1:-1):a.localeCompare(b);});
-  if(cats.length===1) return bycat.get(cats[0]).map(e=>docCard(e)).join('');
-  return cats.map(cat=>{
-    const catE=bycat.get(cat);
+  return groupDocsByClassification(entries, [], 0);
+}
+
+function groupDocsByClassification(entries, remainingDims = [], depth = 0, parentKey = '') {
+  if (!entries.length) return '';
+  const entryCode = entry => classificationParts(f(entry.doc,'Category') || '(Uncategorised)').code.toLowerCase();
+  const directEntries = parentKey ? entries.filter(entry => entryCode(entry) === parentKey) : [];
+  const childKeys = new Set();
+  entries.forEach(entry => {
+    const ancestors = classificationAncestors(entryCode(entry));
+    const parentIndex = parentKey ? ancestors.indexOf(parentKey) : -1;
+    const child = ancestors[parentIndex + 1];
+    if (child && child !== parentKey) childKeys.add(child);
+  });
+  const directHtml = directEntries.length
+    ? (remainingDims.length ? groupDocsNested(directEntries, remainingDims, depth) : directEntries.map(entry => docCard(entry)).join(''))
+    : '';
+  const nodes = [...childKeys].sort((a,b) => a.localeCompare(b, undefined, { numeric:true })).map(categoryKey => {
+    const categoryEntries = entries.filter(entry => {
+      const code = entryCode(entry);
+      return code === categoryKey || code.startsWith(categoryKey + '_');
+    });
+    const categoryNode = idx.categoryTrees?.doccat?.find(node => node.key === categoryKey);
+    const categoryLabel = categoryNode?.label || classificationParts(f(categoryEntries[0]?.doc,'Category')).label || categoryKey;
     const cid='col_'+(collapseCounter++);
-    pendingGroups[cid]={docEntries:catE,isDocMode:true,isCatLeaf:true};
-    return `<div class="grp-block grp-d2" style="margin-bottom:.3rem">
+    pendingGroups[cid]={
+      docEntries:categoryEntries, dims:remainingDims, depth:depth+1,
+      isDocMode:true, isDocCategory:true, categoryKey,
+    };
+    return `<div class="grp-block grp-d${Math.min(depth,4)}" style="margin-bottom:.3rem">
       <div class="grp-hdr grp-cat-doccat grp-collapsed" data-cid="${cid}">
         <i class="bi bi-chevron-down grp-chev"></i>
         <i class="bi bi-folder2-open me-1" style="opacity:.72;font-size:.82rem"></i>
-        <span class="grp-name">${esc(cat)}</span>
-        <span class="grp-cnt">${catE.length}</span>
+        <span class="grp-name">${esc(categoryLabel)}</span>
+        <span class="grp-cnt">${categoryEntries.length}</span>
       </div>
       <div class="grp-body grp-closed" id="${cid}"></div>
     </div>`;
   }).join('');
+  return directHtml + nodes;
 }
 
 function docCard(entry) {

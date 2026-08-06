@@ -12,24 +12,24 @@ Select **Asset View** above the results. Current Facility, Floor, Space, Type, a
 
 A component card can show:
 
-![Expanded AHU-01 component details from the Demo Civic Centre example workbook](../images/05-asset-card-details.png)
+![Expanded component information example](../images/05-asset-card-details.png)
 
 - Component name and description.
 - Type.
 - Space or location.
 - Linked document badges.
-- A **Details** action.
-- An **Edit** pencil action.
+- A **Component info** action.
+- A highlight action.
 
-Select **Details** to reveal available fields such as serial number, tag number, barcode, asset identifier, installation date, and warranty start date.
+Select **Component info** to open a popup with available fields such as serial number, tag number, barcode, asset identifier, installation date, and warranty start date. Blank fields are omitted.
 
-Blank fields are omitted from the compact details table.
+From that popup, use **Edit Component** to open the full editor when changes are required.
 
 ## Use group information
 
-Grouped headers can provide an information action such as **Type Info**, **System Info**, **Space Info**, **Floor Info**, or **Facility Info**.
+Grouped headers provide an information action for the current group (Type, System, Space, Floor, or Facility).
 
-The information window shows available properties and linked documents. Use its **Edit [record]** action to open the full editor.
+The information window shows available properties and linked documents. Use its edit action to open the full editor.
 
 ## Follow relationships
 
@@ -53,7 +53,7 @@ If you select a Document Category, Guerrilla Ops opens Document View. You can re
 
 ## Edit a component
 
-Select the pencil action on a component card. Depending on the data, the editor lets you update:
+Select **Component info** on a card, then choose the edit action in the popup. Depending on the data, the editor lets you update:
 
 - General component properties.
 - Type.
@@ -71,7 +71,7 @@ For full instructions, see [Edit and create records](06-edit-create.md).
 
 1. Search for its component name, tag, serial number, barcode, or asset identifier.
 2. Group by Facility or Type if more than one result remains.
-3. Open **Details**.
+3. Open **Component info**.
 
 ### Review all assets in one room
 

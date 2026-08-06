@@ -55,7 +55,7 @@ function openGroupInfo(dim, name, facility) {
 
   let body = '';
   if (dim === 'type') {
-    const t = db.types.find(x => f(x,'Name').toLowerCase() === name.toLowerCase() && (!facility || x._facility === facility));
+    const t = _findEntity(db.types, name, facility);
     body = t ? buildTypeBody(t) : '<p class="text-muted small mb-0">Type not found.</p>';
   } else if (dim === 'system') {
     body = buildSystemBody(name, facility);
@@ -70,9 +70,9 @@ function openGroupInfo(dim, name, facility) {
   new bootstrap.Modal(document.getElementById('type-modal')).show();
 }
 
-function _attributeRows(entity, widthPx) {
+function _attributeRows(entity, widthPx, skipSvg = false) {
   const attrs = Object.entries(entity?._attrs || {})
-    .filter(([, value]) => value)
+    .filter(([name, value]) => value && !(skipSvg && /^svg/i.test(name)))
     .sort(([a], [b]) => a.localeCompare(b));
   return attrs.map(([name, value]) =>
     `<tr><td style="width:${widthPx}px;color:#888;white-space:nowrap;font-size:.81rem">Attribute: ${esc(name)}</td><td style="font-size:.83rem">${renderAttributeValue(value, name)}</td></tr>`
@@ -93,7 +93,7 @@ function buildTypeBody(t) {
 }
 
 function buildSystemBody(name, facility) {
-  const s = db.systems.find(x => f(x,'Name').toLowerCase() === name.toLowerCase() && (!facility || x._facility === facility));
+  const s = _findEntity(db.systems, name, facility);
   const baseRows = s ? [['Category',f(s,'Category')],['Description',f(s,'Description')]]
     .filter(([,v])=>v).map(([k,v])=>`<tr><td style="width:130px;color:#888;font-size:.81rem">${esc(k)}</td><td style="font-size:.83rem">${esc(v)}</td></tr>`).join('') : '';
   const rows = s ? baseRows + _attributeRows(s, 130) : '';
@@ -114,7 +114,7 @@ function buildSpaceBody(name, facility) {
     ['Net Perimeter',   ['NetPerimeter','Net Perimeter']],
     ['Room Tag',        ['RoomTag','Room Tag']],
   ];
-  const s = db.spaces.find(x => f(x,'Name').toLowerCase() === name.toLowerCase() && (!facility || x._facility === facility));
+  const s = _findEntity(db.spaces, name, facility);
   const baseRows = s ? FIELDS.map(([l,fs])=>{const val=f(s,...fs);return val?`<tr><td style="width:150px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
   const rows = s ? baseRows + _attributeRows(s, 150) : '';
   return `<button class="btn btn-sm btn-outline-secondary mb-2 py-1" data-edit-entity="space" data-edit-key="${esc(name)}" data-edit-fac="${esc(facility)}" style="font-size:.77rem"><i class="bi bi-pencil me-1"></i>Edit Space</button>` +
@@ -130,9 +130,9 @@ function buildFloorBody(name, facility) {
     ['Height',      ['Height']],
     ['Elevation',   ['Elevation']],
   ];
-  const fl = db.floors.find(x => f(x,'Name').toLowerCase() === name.toLowerCase() && (!facility || x._facility === facility));
+  const fl = _findEntity(db.floors, name, facility);
   const baseRows = fl ? FIELDS.map(([l,fs])=>{const val=f(fl,...fs);return val?`<tr><td style="width:130px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
-  const rows = fl ? baseRows + _attributeRows(fl, 130) : '';
+  const rows = fl ? baseRows + _attributeRows(fl, 130, true) : '';
   return `<button class="btn btn-sm btn-outline-secondary mb-2 py-1" data-edit-entity="floor" data-edit-key="${esc(name)}" data-edit-fac="${esc(facility)}" style="font-size:.77rem"><i class="bi bi-pencil me-1"></i>Edit Floor</button>` +
     (rows ? `<table class="table table-sm mb-0"><tbody>${rows}</tbody></table>`
     : '<p class="text-muted small mb-0">No additional floor data.</p>') + buildDocSection(docsFor('Floor', name, facility));
@@ -140,6 +140,7 @@ function buildFloorBody(name, facility) {
 
 function buildFacilityBody(name) {
   const FIELDS = [
+    ['Project Code',    ['ProjectCode','Project Code']],
     ['Description',      ['Description']],
     ['Phase',            ['Phase']],
     ['Country Code',     ['CountryCode','Country Code']],
@@ -153,9 +154,10 @@ function buildFacilityBody(name) {
     ['Region',           ['Region']],
   ];
   const fac = db.facilities.find(x => x._facility === name);
-  const rows = fac ? FIELDS.map(([l,fs])=>{const val=f(fac,...fs);return val?`<tr><td style="width:140px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
+  const rows = fac ? FIELDS.map(([l,fs])=>{const val=f(fac,...fs) || (l === 'Project Code' ? (fac._projectCode || '') : '');return val?`<tr><td style="width:140px;color:#888;font-size:.81rem">${esc(l)}</td><td style="font-size:.83rem">${esc(val)}</td></tr>`:''}).filter(Boolean).join('') : '';
   const attrRows = fac ? _attributeRows(fac, 140) : '';
-  const fileRow = fac?._fileName ? `<tr><td style="width:140px;color:#888;font-size:.81rem">Source file</td><td style="font-size:.83rem"><code>${esc(fac._fileName)}</code></td></tr>` : '';
+  const sourceInfo = _facilityWorkbookSourceInfo(fac);
+  const fileRow = sourceInfo.value ? `<tr><td style="width:140px;color:#888;font-size:.81rem">${esc(sourceInfo.kind)}</td><td style="font-size:.83rem"><code>${esc(sourceInfo.value)}</code></td></tr>` : '';
   const allRows = fileRow + rows + attrRows;
   return `<button class="btn btn-sm btn-outline-secondary mb-2 py-1" data-edit-entity="facility" data-edit-key="${esc(name)}" style="font-size:.77rem"><i class="bi bi-pencil me-1"></i>Edit Facility</button>` +
     (allRows ? `<table class="table table-sm mb-0"><tbody>${allRows}</tbody></table>`
@@ -181,7 +183,7 @@ function openComponentInfo(name, facility) {
   }
 
   const rows = [
-    ['Type', f(c,'TypeName','Type Name')],
+    ['Type', _cobieField(c, 'typeName')],
     ['Location', f(c,'Space')],
     ['Description', f(c,'Description')],
     ['Serial No.', f(c,'SerialNumber','Serial Number')],

@@ -48,21 +48,16 @@ function renderPills() {
       return;
     }
     const handled = new Set();
-    Object.entries(catGrps).forEach(([catName, names]) => {
-      const keys    = names.map(n => n.toLowerCase());
-      const selKeys = keys.filter(k => sel[dim].has(k));
-      if (!selKeys.length) return;
-      const visKeys = keys.filter(k => sel[dim].has(k) || (lastCounts[dim]?.[k] || 0) > 0);
-      if (selKeys.length === visKeys.length && visKeys.length > 0) {
-        html += `<span class="pill ${cfg.cls}">
-          <span style="opacity:.6;font-size:.69rem">${cfg.label}:</span>
-          ${esc(catName)}<span style="opacity:.5;font-size:.67rem"> (${selKeys.length})</span>
-          <span class="pill-rm" data-dim="${esc(dim)}" data-cat="${esc(catName)}">x</span>
-        </span>`;
-      } else {
-        selKeys.forEach(k => { html += _pillItem(cfg, dim, k); });
-      }
-      selKeys.forEach(k => handled.add(k));
+    [...(selectedCategoryLevels[dim] || [])].forEach(catName => {
+      const selectedKeys = (catGrps[catName] || []).map(name => name.toLowerCase()).filter(key => sel[dim].has(key));
+      if (!selectedKeys.length) return;
+      const categoryLabel = idx.categoryTrees?.[dim]?.find(node => node.key === catName)?.label || catName;
+      html += `<span class="pill ${cfg.cls}">
+        <span style="opacity:.6;font-size:.69rem">${cfg.label}:</span>
+        ${esc(categoryLabel)}
+        <span class="pill-rm" data-dim="${esc(dim)}" data-cat="${esc(catName)}">x</span>
+      </span>`;
+      selectedKeys.forEach(key => handled.add(key));
     });
     sel[dim].forEach(k => { if (!handled.has(k)) html += _pillItem(cfg, dim, k); });
   });
@@ -109,8 +104,8 @@ function toggleExpandAll() {
         if (pg.isQA) {
           body.innerHTML = qaGroupBody(pg.qaItems);
         } else if (pg.isDocMode) {
-          body.innerHTML = pg.isCatLeaf
-            ? pg.docEntries.map(e => docCard(e)).join('')
+          body.innerHTML = pg.isDocCategory
+            ? groupDocsByClassification(pg.docEntries, pg.dims || [], pg.depth || 0, pg.categoryKey)
             : groupDocsNested(pg.docEntries, pg.dims || [], pg.depth || 0);
         } else {
           body.innerHTML = groupNested(pg.comps, pg.dims, pg.depth, pg.parentPath || '');

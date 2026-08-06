@@ -14,7 +14,7 @@ function _documentContextMatches(context, ignoredDimension = '') {
   if (searchQuery) {
     const documentText = [
       f(context.doc,'Name'), f(context.doc,'Description'), f(context.doc,'Category'),
-      f(context.doc,'Directory'), f(context.doc,'RowName','Row Name'),
+      f(context.doc,'Directory'), _cobieField(context.doc, 'rowName'),
     ].join(' ').toLowerCase();
     const componentMatch = [...context.components].some(key => (idx.searchText?.[key] || '').includes(searchQuery));
     if (!documentText.includes(searchQuery) && !componentMatch) return false;
@@ -65,7 +65,7 @@ function applyFilters() {
 
   db.components.forEach(comp => {
     const sp  = f(comp,'Space').toLowerCase();
-    const tn  = f(comp,'TypeName','Type Name').toLowerCase();
+    const tn  = _cobieField(comp, 'typeName').toLowerCase();
     const fac = (comp._facility||'').toLowerCase();
     const cn  = f(comp,'Name').toLowerCase();
     const compKey = _scopeKey(fac, cn);
@@ -116,6 +116,9 @@ function applyFilters() {
 
 function toggle(dim, key) {
   const k = key.toLowerCase();
+  Object.entries(idx.catGroups?.[dim] || {}).forEach(([category, names]) => {
+    if (names.some(name => name.toLowerCase() === k)) selectedCategoryLevels[dim]?.delete(category);
+  });
   if (sel[dim].has(k)) sel[dim].delete(k); else sel[dim].add(k);
   // When selecting a facility-only doc category, auto-enable Facility grouping
   if (dim === 'doccat' && sel.doccat.has(k) && idx.docCatFacilityOnly?.has(k)) {
@@ -134,15 +137,21 @@ function toggle(dim, key) {
 
 function clearAll() {
   ['facility','floor','space','type','system','doccat'].forEach(d => sel[d].clear());
+  Object.values(selectedCategoryLevels).forEach(levels => levels.clear());
   applyFilters();
 }
 
+let _searchApplyTimer = null;
 function onSearch(val) {
   searchQuery = val.trim().toLowerCase();
   const clr = document.getElementById('s-clear');
   clr.style.display = searchQuery ? '' : 'none';
   document.getElementById('hdr').classList.toggle('search-active', !!searchQuery);
-  applyFilters();
+  clearTimeout(_searchApplyTimer);
+  _searchApplyTimer = setTimeout(() => {
+    _searchApplyTimer = null;
+    applyFilters();
+  }, 120);
 }
 
 function clearSearch() {
@@ -167,6 +176,12 @@ function toggleCategory(dim, catName) {
     .filter(k => sel[dim].has(k) || (lastCounts[dim]?.[k] || 0) > 0);
   if (!keys.length) return;
   const allSel = keys.every(k => sel[dim].has(k));
+  const changedKeys = new Set(keys);
+  [...(selectedCategoryLevels[dim] || [])].forEach(category => {
+    const categoryNames = (idx.catGroups[dim] || {})[category] || [];
+    if (categoryNames.some(name => changedKeys.has(name.toLowerCase()))) selectedCategoryLevels[dim].delete(category);
+  });
   keys.forEach(k => { if (allSel) sel[dim].delete(k); else sel[dim].add(k); });
+  if (!allSel) selectedCategoryLevels[dim]?.add(catName);
   applyFilters();
 }

@@ -1,0 +1,8 @@
+{
+  "name": "guerrilla-ops",
+  "private": true,
+  "scripts": {
+    "test": "node tests/regression-checks.js",
+    "build": "python build/build_release.py"
+  }
+}

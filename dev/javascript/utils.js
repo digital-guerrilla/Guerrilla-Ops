@@ -7,10 +7,253 @@ function f(row, ...names) {
   for (const n of names) { const r = v(row[n]); if (r) return r; }
   return '';
 }
+const COBIE_FIELD_ALIASES = Object.freeze({
+  typeName:['TypeName', 'Type Name'],
+  floorName:['FloorName', 'Floor Name', 'Floor'],
+  sheetName:['SheetName', 'Sheet Name'],
+  rowName:['RowName', 'Row Name'],
+});
+function _cobieField(row, field) {
+  return f(row, ...(COBIE_FIELD_ALIASES[field] || [field]));
+}
 function _scopeKey(facility, name) {
   return String(facility || '').toLowerCase() + '::' + String(name || '').toLowerCase();
 }
 function _rowKey(row, name) { return _scopeKey(row?._facility, name); }
+function _findEntity(rows, name, facility = '') {
+  const key = String(name || '').trim().toLowerCase();
+  if (!key || !Array.isArray(rows)) return null;
+  return rows.find(row =>
+    f(row, 'Name').toLowerCase() === key && (!facility || row._facility === facility)
+  ) || null;
+}
+function _facilityProjectCode(facObj) {
+  return f(facObj, 'ProjectCode', 'Project Code', 'ProjectName', 'Project Name', 'ProjectId', 'Project ID', 'Code');
+}
+
+function _facilityWorkbookSourceInfo(facObj) {
+  const fileName = String(facObj?._fileName || '').trim();
+  const projectCode = String(facObj?._projectCode || _facilityProjectCode(facObj) || '').trim();
+  const facName = String(facObj?._facility || '').trim();
+  const sharedProject = projectCode && db.facilities.filter(x => {
+    if ((x._facility || '') !== facName) return false;
+    return String(x._projectCode || _facilityProjectCode(x) || '').trim() === projectCode;
+  }).length > 1;
+
+  if (sharedProject) {
+    return { kind: 'Project code', value: projectCode };
+  }
+  return { kind: 'Source file', value: fileName || projectCode };
+}
+
+function _projectAlignmentKey(facObj) {
+  return String(_facilityProjectCode(facObj) || facObj?._facility || '').trim().toLowerCase();
+}
+
+function _projectAlignmentRow(facObj) {
+  const facility = String(facObj?._facility || '').trim();
+  const key = _projectAlignmentKey(facObj);
+  if (!facility || !key) return null;
+  return db.attributes.find(row =>
+    (row._facility || '') === facility &&
+    _cobieField(row, 'sheetName').toLowerCase() === 'project' &&
+    _cobieField(row, 'rowName').toLowerCase() === key &&
+    f(row, 'Name').toLowerCase() === 'floorplanalignment'
+  ) || null;
+}
+
+function _resolvedFloorAlignmentForEntry(entry) {
+  const fallback = { rotation:0, flipHorizontal:false, flipVertical:false, originXPct:0.5, originYPct:0.5, floorToSvg:null };
+  if (!entry) return fallback;
+  if (typeof _floorAlignmentValueForEntry === 'function' && typeof _floorAlignmentFromRaw === 'function') {
+    try {
+      const raw = _floorAlignmentValueForEntry(entry);
+      const parsed = _floorAlignmentFromRaw(raw);
+      return {
+        rotation: Number(parsed?.rotation) || 0,
+        flipHorizontal: !!parsed?.flipHorizontal,
+        flipVertical: !!parsed?.flipVertical,
+        originXPct: _unitInterval(parsed?.originXPct ?? parsed?.originX),
+        originYPct: _unitInterval(parsed?.originYPct ?? parsed?.originY),
+        floorToSvg:parsed?.floorToSvg || null,
+      };
+    } catch (_) {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+function _unitInterval(value, fallback = 0.5) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
+}
+
+function _finiteNumber(value, fallback = 0.5) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function _applyFloorAlignmentToUv(u, v, alignment) {
+  const uu = _finiteNumber(u);
+  const vv = _finiteNumber(v);
+  const theta = (Number(alignment?.rotation) || 0) * Math.PI / 180;
+  const sx = alignment?.flipHorizontal ? -1 : 1;
+  const sy = alignment?.flipVertical ? -1 : 1;
+
+  let x = uu - 0.5;
+  let y = vv - 0.5;
+
+  x *= sx;
+  y *= sy;
+
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  const xr = (x * cos) - (y * sin);
+  const yr = (x * sin) + (y * cos);
+
+  return {
+    u: xr + 0.5,
+    v: yr + 0.5,
+  };
+}
+
+function _invertFloorAlignmentFromUv(u, v, alignment) {
+  const uu = _finiteNumber(u);
+  const vv = _finiteNumber(v);
+  const theta = (Number(alignment?.rotation) || 0) * Math.PI / 180;
+  const sx = alignment?.flipHorizontal ? -1 : 1;
+  const sy = alignment?.flipVertical ? -1 : 1;
+
+  const x = uu - 0.5;
+  const y = vv - 0.5;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+
+  // Inverse rotation first.
+  let xr = (x * cos) + (y * sin);
+  let yr = (-x * sin) + (y * cos);
+
+  // Then inverse flip.
+  xr /= sx;
+  yr /= sy;
+
+  return {
+    u: xr + 0.5,
+    v: yr + 0.5,
+  };
+}
+
+function _floorUvToSvgUv(u, v, alignment) {
+  const map = alignment?.floorToSvg;
+  if (map && [map.a, map.b, map.c, map.d, map.e, map.f].every(Number.isFinite)) {
+    return {
+      u:(map.a * u) + (map.b * v) + map.c,
+      v:(map.d * u) + (map.e * v) + map.f,
+    };
+  }
+  return _invertFloorAlignmentFromUv(u, v, alignment);
+}
+
+function _svgUvToFloorUv(u, v, alignment) {
+  const map = alignment?.floorToSvg;
+  if (map && [map.a, map.b, map.c, map.d, map.e, map.f].every(Number.isFinite)) {
+    const determinant = (map.a * map.e) - (map.b * map.d);
+    if (Math.abs(determinant) > 1e-12) {
+      const x = u - map.c;
+      const y = v - map.f;
+      return {
+        u:((map.e * x) - (map.b * y)) / determinant,
+        v:((-map.d * x) + (map.a * y)) / determinant,
+      };
+    }
+  }
+  return _applyFloorAlignmentToUv(u, v, alignment);
+}
+
+function _projectFloorPlanAlignment(facObj) {
+  const row = _projectAlignmentRow(facObj);
+  if (!row) return { xPct: 0.5, yPct: 0.5, scale: 1, rotation: 0, flipHorizontal: false, flipVertical: false };
+  const raw = f(row, 'Value', 'AttributeValue', 'Attribute Value', 'NominalValue', 'Nominal Value');
+  if (!raw) return { xPct: 0.5, yPct: 0.5, scale: 1, rotation: 0, flipHorizontal: false, flipVertical: false };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      xPct: _unitInterval(parsed?.xPct ?? parsed?.centerX),
+      yPct: _unitInterval(parsed?.yPct ?? parsed?.centerY),
+      scale: Number(parsed?.scale) || 1,
+      rotation: Number(parsed?.rotation) || 0,
+      flipHorizontal: !!(parsed?.flipHorizontal || parsed?.flipX),
+      flipVertical: !!(parsed?.flipVertical || parsed?.flipY),
+    };
+  } catch (_) {
+    return { xPct: 0.5, yPct: 0.5, scale: 1, rotation: 0, flipHorizontal: false, flipVertical: false };
+  }
+}
+
+function _setProjectFloorPlanAlignment(facObj, alignment) {
+  const facility = String(facObj?._facility || '').trim();
+  const key = _projectAlignmentKey(facObj);
+  if (!facility || !key) return null;
+
+  const row = _projectAlignmentRow(facObj) || {
+    SheetName: 'Project',
+    RowName: key,
+    Name: 'FloorPlanAlignment',
+    CreatedBy: '',
+    CreatedOn: new Date().toISOString().slice(0, 10),
+    ExtSystem: '',
+    ExtObject: '',
+    ExtIdentifier: '',
+    _facility: facility,
+    _projectCode: _facilityProjectCode(facObj) || '',
+  };
+
+  const payload = {
+    xPct: _unitInterval(alignment?.xPct ?? alignment?.centerX),
+    yPct: _unitInterval(alignment?.yPct ?? alignment?.centerY),
+    scale: Number(alignment?.scale) || 1,
+    rotation: Number(alignment?.rotation) || 0,
+    flipHorizontal: !!(alignment?.flipHorizontal || alignment?.flipX),
+    flipVertical: !!(alignment?.flipVertical || alignment?.flipY),
+  };
+  const value = JSON.stringify(payload);
+  row.Value = value;
+  row.AttributeValue = value;
+  row['Attribute Value'] = value;
+  row.NominalValue = value;
+  row['Nominal Value'] = value;
+
+  if (!db.attributes.includes(row)) db.attributes.push(row);
+  return row;
+}
+
+function _roomUvToWorldXZ(bounds, u, v, clamp = true) {
+  if (!bounds) return null;
+  const rawU = _finiteNumber(u);
+  const rawV = _finiteNumber(v);
+  const uu = clamp ? _unitInterval(rawU) : rawU;
+  const vv = clamp ? _unitInterval(rawV) : rawV;
+  return {
+    x: bounds.minX + (uu * bounds.sizeX),
+    // SVG Y grows downward; map this to decreasing world Z for consistent orientation.
+    z: bounds.maxZ - (vv * bounds.sizeZ),
+  };
+}
+
+function _worldXZToRoomUv(bounds, x, z, clamp = true) {
+  if (!bounds) return { u:0.5, v:0.5 };
+  const sizeX = Math.max(1, Number(bounds.sizeX) || 1);
+  const sizeZ = Math.max(1, Number(bounds.sizeZ) || 1);
+  const rawU = (Number(x) - bounds.minX) / sizeX;
+  const rawV = (bounds.maxZ - Number(z)) / sizeZ;
+  const u = Number.isFinite(rawU) ? rawU : 0.5;
+  const v = Number.isFinite(rawV) ? rawV : 0.5;
+  return {
+    u: clamp ? _unitInterval(u) : u,
+    v: clamp ? _unitInterval(v) : v,
+  };
+}
 
 // ── HTML escaping ────────────────────────────────────────────
 const _ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
@@ -35,7 +278,7 @@ function _docUniqueKey(doc) {
   const path = f(doc,'Directory').toLowerCase();
   const fallback = f(doc,'Name').toLowerCase() || [
     f(doc,'Description'), f(doc,'Category'),
-    f(doc,'SheetName','Sheet Name'), f(doc,'RowName','Row Name'),
+    _cobieField(doc, 'sheetName'), _cobieField(doc, 'rowName'),
   ].join('::').toLowerCase();
   return facility + '::' + (path ? 'path::' + path : 'name::' + fallback);
 }

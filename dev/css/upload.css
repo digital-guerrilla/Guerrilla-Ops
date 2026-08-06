@@ -10,6 +10,18 @@
   max-width: 440px; width: 100%;
 }
 .up-card .ico { font-size: 4rem; color: var(--navy); margin-bottom: .9rem; }
+.up-card .go-logo {
+  display: inline-flex;
+  width: 100px;
+  height: 100px;
+  align-items: center;
+  justify-content: center;
+}
+.up-card .go-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .up-card h4   { color: var(--navy); margin-bottom: .4rem; }
 .up-card p    { color: var(--text-muted); font-size: .88rem; }
 .editable-picker-card {

@@ -229,8 +229,20 @@ function _bindFilterSideHandleDrag() {
 }
 
 _bindFilterSideHandleDrag();
+if (typeof initComponentPlacementModal === 'function') initComponentPlacementModal();
 
 document.getElementById('filter-bar').addEventListener('click', e => {
+  const treeStep = e.target.closest('[data-filter-tree-step]');
+  if (treeStep) {
+    stepFilterTreeDepth(treeStep.dataset.dim, treeStep.dataset.filterTreeStep);
+    return;
+  }
+  const categoryToggle = e.target.closest('.fp-cat-toggle');
+  if (categoryToggle) {
+    const header = categoryToggle.closest('.fp-cat-hdr');
+    toggleFilterCategoryCollapse(header.dataset.dim, header.dataset.cat);
+    return;
+  }
   const item = e.target.closest('.fp-item');
   if (item && !item.classList.contains('fp-zero')) {
     toggle(item.dataset.dim, item.dataset.key); return;
@@ -251,6 +263,7 @@ document.getElementById('pills').addEventListener('click', e => {
   if (rm.dataset.cat) {
     const names = (idx.catGroups?.[rm.dataset.dim] || {})[rm.dataset.cat] || [];
     names.forEach(n => sel[rm.dataset.dim].delete(n.toLowerCase()));
+    selectedCategoryLevels[rm.dataset.dim]?.delete(rm.dataset.cat);
   } else {
     sel[rm.dataset.dim].delete(rm.dataset.key);
   }

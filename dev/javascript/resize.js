@@ -38,6 +38,11 @@
     _scheduleVerticalResizeNotify();
   };
 
+  const _refreshFilterBarForWindowResize = () => {
+    if (bar.dataset.userSized === '1') return;
+    _applyInitialVerticalSplit(true);
+  };
+
   globalThis.applyInitialVerticalFilterSplit = _applyInitialVerticalSplit;
 
   // Default vertical split on first load: filter pane at 40% viewport height.
@@ -45,6 +50,7 @@
 
   handle.addEventListener('mousedown', e => {
     dragging = true; startY = e.clientY; startH = bar.offsetHeight;
+    bar.dataset.userSized = '1';
     handle.classList.add('resizing');
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'ns-resize';
@@ -65,6 +71,7 @@
   handle.addEventListener('touchstart', e => {
     const t = e.touches[0];
     dragging = true; startY = t.clientY; startH = bar.offsetHeight;
+    bar.dataset.userSized = '1';
     e.preventDefault();
   }, { passive: false });
   document.addEventListener('touchmove', e => {
@@ -82,12 +89,14 @@
   const _restoreHeight = () => {
     bar.style.height = (_prevHMin !== null ? _prevHMin : 215) + 'px';
     _prevHMin = null;
+    bar.dataset.userSized = '1';
   };
 
   const _setMinimised = () => {
     const cur = bar.offsetHeight;
     if (cur > _minH) _prevHMin = cur;
     bar.style.height = _minH + 'px';
+    bar.dataset.userSized = '1';
   };
 
   const _syncFilterHeaderButtons = () => {
@@ -125,8 +134,13 @@
       _prevHMax = cur;
       bar.style.height = _maxH + 'px';
     }
+    bar.dataset.userSized = '1';
     _syncFilterHeaderButtons();
     _scheduleVerticalResizeNotify();
   });
   _syncFilterHeaderButtons();
+
+  window.addEventListener('resize', () => {
+    _refreshFilterBarForWindowResize();
+  });
 })();

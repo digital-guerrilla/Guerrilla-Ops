@@ -193,6 +193,8 @@ buildings while keeping each workbook's information separate.
 | **Internet access** | Needed to load the interface libraries |
 | **Application format** | One portable HTML file |
 
+The footer includes project attribution, license links, and a **Terms of use** popup.
+
 ## AI use disclaimer
 
 This project has been developed and documented with assistance from artificial
@@ -210,3 +212,11 @@ review the resulting Excel files against the original data.
 
 Ideas, fixes and pull requests are welcome. To get involved, visit
 [digital-guerrilla.scot](https://digital-guerrilla.scot).
+
+The development source is under `dev/`. Run the regression checks and rebuild
+the self-contained release files with:
+
+```powershell
+npm test
+npm run build
+```

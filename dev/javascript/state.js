@@ -1,5 +1,5 @@
 // ── Application state and shared constants ───────────────────
-const db  = { types:[], components:[], spaces:[], floors:[], systems:[], documents:[], facilities:[], contacts:[], attributes:[], coordinates:[], facility:null };
+const db  = { types:[], components:[], spaces:[], floors:[], systems:[], documents:[], facilities:[], contacts:[], attributes:[], coordinates:[], picklists:[], facility:null };
 const idx = {};
 let docStore = [];
 let cardCtr  = 0;
@@ -9,6 +9,8 @@ const _GRP_ICONS  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-gri
 const _GRP_LABELS = {type:'Type',system:'System',space:'Space',floor:'Floor',facility:'Facility'};
 
 const sel = { facility: new Set(), floor: new Set(), space: new Set(), type: new Set(), system: new Set(), doccat: new Set() };
+const selectedCategoryLevels = { facility:new Set(), space:new Set(), type:new Set(), system:new Set(), doccat:new Set() };
+const collapsedFilterCategories = new Set();
 let lastCounts = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
 let searchQuery = '';
 let viewMode = 'asset';

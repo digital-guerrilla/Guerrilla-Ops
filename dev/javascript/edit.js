@@ -5,14 +5,9 @@ let _editDocRefs = new Map();
 let _editDocRefCounter = 0;
 let _pendingNewType = null; // { name, facility } — queued when a component edit introduces a new TypeName
 
-// ── Edit modal lifecycle ──────────────────────────────────────
-function _entRow(rows, name, facility) {
-  return (facility && rows.find(r => f(r,'Name') === name && r._facility === facility))
-      || rows.find(r => f(r,'Name') === name);
-}
-
 function openEditModal(entityType, entityName, facility) {
   _editState = { entityType, entityName, facility: facility || '' };
+  if (typeof resetComponentPlacementDraft === 'function') resetComponentPlacementDraft('edit');
   _editDocRemovals = [];
   _editDocRefs = new Map();
   _editDocRefCounter = 0;
@@ -84,6 +79,16 @@ function _eauto(label, fieldName, currentVal, options, maxOpts=400) {
     <datalist id="${lid}">${opts}</datalist>
   </div>`;
 }
+function _editPropertyField(entityType, fieldName, value) {
+  return fieldName.toLowerCase() === 'category' && ['facility','space','type','system'].includes(entityType)
+    ? _eauto(fieldName, fieldName, value, picklistCategoryValues(entityType), Infinity)
+    : _ef(fieldName, fieldName, value);
+}
+function _documentCategoryDatalist() {
+  const options = picklistCategoryValues('document')
+    .map(value => `<option value="${esc(value)}"></option>`).join('');
+  return `<datalist id="edit-document-category-list">${options}</datalist>`;
+}
 function _docEditRow(doc, sheetName, rowName, isNew = false, docRef = '') {
   const name = doc ? f(doc,'Name') : '';
   const description = doc ? f(doc,'Description') : '';
@@ -103,7 +108,11 @@ function _docEditRow(doc, sheetName, rowName, isNew = false, docRef = '') {
     </div>
     ${field('Name', 'Name', name)}
     ${field('Description', 'Description', description)}
-    ${field('Category', 'Category', category)}
+    <div class="mb-2">
+      <label class="form-label mb-1" style="font-size:.71rem;font-weight:700;color:#666">Category</label>
+      <input class="form-control form-control-sm" value="${esc(category)}" data-dfield="Category"
+        list="edit-document-category-list" autocomplete="off">
+    </div>
     <div class="mb-1">
       <label class="form-label mb-1" style="font-size:.71rem;font-weight:700;color:#666">Link</label>
       <div class="doc-link-display${isNew?' d-none':''}">
@@ -169,12 +178,13 @@ function _buildEditBody(entityType, entityName) {
     const documentRow = _editState?.document;
     if (!documentRow) return '<p class="text-muted">Document not found.</p>';
     return `<div style="max-width:720px;margin:0 auto">
-      ${_docEditRow(documentRow, f(documentRow,'SheetName','Sheet Name'), f(documentRow,'RowName','Row Name'), false, 'doc-direct')}
+      ${_documentCategoryDatalist()}
+      ${_docEditRow(documentRow, _cobieField(documentRow, 'sheetName'), _cobieField(documentRow, 'rowName'), false, 'doc-direct')}
     </div>`;
   }
 
   if (entityType === 'component') {
-    const obj = _entRow(db.components, entityName, _fac);
+    const obj = _findEntity(db.components, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
     const shown = new Set(['typeName','type name','space']);
     Object.entries(obj).forEach(([k,v]) => {
@@ -185,11 +195,11 @@ function _buildEditBody(entityType, entityName) {
       const t = db.types.find(x => f(x,'Name') === n);
       return { name: n, desc: t ? f(t,'Description') : '' };
     });
-    assocHtml += _eauto('Type (TypeName)', 'TypeName', f(obj,'TypeName','Type Name'), typeDescs);
+    assocHtml += _eauto('Type (TypeName)', 'TypeName', _cobieField(obj, 'typeName'), typeDescs);
     const spaceMap = new Map();
     db.spaces.forEach(s => { const n=f(s,'Name'); if(n && !spaceMap.has(n)) spaceMap.set(n, f(s,'Description')); });
     const spaceDescs = [...spaceMap.entries()].map(([name,desc])=>({name,desc}));
-    assocHtml += _eauto('Space', 'Space', f(obj,'Space'), spaceDescs);
+    assocHtml += renderComponentSpaceField('edit', f(obj,'Space'), spaceDescs);
     const cLow = entityName.toLowerCase();
     const _sysRows = _fac ? db.systems.filter(x => x._facility === _fac) : db.systems;
     const _sysNames = [...new Set(_sysRows.map(x=>f(x,'Name')).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
@@ -210,23 +220,23 @@ function _buildEditBody(entityType, entityName) {
     assocHtml += _editDocList('Component', entityName);
 
   } else if (entityType === 'type') {
-    const obj = _entRow(db.types, entityName, _fac);
+    const obj = _findEntity(db.types, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
-    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _ef(k,k,v); });
+    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _editPropertyField(entityType,k,v); });
     assocHtml += _editDocList('Type', entityName);
 
   } else if (entityType === 'space') {
-    const obj = _entRow(db.spaces, entityName, _fac);
+    const obj = _findEntity(db.spaces, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
     const flKeys = new Set(['floorname','floor name','floor']);
-    assocHtml += _esel('Floor', 'FloorName', f(obj,'FloorName','Floor Name','Floor'), idx.floors);
-    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)&&!flKeys.has(k.toLowerCase())) propsHtml += _ef(k,k,v); });
+    assocHtml += _esel('Floor', 'FloorName', _cobieField(obj, 'floorName'), idx.floors);
+    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)&&!flKeys.has(k.toLowerCase())) propsHtml += _editPropertyField(entityType,k,v); });
     assocHtml += _editDocList('Space', entityName);
 
   } else if (entityType === 'system') {
-    const obj = _entRow(db.systems, entityName, _fac);
+    const obj = _findEntity(db.systems, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
-    ['Name','Category','Description'].forEach(k => propsHtml += _ef(k, k, obj[k]||''));
+    ['Name','Category','Description'].forEach(k => propsHtml += _editPropertyField(entityType, k, obj[k]||''));
     const sysCompsLow = new Set();
     db.systems.filter(x => f(x,'Name') === entityName && (!_fac || x._facility === _fac)).forEach(x => {
       ((x.ComponentNames !== undefined ? x.ComponentNames : x['Component Names'])||'')
@@ -243,20 +253,20 @@ function _buildEditBody(entityType, entityName) {
     assocHtml += _editDocList('System', entityName);
 
   } else if (entityType === 'floor') {
-    const obj = _entRow(db.floors, entityName, _fac);
+    const obj = _findEntity(db.floors, entityName, _fac);
     if (!obj) return '<p class="text-muted">Not found.</p>';
-    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _ef(k,k,v); });
+    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k) && !/^svg/i.test(k)) propsHtml += _ef(k,k,v); });
     assocHtml += _editDocList('Floor', entityName);
 
   } else if (entityType === 'facility') {
     const obj = db.facilities.find(x => x._facility === entityName);
     if (!obj) return '<p class="text-muted">Not found.</p>';
-    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _ef(k,k,v); });
+    Object.entries(obj).forEach(([k,v]) => { if(!_eskip(k)) propsHtml += _editPropertyField(entityType,k,v); });
     assocHtml += _editDocList('Facility', entityName);
   }
 
   const hdr = (ico, t) => `<div style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:.6rem"><i class="bi ${ico} me-1"></i>${t}</div>`;
-  return `<div class="row g-3">
+  return `${_documentCategoryDatalist()}<div class="row g-3">
     <div class="col-md-6 pe-md-3 border-end-md">
       ${hdr('bi-list-ul','Properties')}
       ${propsHtml||'<p class="text-muted small">No properties.</p>'}
@@ -279,7 +289,7 @@ function _setReference(row, aliases, oldName, newName) {
 function _renameDocumentRows(sheetName, oldName, newName, facility) {
   db.documents.forEach(doc => {
     if (facility && doc._facility !== facility) return;
-    if (f(doc,'SheetName','Sheet Name').toLowerCase() !== sheetName.toLowerCase()) return;
+    if (_cobieField(doc, 'sheetName').toLowerCase() !== sheetName.toLowerCase()) return;
     _setReference(doc, ['RowName','Row Name'], oldName, newName);
   });
 }
@@ -376,8 +386,9 @@ function saveEdit() {
   }
 
   if (entityType === 'component') {
-    const obj = _entRow(db.components, entityName, _fac);
+    const obj = _findEntity(db.components, entityName, _fac);
     if (obj) {
+      const previousSpace = f(obj, 'Space').trim().toLowerCase();
       Object.assign(obj, fields);
       changedEntityName = f(obj,'Name') || entityName;
       const newTN = (fields.TypeName || fields['Type Name'] || '').trim();
@@ -386,12 +397,25 @@ function saveEdit() {
       }
       const newSys = new Set([...document.querySelectorAll('#edit-modal-body .sys-assoc-chk:checked')].map(el=>el.value));
       _updateCompSystems(entityName, newSys, obj._facility || _fac);
+      if (typeof _renameComponentCoordinateRows === 'function') {
+        _renameComponentCoordinateRows(obj._facility || _fac, entityName, changedEntityName);
+      }
+      const appliedPlacement = typeof _componentPlacementConsumeApplied === 'function'
+        ? _componentPlacementConsumeApplied('edit')
+        : null;
+      if (typeof _writeComponentCoordinates === 'function' && appliedPlacement?.spaceName) {
+        _writeComponentCoordinates(obj._facility || _fac, changedEntityName, appliedPlacement);
+        resetComponentPlacementDraft();
+      } else if (previousSpace !== f(obj, 'Space').trim().toLowerCase() && typeof _removeComponentCoordinateRows === 'function') {
+        const removed = _removeComponentCoordinateRows(obj._facility || _fac, changedEntityName);
+        if (removed) _logChange('coordinate', changedEntityName, obj._facility || _fac);
+      }
     }
   } else if (entityType === 'type') {
-    const obj = _entRow(db.types, entityName, _fac);
+    const obj = _findEntity(db.types, entityName, _fac);
     if (obj) { Object.assign(obj, fields); changedEntityName = f(obj,'Name') || entityName; }
   } else if (entityType === 'space') {
-    const obj = _entRow(db.spaces, entityName, _fac);
+    const obj = _findEntity(db.spaces, entityName, _fac);
     if (obj) { Object.assign(obj, fields); changedEntityName = f(obj,'Name') || entityName; }
   } else if (entityType === 'system') {
     db.systems.filter(s => f(s,'Name') === entityName && (!_fac || s._facility === _fac)).forEach(s => {
@@ -401,7 +425,7 @@ function saveEdit() {
     const newComps = [...document.querySelectorAll('#edit-modal-body .comp-assoc-chk:checked')].map(el=>el.value);
     _updateSysComponents(changedEntityName, newComps, _fac);
   } else if (entityType === 'floor') {
-    const obj = _entRow(db.floors, entityName, _fac);
+    const obj = _findEntity(db.floors, entityName, _fac);
     if (obj) { Object.assign(obj, fields); changedEntityName = f(obj,'Name') || entityName; }
   } else if (entityType === 'facility') {
     const obj = db.facilities.find(x => x._facility === entityName);
@@ -412,8 +436,8 @@ function saveEdit() {
   _editDocRemovals.forEach(({ sheetName, rowName, docName, docRef }) => {
     const exactDoc = _editDocRefs.get(docRef);
     const i = exactDoc ? db.documents.indexOf(exactDoc) : db.documents.findIndex(d =>
-      f(d,'SheetName','Sheet Name').toLowerCase() === sheetName.toLowerCase() &&
-      f(d,'RowName','Row Name').toLowerCase() === rowName.toLowerCase() &&
+      _cobieField(d, 'sheetName').toLowerCase() === sheetName.toLowerCase() &&
+      _cobieField(d, 'rowName').toLowerCase() === rowName.toLowerCase() &&
       f(d,'Name') === docName && (!_fac || (d._facility||'') === _fac)
     );
     if (i !== -1) db.documents.splice(i, 1);
@@ -434,8 +458,8 @@ function saveEdit() {
       }
     } else if (orig) {
       const doc = _editDocRefs.get(row.dataset.docRef) || db.documents.find(d =>
-        f(d,'SheetName','Sheet Name').toLowerCase() === sheet.toLowerCase() &&
-        f(d,'RowName','Row Name').toLowerCase() === rn.toLowerCase() &&
+        _cobieField(d, 'sheetName').toLowerCase() === sheet.toLowerCase() &&
+        _cobieField(d, 'rowName').toLowerCase() === rn.toLowerCase() &&
         f(d,'Name') === orig &&
         (!_fac || (d._facility||'') === _fac)
       );

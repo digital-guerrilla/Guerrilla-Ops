@@ -61,9 +61,28 @@ function _viewer3dSetWidth(els, width) {
   _renderThreeDViewer();
 }
 
-function _viewer3dParseNumber(value, fallback = 0) {
-  const num = parseFloat(String(value ?? '').replace(/,/g, ''));
+function _viewer3dParseNumber(value, fallback = null) {
+  const text = String(value ?? '').trim();
+  if (!text || text.toLowerCase() === 'n/a') return fallback;
+  const num = Number(text.replace(/,/g, ''));
   return Number.isFinite(num) ? num : fallback;
+}
+
+function _coordinateSourceToWorld(sourceX, sourceY, sourceZ) {
+  return {
+    x:sourceY,
+    y:sourceZ,
+    z:sourceX === 0 ? 0 : -sourceX,
+  };
+}
+
+function _coordinateWorldToSource(point) {
+  if (!point || ![point.x, point.y, point.z].every(Number.isFinite)) return null;
+  return {
+    x:point.z === 0 ? 0 : -point.z,
+    y:point.x,
+    z:point.y,
+  };
 }
 
 function _viewer3dCoordPoint(row) {
@@ -71,37 +90,44 @@ function _viewer3dCoordPoint(row) {
   const sourceX = _viewer3dParseNumber(f(row, 'CoordinateXAxis', 'Coordinate X Axis'));
   const sourceY = _viewer3dParseNumber(f(row, 'CoordinateYAxis', 'Coordinate Y Axis'));
   const sourceZ = _viewer3dParseNumber(f(row, 'CoordinateZAxis', 'Coordinate Z Axis'));
-  return {
-    x: sourceX,
-    y: sourceZ,
-    z: -sourceY,
-  };
+  if (sourceX === null || sourceY === null || sourceZ === null) return null;
+  return _coordinateSourceToWorld(sourceX, sourceY, sourceZ);
 }
 
 function _viewer3dCoordKeyParts(row) {
-  const rowName = f(row, 'RowName', 'Row Name').trim();
+  const rowName = _cobieField(row, 'rowName').trim();
   if (!rowName) return null;
-  const match = rowName.match(/^(.*?)(?:_(upperright|lowerright|upperleft|lowerleft))$/i);
+  const coordinateName = f(row, 'Name').replace(/[\s_-]+/g, '').toLowerCase();
+  const namedCorner = ['upperright', 'lowerright', 'upperleft', 'lowerleft']
+    .find(corner => coordinateName.endsWith(corner)) || '';
+  const suffixMatch = rowName.match(/^(.*?)(?:_(upperright|lowerright|upperleft|lowerleft))$/i);
+  const cornerName = namedCorner || (coordinateName === 'coordinate' ? '' : (suffixMatch?.[2] || '').toLowerCase());
   return {
-    baseName: (match ? match[1] : rowName).trim(),
-    cornerName: (match ? match[2] : '').toLowerCase(),
+    baseName: (cornerName && suffixMatch ? suffixMatch[1] : rowName).trim(),
+    cornerName,
   };
 }
 
 function _viewer3dCoordIndex() {
   const bySheet = Object.create(null);
   (db.coordinates || []).forEach(row => {
-    const sheet = f(row, 'SheetName', 'Sheet Name').toLowerCase();
+    const sheet = _cobieField(row, 'sheetName').toLowerCase();
     const parts = _viewer3dCoordKeyParts(row);
     const facility = String(row._facility || '').toLowerCase();
     if (!sheet || !parts?.baseName) return;
     const key = facility + '::' + parts.baseName.toLowerCase();
     const bucket = (bySheet[sheet] = bySheet[sheet] || Object.create(null));
     const entry = (bucket[key] = bucket[key] || { base:null, upperRight:null, lowerLeft:null, corners:[] });
-    entry.base ||= row;
-    if (parts.cornerName === 'upperright') entry.upperRight = row;
-    else if (parts.cornerName === 'lowerleft') entry.lowerLeft = row;
-    else entry.corners.push(row);
+    const prefer = current => !current || (!_viewer3dCoordPoint(current) && _viewer3dCoordPoint(row));
+    if (!parts.cornerName) {
+      if (prefer(entry.base)) entry.base = row;
+    } else if (parts.cornerName === 'upperright') {
+      if (prefer(entry.upperRight)) entry.upperRight = row;
+    } else if (parts.cornerName === 'lowerleft') {
+      if (prefer(entry.lowerLeft)) entry.lowerLeft = row;
+    } else {
+      entry.corners.push(row);
+    }
   });
   return bySheet;
 }
@@ -134,17 +160,18 @@ function _viewer3dSpaceTooltip(spaceRow) {
 
 function _viewer3dBounds(coordEntry, fallbackSize = 1000) {
   if (!coordEntry) return null;
-  const points = [];
+  const cornerPoints = [];
   const lowerLeft = _viewer3dCoordPoint(coordEntry.lowerLeft);
   const upperRight = _viewer3dCoordPoint(coordEntry.upperRight);
   const basePoint = _viewer3dCoordPoint(coordEntry.base);
-  if (lowerLeft) points.push(lowerLeft);
-  if (upperRight) points.push(upperRight);
+  if (lowerLeft) cornerPoints.push(lowerLeft);
+  if (upperRight) cornerPoints.push(upperRight);
   coordEntry.corners.forEach(row => {
     const point = _viewer3dCoordPoint(row);
-    if (point) points.push(point);
+    if (point) cornerPoints.push(point);
   });
-  if (!points.length && basePoint) points.push(basePoint);
+  const hasCornerPoints = cornerPoints.length >= 2;
+  const points = hasCornerPoints ? cornerPoints : (basePoint ? [basePoint] : cornerPoints.slice(0, 1));
   if (!points.length) return null;
 
   const xs = points.map(point => point.x);
@@ -160,6 +187,8 @@ function _viewer3dBounds(coordEntry, fallbackSize = 1000) {
 
   return {
     minX, maxX, minY, maxY, minZ, maxZ,
+    hasCorners:hasCornerPoints,
+    isPoint:!hasCornerPoints,
     centerX: (minX + maxX) / 2,
     centerY: (minY + maxY) / 2,
     centerZ: (minZ + maxZ) / 2,
@@ -213,7 +242,7 @@ function _viewer3dVisibleFloors(counts) {
     db.spaces.forEach(space => {
       const spName = f(space, 'Name').toLowerCase();
       if (!sel.space.has(spName)) return;
-      const floorName = f(space, 'FloorName', 'Floor Name', 'Floor').toLowerCase();
+      const floorName = _cobieField(space, 'floorName').toLowerCase();
       const match = db.floors.find(row =>
         f(row, 'Name').toLowerCase() === floorName &&
         row._facility === space._facility
@@ -240,7 +269,7 @@ function _viewer3dVisibleSpaces(visibleFloors) {
   const floorKeys = new Set(visibleFloors.map(row => _rowKey(row, f(row, 'Name'))));
   return db.spaces.filter(space => {
     if (sel.facility.size && !sel.facility.has((space._facility || '').toLowerCase())) return false;
-    const floorName = f(space, 'FloorName', 'Floor Name', 'Floor');
+    const floorName = _cobieField(space, 'floorName');
     const floorKey = _scopeKey(space._facility, floorName);
     if (!floorKeys.has(floorKey)) return false;
     return true;
@@ -303,7 +332,7 @@ function _viewer3dSceneData(filteredComps, counts) {
 
   const spacePointsByFloor = Object.create(null);
   culledSpaces.forEach(entry => {
-    const floorName = f(entry.row, 'FloorName', 'Floor Name', 'Floor');
+    const floorName = _cobieField(entry.row, 'floorName');
     const floorKey = _scopeKey(entry.row._facility, floorName);
     (spacePointsByFloor[floorKey] = spacePointsByFloor[floorKey] || []).push(entry.bounds);
   });
@@ -388,10 +417,14 @@ function _viewer3dSceneData(filteredComps, counts) {
 }
 
 function _viewer3dRotate(point) {
-  const cosY = Math.cos(_viewer3dRotY);
-  const sinY = Math.sin(_viewer3dRotY);
-  const cosX = Math.cos(_viewer3dRotX);
-  const sinX = Math.sin(_viewer3dRotX);
+  return _viewer3dRotateAt(point, _viewer3dRotX, _viewer3dRotY);
+}
+
+function _viewer3dRotateAt(point, rotX, rotY) {
+  const cosY = Math.cos(rotY);
+  const sinY = Math.sin(rotY);
+  const cosX = Math.cos(rotX);
+  const sinX = Math.sin(rotX);
   const x1 = point.x * cosY - point.z * sinY;
   const z1 = point.x * sinY + point.z * cosY;
   const y2 = point.y * cosX - z1 * sinX;
@@ -400,16 +433,152 @@ function _viewer3dRotate(point) {
 }
 
 function _viewer3dProject(point, scale, perspective, width, height, fovScale = 1) {
-  const rotated = _viewer3dRotate(point);
+  return _viewer3dProjectAt(point, scale, perspective, width, height, fovScale, _viewer3dRotX, _viewer3dRotY, _viewer3dPanX, _viewer3dPanY);
+}
+
+function _viewer3dProjectAt(point, scale, perspective, width, height, fovScale = 1, rotX = _viewer3dRotX, rotY = _viewer3dRotY, panX = _viewer3dPanX, panY = _viewer3dPanY) {
+  const rotated = _viewer3dRotateAt(point, rotX, rotY);
   const minDenominator = Math.max(1, perspective * 0.08);
   const rawDenominator = perspective + rotated.z + perspective * 0.15;
   const safeDenominator = Math.max(minDenominator, rawDenominator);
   const factor = _viewer3dClamp((perspective / safeDenominator) * fovScale, 0, 7.5);
   return {
-    x: (width / 2) + _viewer3dPanX + (rotated.x * scale * factor),
-    y: (height / 2) + _viewer3dPanY - (rotated.y * scale * factor),
+    x: (width / 2) + panX + (rotated.x * scale * factor),
+    y: (height / 2) + panY - (rotated.y * scale * factor),
     depth: rotated.z,
   };
+}
+
+function _viewer3dRenderSceneToCanvas(canvas, scene, options = {}) {
+  if (!canvas || !scene?.points?.length) return false;
+
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(10, Math.round(rect.width || canvas.clientWidth || 10));
+  const height = Math.max(10, Math.round(rect.height || canvas.clientHeight || 10));
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+
+  const theme = options.theme || _viewer3dTheme();
+  const rotX = Number.isFinite(options.rotX) ? options.rotX : _viewer3dRotX;
+  const rotY = Number.isFinite(options.rotY) ? options.rotY : _viewer3dRotY;
+  const panX = Number.isFinite(options.panX) ? options.panX : _viewer3dPanX;
+  const panY = Number.isFinite(options.panY) ? options.panY : _viewer3dPanY;
+  const zoom = Number.isFinite(options.zoom) ? options.zoom : _viewer3dZoom;
+  const background = options.background || theme.background;
+  const focusSource = scene.focusPoints?.length ? scene.focusPoints : scene.points;
+  const xs = focusSource.map(point => point.x);
+  const ys = focusSource.map(point => point.y);
+  const zs = focusSource.map(point => point.z);
+  const center = {
+    x: (Math.min(...xs) + Math.max(...xs)) / 2,
+    y: (Math.min(...ys) + Math.max(...ys)) / 2,
+    z: (Math.min(...zs) + Math.max(...zs)) / 2,
+  };
+  const extentSource = scene.points;
+  const span = Math.max(
+    ...extentSource.map(point => Math.abs(point.x - center.x) * 2),
+    ...extentSource.map(point => Math.abs(point.y - center.y) * 2),
+    ...extentSource.map(point => Math.abs(point.z - center.z) * 2),
+    options.minSpan || 3000
+  );
+  const scale = (options.scaleFactor || 0.82) * Math.min(width, height) / span * zoom;
+  const perspectiveBlend = _viewer3dClamp((zoom - 1.2) / 5, 0, 1);
+  const perspectiveDistance = span * (1.9 - 1.7 * perspectiveBlend);
+  const perspective = Math.max(options.minPerspective || 120, perspectiveDistance);
+  const fovStartDeg = 22;
+  const fovEndDeg = 35;
+  const fovRamp = _viewer3dClamp((perspectiveBlend - 0.24) / 0.76, 0, 1);
+  const fovT = Math.pow(fovRamp, 1.35);
+  const fovDegrees = fovStartDeg + ((fovEndDeg - fovStartDeg) * fovT);
+  const fovScale = Math.tan((fovStartDeg * Math.PI) / 360) / Math.tan((fovDegrees * Math.PI) / 360);
+
+  const renderBatches = [];
+  const hoverTargets = [];
+  (scene.objects || []).forEach(object => {
+    const localX = object.x - center.x;
+    const localY = object.y - center.y;
+    const localZ = object.z - center.z;
+    const edges = object.type === 'plane'
+      ? _viewer3dPlaneEdges(localX, localY, localZ, object.sizeX, object.sizeY)
+      : _viewer3dCubeEdges(localX, localY, localZ, object.sizeX, object.sizeY, object.sizeZ);
+    const depth = _viewer3dRotateAt({ x:localX, y:localY, z:localZ }, rotX, rotY).z;
+    const batch = {
+      edges,
+      color:object.color,
+      depth,
+      lineWidth:object.lineWidth || 1,
+      alphaMul:object.alphaMul || 1,
+      fills:[],
+      tooltip:object.tooltip || '',
+      spaceKey:object.spaceKey || '',
+    };
+
+    if (object.type === 'cube' && object.fillColor && object.fillAlpha > 0) {
+      const faces = _viewer3dCubeFaces(localX, localY, localZ, object.sizeX, object.sizeY, object.sizeZ);
+      faces.forEach(face => {
+        const depthAverage = face.reduce((sum, point) => sum + _viewer3dRotateAt(point, rotX, rotY).z, 0) / face.length;
+        batch.fills.push({ points:face, color:object.fillColor, alpha:object.fillAlpha, depth:depthAverage });
+      });
+      batch.fills.sort((a, b) => b.depth - a.depth);
+    }
+
+    renderBatches.push(batch);
+  });
+
+  renderBatches.sort((a, b) => b.depth - a.depth);
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, width, height);
+
+  renderBatches.forEach(batch => {
+    batch.fills.forEach(fill => {
+      ctx.fillStyle = _viewer3dResolveColor(theme, fill.color);
+      ctx.globalAlpha = fill.alpha;
+      ctx.beginPath();
+      fill.points.forEach((point, index) => {
+        const p = _viewer3dProjectAt(point, scale, perspective, width, height, fovScale, rotX, rotY, panX, panY);
+        if (index === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    ctx.strokeStyle = _viewer3dResolveColor(theme, batch.color);
+    ctx.globalAlpha = batch.alphaMul;
+    ctx.lineWidth = batch.lineWidth;
+    ctx.beginPath();
+    batch.edges.forEach(([start, end]) => {
+      const p1 = _viewer3dProjectAt(start, scale, perspective, width, height, fovScale, rotX, rotY, panX, panY);
+      const p2 = _viewer3dProjectAt(end, scale, perspective, width, height, fovScale, rotX, rotY, panX, panY);
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+    });
+    ctx.stroke();
+
+    if (batch.tooltip) {
+      let bestFace = null;
+      batch.fills.forEach(fill => {
+        if (!bestFace || fill.depth < bestFace.depth) bestFace = fill;
+      });
+      if (bestFace?.points?.length) {
+        const polygon = bestFace.points.map(point => _viewer3dProjectAt(point, scale, perspective, width, height, fovScale, rotX, rotY, panX, panY));
+        hoverTargets.push({ tooltip:batch.tooltip, polygon, depth:batch.depth, spaceKey:batch.spaceKey });
+      }
+    }
+  });
+
+  ctx.globalAlpha = 1;
+  _viewer3dDrawAxesHelper(ctx, width, height, theme);
+  return { width, height, center, scale, perspective, fovScale, hoverTargets };
 }
 
 function _viewer3dSceneSignature(scene) {
@@ -510,6 +679,7 @@ function _viewer3dSpaceAt(canvasX, canvasY) {
 
 function _viewer3dApplyRoomSelection(spaceKey, additive) {
   if (!spaceKey) return;
+  selectedCategoryLevels.space.clear();
   if (additive) {
     if (sel.space.has(spaceKey)) sel.space.delete(spaceKey);
     else sel.space.add(spaceKey);
@@ -591,138 +761,14 @@ function _renderThreeDViewer() {
   const els = _viewer3dElements();
   const canvas = els?.canvas;
   if (!canvas || !_viewer3dScene || !els.panel || els.panel.classList.contains('viewer3d-collapsed')) return;
-
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(10, Math.round(rect.width));
-  const height = Math.max(10, Math.round(rect.height));
-  const dpr = window.devicePixelRatio || 1;
-  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-  }
-
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, width, height);
-  const theme = _viewer3dTheme();
-
-  const focusSource = _viewer3dScene.focusPoints?.length ? _viewer3dScene.focusPoints : _viewer3dScene.points;
-  const xs = focusSource.map(point => point.x);
-  const ys = focusSource.map(point => point.y);
-  const zs = focusSource.map(point => point.z);
-  const center = {
-    x: (Math.min(...xs) + Math.max(...xs)) / 2,
-    y: (Math.min(...ys) + Math.max(...ys)) / 2,
-    z: (Math.min(...zs) + Math.max(...zs)) / 2,
-  };
-  const extentSource = _viewer3dScene.points;
-  const span = Math.max(
-    ...extentSource.map(point => Math.abs(point.x - center.x) * 2),
-    ...extentSource.map(point => Math.abs(point.y - center.y) * 2),
-    ...extentSource.map(point => Math.abs(point.z - center.z) * 2),
-    3000
-  );
-  const scale = (0.82 * Math.min(width, height) / span) * _viewer3dZoom;
-  const perspectiveBlend = _viewer3dClamp((_viewer3dZoom - 1.2) / 5, 0, 1);
-  const perspectiveDistance = span * (1.9 - 1.7 * perspectiveBlend);
-  const perspective = Math.max(120, perspectiveDistance);
-  const fovStartDeg = 22;
-  const fovEndDeg = 35;
-  const fovRamp = _viewer3dClamp((perspectiveBlend - 0.24) / 0.76, 0, 1);
-  const fovT = Math.pow(fovRamp, 1.35);
-  const fovDegrees = fovStartDeg + ((fovEndDeg - fovStartDeg) * fovT);
-  const fovScale = Math.tan((fovStartDeg * Math.PI) / 360) / Math.tan((fovDegrees * Math.PI) / 360);
-
-  const renderBatches = [];
-  _viewer3dHoverTargets = [];
-  _viewer3dScene.objects.forEach(object => {
-    const localX = object.x - center.x;
-    const localY = object.y - center.y;
-    const localZ = object.z - center.z;
-    const edges = object.type === 'plane'
-      ? _viewer3dPlaneEdges(localX, localY, localZ, object.sizeX, object.sizeY)
-      : _viewer3dCubeEdges(localX, localY, localZ, object.sizeX, object.sizeY, object.sizeZ);
-    const depth = _viewer3dRotate({ x:localX, y:localY, z:localZ }).z;
-    const batch = {
-      edges,
-      color:object.color,
-      depth,
-      lineWidth:object.lineWidth || 1,
-      alphaMul:object.alphaMul || 1,
-      fills:[],
-      tooltip:object.tooltip || '',
-      spaceKey:object.spaceKey || '',
-    };
-
-    if (object.type === 'cube' && object.fillColor && object.fillAlpha > 0) {
-      const faces = _viewer3dCubeFaces(localX, localY, localZ, object.sizeX, object.sizeY, object.sizeZ);
-      faces.forEach(face => {
-        const depthAverage = face.reduce((sum, point) => sum + _viewer3dRotate(point).z, 0) / face.length;
-        batch.fills.push({
-          points:face,
-          color:object.fillColor,
-          alpha:object.fillAlpha,
-          depth:depthAverage,
-        });
-      });
-      batch.fills.sort((a, b) => b.depth - a.depth);
-    }
-
-    renderBatches.push(batch);
+  const render = _viewer3dRenderSceneToCanvas(canvas, _viewer3dScene, {
+    rotX: _viewer3dRotX,
+    rotY: _viewer3dRotY,
+    panX: _viewer3dPanX,
+    panY: _viewer3dPanY,
+    zoom: _viewer3dZoom,
   });
-
-  // Painter's order: draw farther geometry first, then nearer geometry on top.
-  renderBatches.sort((a, b) => b.depth - a.depth);
-
-  ctx.fillStyle = theme.background;
-  ctx.fillRect(0, 0, width, height);
-
-  renderBatches.forEach(batch => {
-    batch.fills.forEach(fill => {
-      ctx.fillStyle = _viewer3dResolveColor(theme, fill.color);
-      ctx.globalAlpha = fill.alpha;
-      ctx.beginPath();
-      fill.points.forEach((point, index) => {
-        const p = _viewer3dProject(point, scale, perspective, width, height, fovScale);
-        if (index === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
-      });
-      ctx.closePath();
-      ctx.fill();
-    });
-
-    ctx.strokeStyle = _viewer3dResolveColor(theme, batch.color);
-    ctx.globalAlpha = batch.alphaMul;
-    ctx.lineWidth = batch.lineWidth;
-    ctx.beginPath();
-    batch.edges.forEach(([start, end]) => {
-      const p1 = _viewer3dProject(start, scale, perspective, width, height, fovScale);
-      const p2 = _viewer3dProject(end, scale, perspective, width, height, fovScale);
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-    });
-    ctx.stroke();
-
-    if (batch.tooltip) {
-      let bestFace = null;
-      batch.fills.forEach(fill => {
-        if (!bestFace || fill.depth < bestFace.depth) bestFace = fill;
-      });
-      if (bestFace?.points?.length) {
-        const polygon = bestFace.points.map(point => _viewer3dProject(point, scale, perspective, width, height, fovScale));
-        _viewer3dHoverTargets.push({
-          tooltip:batch.tooltip,
-          polygon,
-          depth:batch.depth,
-          spaceKey:batch.spaceKey,
-        });
-      }
-    }
-  });
-
-  ctx.globalAlpha = 1;
-
-  _viewer3dDrawAxesHelper(ctx, width, height, theme);
+  _viewer3dHoverTargets = render?.hoverTargets || [];
 }
 
 function _viewer3dApplyCollapsedState(els) {

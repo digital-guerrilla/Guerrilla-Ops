@@ -1,11 +1,25 @@
 /* ── Header bar ─────────────────────────────────────────────── */
 #hdr {
+  --logo-size: 1.45rem;
   flex-shrink: 0; height: var(--hh);
   background: var(--navy); color: var(--on-dark);
   display: flex; align-items: center; gap: .7rem;
   padding: 0 1.2rem;
   box-shadow: 0 2px 8px var(--shadow-md);
   z-index: 200;
+}
+#hdr .go-logo {
+  display: inline-flex;
+  width: var(--logo-size);
+  height: var(--logo-size);
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+#hdr .go-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 #hdr .title { font-size: 1.05rem; font-weight: 600; letter-spacing: .02em; flex: 1; }
 #hdr .file-lbl {
@@ -60,3 +74,91 @@
 }
 #s-clear:hover { color: var(--on-dark); }
 .search-active #search-wrap { background: rgba(255,255,255,.18); border-color: var(--accent); }
+
+/* ── Global footer / disclaimer ─────────────────────────────── */
+#app-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .45rem;
+  min-height: 30px;
+  padding: .38rem .85rem;
+  background: color-mix(in srgb, var(--surf), var(--brand-dark) 6%);
+  border-top: 1px solid color-mix(in srgb, var(--brand-dark), white 74%);
+  color: var(--text-muted);
+  font-size: .68rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+#app-footer .ftr-attrib {
+  color: var(--text-dark);
+  max-width: min(1200px, 94vw);
+}
+
+#app-footer .ftr-attrib strong {
+  font-weight: 700;
+}
+
+#app-footer .ftr-brand {
+  color: var(--text-dark);
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+#app-footer .ftr-sep {
+  opacity: .45;
+}
+
+#app-footer .ftr-note {
+  max-width: min(1100px, 92vw);
+  color: var(--text-dark);
+}
+
+#app-footer .ftr-disclaimer-link {
+  background: none;
+  border: none;
+  padding: 0;
+  display: inline;
+  color: var(--text-dark);
+  border-bottom: 1px solid color-mix(in srgb, var(--brand-dark), white 55%);
+  cursor: pointer;
+}
+
+#app-footer .ftr-disclaimer-link:hover {
+  color: var(--accent);
+  border-bottom-color: color-mix(in srgb, var(--accent), black 20%);
+}
+
+#app-footer .ftr-link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent), transparent 40%);
+}
+
+#app-footer .ftr-link:hover {
+  color: color-mix(in srgb, var(--accent), black 14%);
+  border-bottom-color: color-mix(in srgb, var(--accent), black 20%);
+}
+
+#app-footer .ftr-license {
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+#app-footer .ftr-icon-link {
+  border-bottom: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  font-size: .95rem;
+  color: var(--text-dark);
+}
+
+#app-footer .ftr-icon-link:hover {
+  color: var(--accent);
+}

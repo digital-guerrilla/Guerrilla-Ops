@@ -6,10 +6,10 @@ QA View audits loaded COBie data for common completeness and relationship proble
 
 ## Start an audit
 
-![Illustrative QA findings based on Demo Civic Centre example records](../images/07-qa-findings.png)
+![Illustrative QA findings example](../images/07-qa-findings.png)
 
 > [!NOTE]
-> The screenshot uses deliberate in-memory broken references to demonstrate QA findings. The supplied example workbook opens with a clean audit.
+> The screenshot may use deliberate in-memory broken references to demonstrate QA findings. A clean workbook can show no findings.
 
 1. Select **QA View**.
 2. Optionally select one or more Facilities to limit the audit.

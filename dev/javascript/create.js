@@ -3,6 +3,7 @@ let _createType = 'space';
 
 function openCreateModal(entityType, prefillName, prefillFac) {
   _createType = entityType || 'space';
+  if (typeof resetComponentPlacementDraft === 'function') resetComponentPlacementDraft('create');
   const facSel = document.getElementById('create-fac-sel');
   const facRow = document.getElementById('create-fac-row');
   facSel.innerHTML = db.facilities.map(fac =>
@@ -31,9 +32,9 @@ function _buildCreateForm(type, prefillName) {
     `<div class="mb-2"><label class="d-block mb-1" ${lbl}>${label}</label>
      <input type="text" class="form-control form-control-sm create-field" data-field="${esc(field)}"
        value="${esc(String(val))}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
-  const cta = (label, field, val='', opts=[]) => {
+  const cta = (label, field, val='', opts=[], maxOpts=400) => {
     const lid = 'cdl_' + field.replace(/[^a-z0-9]/gi,'_');
-    const items = opts.slice(0,400).map(o => typeof o==='string'
+    const items = opts.slice(0,maxOpts).map(o => typeof o==='string'
       ? `<option value="${esc(o)}">`
       : `<option value="${esc(o.name)}">${esc(o.desc||'')}</option>`).join('');
     return `<div class="mb-2"><label class="d-block mb-1" ${lbl}>${label}</label>
@@ -55,7 +56,7 @@ function _buildCreateForm(type, prefillName) {
   if (type === 'space') {
     return `<div class="row g-3"><div class="col-md-6">
       ${cf('Name *','Name',prefillName,'e.g. GF-001')}
-      ${cf('Category','Category','','e.g. Office')}
+      ${cta('Category','Category','',picklistCategoryValues('space'),Infinity)}
       ${csel('Floor','FloorName',idx.floors||[])}
       ${cf('Room Tag','RoomTag')}
     </div><div class="col-md-6">
@@ -66,10 +67,10 @@ function _buildCreateForm(type, prefillName) {
     </div></div>`;
   }
   if (type === 'type') {
-    const cats = [...new Set(db.types.map(t=>f(t,'Category')).filter(Boolean))].sort();
+    const cats = picklistCategoryValues('type');
     return `<div class="row g-3"><div class="col-md-6">
       ${cf('Name *','Name',prefillName,'e.g. Air Handling Unit')}
-      ${cta('Category','Category','',cats)}
+      ${cta('Category','Category','',cats,Infinity)}
       ${cf('Asset Type','AssetType','','Fixed, Moveable, etc.')}
       ${cf('Manufacturer','Manufacturer')}
       ${cf('Model Number','ModelNumber')}
@@ -92,7 +93,7 @@ function _buildCreateForm(type, prefillName) {
     return `<div class="row g-3"><div class="col-md-6">
       ${cf('Name *','Name',prefillName,'e.g. AHU-01')}
       ${cta('Type (TypeName)','TypeName','',typeDescs)}
-      ${cta('Space','Space','',spaceDescs)}
+      ${renderComponentSpaceField('create', '', spaceDescs)}
       ${cf('Description','Description')}
     </div><div class="col-md-6">
       ${cf('Assembly Type','AssemblyType')}
@@ -102,14 +103,14 @@ function _buildCreateForm(type, prefillName) {
     </div></div>`;
   }
   if (type === 'system') {
-    const cats = [...new Set(db.systems.map(s=>f(s,'Category')).filter(Boolean))].sort();
+    const cats = picklistCategoryValues('system');
     const compList = [...new Set(db.components.map(c=>f(c,'Name')))].sort().map(cn =>
       `<label class="d-flex align-items-center gap-1 mb-1" style="font-size:.79rem">
         <input type="checkbox" class="form-check-input create-comp-chk" value="${esc(cn)}"> ${esc(cn)}
       </label>`).join('');
     return `<div class="row g-3"><div class="col-md-6">
       ${cf('Name *','Name',prefillName,'e.g. Mechanical Ventilation')}
-      ${cta('Category','Category','',cats)}
+      ${cta('Category','Category','',cats,Infinity)}
       ${carea('Description','Description','System description…')}
     </div><div class="col-md-6">
       <div class="mb-2"><label class="d-block mb-1" ${lbl}>Components</label>
@@ -182,6 +183,13 @@ function saveCreate() {
     const newTN = (fields.TypeName||'').trim();
     if (newTN && !db.types.some(t => f(t,'Name')===newTN && t._facility===fac)) {
       _pendingNewType = { name: newTN, facility: fac };
+    }
+    const appliedPlacement = typeof _componentPlacementConsumeApplied === 'function'
+      ? _componentPlacementConsumeApplied('create')
+      : null;
+    if (typeof _writeComponentCoordinates === 'function' && appliedPlacement?.spaceName) {
+      _writeComponentCoordinates(fac, name, appliedPlacement);
+      resetComponentPlacementDraft();
     }
 
   } else if (type === 'system') {

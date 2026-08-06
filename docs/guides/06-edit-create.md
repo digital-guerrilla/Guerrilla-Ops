@@ -8,7 +8,7 @@ Edits and new records are applied to the in-memory COBie data immediately. They 
 
 ## Edit an existing record
 
-Open a pencil action from a component card, group information window, document card, or QA finding.
+Open an edit action from a group information window, document card, or QA finding. For components, open **Component info** from the card first, then select the edit action in that popup.
 
 The editor usually separates:
 
