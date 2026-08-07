@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Guerrilla Ops</title>
+  <link rel="icon" type="image/svg+xml" href="svgs/Guerrilla-Ops.svg">
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script>globalThis.XLSX_CORE = globalThis.XLSX;</script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
@@ -169,9 +170,19 @@
       <button class="mode-btn" id="btn-qa" onclick="setMode('qa')">
         <i class="bi bi-clipboard-check me-1"></i>QA View
       </button>
-      <button class="mode-btn" id="btn-create" onclick="openCreateModal()">
-        <i class="bi bi-plus-circle me-1"></i>Create
-      </button>
+      <div class="dropdown">
+        <button class="mode-btn dropdown-toggle" id="btn-create" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-plus-circle me-1"></i>Create
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="btn-create">
+          <li><button class="dropdown-item" type="button" onclick="openCreateModal('space')"><i class="bi bi-grid-fill me-2"></i>Space</button></li>
+          <li><button class="dropdown-item" type="button" onclick="openCreateModal('type')"><i class="bi bi-tag-fill me-2"></i>Type</button></li>
+          <li><button class="dropdown-item" type="button" onclick="openCreateModal('component')"><i class="bi bi-tools me-2"></i>Component</button></li>
+          <li><button class="dropdown-item" type="button" onclick="openCreateModal('system')"><i class="bi bi-diagram-3-fill me-2"></i>System</button></li>
+          <li><button class="dropdown-item" type="button" onclick="openCreateModal('contact')"><i class="bi bi-person-fill me-2"></i>Contact</button></li>
+          <li><button class="dropdown-item" type="button" onclick="openCreateModal('document')"><i class="bi bi-file-earmark-text me-2"></i>Document</button></li>
+        </ul>
+      </div>
     </div>
 
     <div id="active-bar">
@@ -223,6 +234,15 @@
           <div class="viewer3d-body">
             <canvas id="viewer-3d-canvas"></canvas>
             <div class="viewer3d-empty d-none" id="viewer-3d-empty">No coordinate data available for the current view.</div>
+            <div class="viewer3d-floor-control d-none" id="viewer3d-floor-control">
+              <i class="bi bi-layers" aria-hidden="true"></i>
+              <select id="viewer3d-floor-select" aria-label="Overlay floor plan">
+                <option value="">Floor plan…</option>
+              </select>
+              <button class="viewer3d-reset-view" id="viewer3d-reset-view" type="button" title="Reset 3D view" aria-label="Reset 3D view">
+                <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -253,7 +273,7 @@
 </div>
 
 <!-- TYPE DETAIL MODAL -->
-<div class="modal fade" id="type-modal" tabindex="-1">
+<div class="modal" id="type-modal" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header" style="background:var(--navy);color:#fff">
@@ -261,65 +281,6 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body" id="mtype-body"></div>
-    </div>
-  </div>
-</div>
-
-<!-- DOCUMENT MODAL -->
-<div class="modal fade" id="doc-modal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header" style="background:var(--navy);color:#fff">
-        <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i><span id="mdoc-title">Document</span></h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body" id="mdoc-body"></div>
-    </div>
-  </div>
-</div>
-
-<!-- CREATE MODAL -->
-<div class="modal fade" id="create-modal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header" style="background:var(--navy);color:#fff">
-        <h5 class="modal-title">
-          <i class="bi bi-plus-circle me-2" id="create-modal-icon"></i>
-          <span id="create-modal-title">Create New</span>
-        </h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="d-flex gap-2 flex-wrap mb-3" id="create-type-picker">
-          <button class="create-type-btn" data-etype="space" onclick="switchCreateType('space')">
-            <i class="bi bi-grid-fill me-1"></i>Space
-          </button>
-          <button class="create-type-btn" data-etype="type" onclick="switchCreateType('type')">
-            <i class="bi bi-tag-fill me-1"></i>Type
-          </button>
-          <button class="create-type-btn" data-etype="component" onclick="switchCreateType('component')">
-            <i class="bi bi-tools me-1"></i>Component
-          </button>
-          <button class="create-type-btn" data-etype="system" onclick="switchCreateType('system')">
-            <i class="bi bi-diagram-3-fill me-1"></i>System
-          </button>
-          <button class="create-type-btn" data-etype="contact" onclick="switchCreateType('contact')">
-            <i class="bi bi-person-fill me-1"></i>Contact
-          </button>
-        </div>
-        <hr class="mt-0 mb-3">
-        <div id="create-fac-row" class="mb-3 d-none">
-          <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">Facility</label>
-          <select class="form-select form-select-sm" id="create-fac-sel"></select>
-        </div>
-        <div id="create-form-body"></div>
-      </div>
-      <div class="modal-footer" style="background:#f8f9fa">
-        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-sm btn-primary" onclick="saveCreate()" style="background:var(--navy);border-color:var(--navy)">
-          <i class="bi bi-plus-circle me-1"></i>Create
-        </button>
-      </div>
     </div>
   </div>
 </div>
@@ -410,7 +371,7 @@
 </div>
 
 <!-- EDIT MODAL -->
-<div class="modal fade" id="edit-modal" tabindex="-1">
+<div class="modal" id="edit-modal" tabindex="-1">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header" style="background:var(--navy);color:#fff">
@@ -429,7 +390,7 @@
 </div>
 
 <!-- COMPONENT PLACEMENT MODAL -->
-<div class="modal fade" id="component-placement-modal" tabindex="-1" aria-hidden="true">
+<div class="modal" id="component-placement-modal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-fullscreen">
     <div class="modal-content">
       <div class="modal-header" style="background:var(--navy);color:#fff">
@@ -488,6 +449,7 @@
 <script src="javascript/three-d-viewer.js"></script>
 <script src="javascript/documents.js"></script>
 <script src="javascript/qa.js"></script>
+<script src="javascript/model-config.js"></script>
 <script src="javascript/modals.js"></script>
 <script src="javascript/edit.js"></script>
 <script src="javascript/create.js"></script>

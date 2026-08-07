@@ -6,38 +6,47 @@ const _DOC_CONTEXT_DIMENSIONS = {
   facility:'facilities', floor:'floors', space:'spaces', type:'types', system:'systems', doccat:'categories',
 };
 
-function _documentContextMatches(context, ignoredDimension = '') {
-  for (const [dimension, property] of Object.entries(_DOC_CONTEXT_DIMENSIONS)) {
-    if (dimension === ignoredDimension || !sel[dimension].size) continue;
-    if (!_setHasAny(sel[dimension], context[property])) return false;
-  }
+function _documentContextSearchMatches(context) {
   if (searchQuery) {
     const documentText = [
       f(context.doc,'Name'), f(context.doc,'Description'), f(context.doc,'Category'),
       f(context.doc,'Directory'), _cobieField(context.doc, 'rowName'),
     ].join(' ').toLowerCase();
-    const componentMatch = [...context.components].some(key => (idx.searchText?.[key] || '').includes(searchQuery));
+    const componentMatch = Array.from(context.components).some(key => (idx.searchText?.[key] || '').includes(searchQuery));
     if (!documentText.includes(searchQuery) && !componentMatch) return false;
   }
   return true;
 }
 
-function _documentCrossCounts(contexts, counts, replaceAssetCounts) {
-  const countDimension = dimension => {
-    const property = _DOC_CONTEXT_DIMENSIONS[dimension];
-    const keysByValue = {};
-    contexts.forEach(context => {
-      if (!_documentContextMatches(context, dimension)) return;
-      context[property].forEach(value => (keysByValue[value] ||= new Set()).add(context.identity));
+function _filterDocumentContexts(contexts, counts, replaceAssetCounts) {
+  const dimensions = Object.keys(_DOC_CONTEXT_DIMENSIONS);
+  const countSets = Object.fromEntries(dimensions.map(dimension => [dimension, Object.create(null)]));
+  const filtered = [];
+  const ALL = (1 << dimensions.length) - 1;
+
+  contexts.forEach(context => {
+    if (!_documentContextSearchMatches(context)) return;
+    let bits = 0;
+    dimensions.forEach((dimension, index) => {
+      const property = _DOC_CONTEXT_DIMENSIONS[dimension];
+      if (!sel[dimension].size || _setHasAny(sel[dimension], context[property])) bits |= 1 << index;
     });
-    const result = {};
-    Object.entries(keysByValue).forEach(([value, keys]) => { result[value] = keys.size; });
-    return result;
-  };
-  counts.doccat = countDimension('doccat');
-  if (replaceAssetCounts) {
-    ['facility','floor','space','type','system'].forEach(dimension => { counts[dimension] = countDimension(dimension); });
-  }
+    if (bits === ALL) filtered.push(context);
+
+    dimensions.forEach((dimension, index) => {
+      if ((bits | (1 << index)) !== ALL) return;
+      const property = _DOC_CONTEXT_DIMENSIONS[dimension];
+      context[property].forEach(value => (countSets[dimension][value] ||= new Set()).add(context.identity));
+    });
+  });
+
+  dimensions.forEach(dimension => {
+    if (dimension !== 'doccat' && !replaceAssetCounts) return;
+    counts[dimension] = Object.fromEntries(
+      Object.entries(countSets[dimension]).map(([value, identities]) => [value, identities.size]),
+    );
+  });
+  return filtered;
 }
 
 function _documentContextEntry(context) {
@@ -95,8 +104,11 @@ function applyFilters() {
   });
 
   const contexts = idx.documentContexts || [];
-  const filteredDocumentContexts = contexts.filter(context => _documentContextMatches(context));
-  _documentCrossCounts(contexts, c, viewMode === 'document' || sel.doccat.size > 0);
+  const filteredDocumentContexts = _filterDocumentContexts(
+    contexts,
+    c,
+    viewMode === 'document' || sel.doccat.size > 0,
+  );
 
   lastCounts = c;
   renderPanels(c);
@@ -114,25 +126,46 @@ function applyFilters() {
   document.getElementById('res-count').textContent = n + ' ' + noun + (n!==1?'s':'');
 }
 
-function toggle(dim, key) {
-  const k = key.toLowerCase();
+function _setFilterSelection(dim, keys, selected, categoryLevels = []) {
+  const normalized = [...new Set(keys.map(key => String(key || '').toLowerCase()).filter(Boolean))];
+  if (!normalized.length) return;
+  const changedKeys = new Set(normalized);
   Object.entries(idx.catGroups?.[dim] || {}).forEach(([category, names]) => {
-    if (names.some(name => name.toLowerCase() === k)) selectedCategoryLevels[dim]?.delete(category);
+    if (names.some(name => changedKeys.has(name.toLowerCase()))) selectedCategoryLevels[dim]?.delete(category);
   });
-  if (sel[dim].has(k)) sel[dim].delete(k); else sel[dim].add(k);
+  normalized.forEach(key => {
+    if (selected) sel[dim].add(key); else sel[dim].delete(key);
+  });
+  if (selected) categoryLevels.forEach(category => selectedCategoryLevels[dim]?.add(category));
   // When selecting a facility-only doc category, auto-enable Facility grouping
-  if (dim === 'doccat' && sel.doccat.has(k) && idx.docCatFacilityOnly?.has(k)) {
+  if (dim === 'doccat' && selected && normalized.some(key => idx.docCatFacilityOnly?.has(key))) {
     if (!groupState.active.has('facility')) {
       groupState.active.add('facility');
       const chip = document.querySelector('#group-sortable [data-dim="facility"]');
       if (chip) chip.classList.add('gchip-active');
     }
   }
-  if (dim === 'doccat' && sel.doccat.has(k) && viewMode === 'asset') {
+  if (dim === 'doccat' && selected && viewMode === 'asset') {
     setMode('document');
     return;
   }
   applyFilters();
+}
+
+function toggle(dim, key) {
+  const normalized = String(key || '').toLowerCase();
+  _setFilterSelection(dim, [normalized], !sel[dim].has(normalized));
+}
+
+function selectFilterRange(dim, keys, selected) {
+  _setFilterSelection(dim, keys, selected);
+}
+
+function selectFilterCategoryRange(dim, categories, selected) {
+  const keys = [...new Set(categories.flatMap(category => (idx.catGroups?.[dim]?.[category] || [])
+    .map(name => name.toLowerCase())
+    .filter(key => sel[dim].has(key) || (lastCounts[dim]?.[key] || 0) > 0)))];
+  _setFilterSelection(dim, keys, selected, categories);
 }
 
 function clearAll() {

@@ -39,9 +39,10 @@ A document card shows:
 - Description.
 - Relationship level and linked record.
 - Category.
-- **Link**, details, and **Edit** actions when available.
+- **Info** and **Link** actions when available.
 
-Select the information action to open a details window. Select **Link** to open the Directory value.
+Select **Info** to open Document Information. Select **Link** to open the
+Directory value in a new browser tab.
 
 ## Understand the Link field
 
@@ -56,9 +57,10 @@ Supported values can include:
 
 Whether a local or network path opens depends on browser and security policy. Copy the path and open it in File Explorer when direct opening is blocked.
 
-## Edit a document directly
+## Edit a document
 
-Select the document's pencil action. The direct document editor contains:
+Select **Info** on the document card. Document Information contains configured
+fields including:
 
 - **Name**
 - **Description**
@@ -67,20 +69,25 @@ Select the document's pencil action. The direct document editor contains:
 
 It does not edit the linked Component, Type, Space, Floor, System, or Facility.
 
-To change the link:
+Double-click a value to edit it inline. To change the link:
 
-1. Select **Edit** beside the current link.
-2. Paste the complete URL or path, or select **Browse**.
-3. Select **Save Changes**.
+1. Double-click the **Link** value.
+2. Enter the complete URL, drive path, UNC path, or `file:` address.
+3. Press **Enter** or move away from the field to apply it.
+4. Use **Open link** or **Copy path** above the cards to check the result.
 
-Browsers usually do not reveal a selected file's full local path. If the full path is required, paste it manually.
+Use **Undo** on a changed row to restore its original value.
 
 ## Add or remove documents from an entity
 
-Open the linked entity's full editor and use its **Documents** section:
+Open the linked entity's **Info** view and use its **Documents** card:
 
-- Select **Add** to create a Document row linked to that entity.
-- Use the trash action to remove a linked row.
-- Complete Name, Description, Category, and Link.
+- Select the add action to open a new Document Information draft linked to that entity.
+- Complete Name, Description, Category, Link, and any required associations.
+- Select **Save Document** to create the row or **Cancel** to discard the draft.
+
+You can also select **Create > Document**. A document created from the main
+menu starts with the current Facility as its relationship context; review its
+associations before saving.
 
 These changes remain unsaved until you update or download the workbook.

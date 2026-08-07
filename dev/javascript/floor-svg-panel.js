@@ -10,6 +10,7 @@ let _svgPanX = 0;
 let _svgPanY = 0;
 let _activeInlineSvg = null;
 let _activeViewport = null;
+const _svgViewRotationByFloor = new Map();
 
 let _isPanelDragging = false;
 let _isStageDragging = false;
@@ -33,6 +34,7 @@ const _SVG_ATTR_NAME_RE = /^svg(?:[^\d]*(\d+))?$/i;
 const _ALIGN_ATTR_CHUNK_SIZE = 30000;
 const _ALIGN_ATTR_NAME_RE = /^svg-alignment(?:[^\d]*(\d+))?$/i;
 const _SVG_FIT_PADDING_RATIO = 0.08;
+const _SVG_MIN_ZOOM = 0.05;
 
 function _attributeRawValue(attr) {
   if (!attr) return '';
@@ -238,6 +240,9 @@ function _floorAlignmentSave(entry, alignment) {
 
   if (saved && afterValue !== beforeValue) {
     _logChange('attribute', `Floor/${f(floorRow, 'Name')}/svg-alignment`, floorRow._facility || '');
+    if (typeof _viewer3dRebuildRoomGeometryCache === 'function') {
+      _viewer3dRebuildRoomGeometryCache(entry.key);
+    }
   }
 
   _floorPlanAlignment = {
@@ -743,6 +748,9 @@ function _handleSvgUpload(file, floorKey) {
     }
     if (_upsertFloorSvgAttribute(floorRow, svgMarkup)) {
       _logChange('floor', f(floorRow, 'Name'), floorRow._facility || '');
+      if (typeof _viewer3dRebuildRoomGeometryCache === 'function') {
+        _viewer3dRebuildRoomGeometryCache(floorKey);
+      }
       refreshDisplay();
     }
   };
@@ -765,9 +773,35 @@ function _svgNaturalSize(svgNode, viewport) {
   return { w:viewportW, h:Math.round(viewportW * 0.6) };
 }
 
+function _svgViewRotation(floorKey = _activeFloorKey) {
+  return _svgViewRotationByFloor.get(floorKey || '') || 0;
+}
+
+function _svgRotatedBounds(width, height, angle = _svgViewRotation()) {
+  const radians = (Number(angle) || 0) * Math.PI / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const corners = [
+    { x:0, y:0 },
+    { x:width * cos, y:width * sin },
+    { x:-height * sin, y:height * cos },
+    { x:(width * cos) - (height * sin), y:(width * sin) + (height * cos) },
+  ];
+  const xs = corners.map(point => point.x);
+  const ys = corners.map(point => point.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return {
+    minX,
+    minY,
+    width:Math.max(...xs) - minX,
+    height:Math.max(...ys) - minY,
+  };
+}
+
 function _setSvgZoom(nextZoom, viewport, svgNode = _activeInlineSvg) {
   if (!svgNode || !viewport) return;
-  const zoom = Math.max(0.2, Math.min(8, nextZoom));
+  const zoom = Math.max(_SVG_MIN_ZOOM, Math.min(8, nextZoom));
   if (!_svgBaseWidth || !_svgBaseHeight) {
     const size = _svgNaturalSize(svgNode, viewport);
     _svgBaseWidth = size.w;
@@ -777,13 +811,18 @@ function _setSvgZoom(nextZoom, viewport, svgNode = _activeInlineSvg) {
   svgNode.style.width = Math.max(100, Math.round(_svgBaseWidth)) + 'px';
   svgNode.style.height = Math.max(60, Math.round(_svgBaseHeight)) + 'px';
   svgNode.style.transformOrigin = '0 0';
-  svgNode.style.transform = `translate(${_svgPanX}px, ${_svgPanY}px) scale(${_svgZoom})`;
+  const angle = _svgViewRotation();
+  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight, angle);
+  const translateX = _svgPanX - (rotated.minX * _svgZoom);
+  const translateY = _svgPanY - (rotated.minY * _svgZoom);
+  svgNode.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${angle}deg) scale(${_svgZoom})`;
 }
 
 function _centerSvgViewport(viewport) {
   if (!viewport || !_activeInlineSvg) return;
-  const scaledW = _svgBaseWidth * _svgZoom;
-  const scaledH = _svgBaseHeight * _svgZoom;
+  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight);
+  const scaledW = rotated.width * _svgZoom;
+  const scaledH = rotated.height * _svgZoom;
   _svgPanX = Math.round((viewport.clientWidth - scaledW) / 2);
   _svgPanY = Math.round((viewport.clientHeight - scaledH) / 2);
   viewport.scrollLeft = 0;
@@ -801,11 +840,12 @@ function _fitSvgToViewport(viewport, svgNode = _activeInlineSvg) {
 
   const availW = Math.max(80, viewport.clientWidth * (1 - (_SVG_FIT_PADDING_RATIO * 2)));
   const availH = Math.max(80, viewport.clientHeight * (1 - (_SVG_FIT_PADDING_RATIO * 2)));
-  const fitZoom = Math.min(availW / _svgBaseWidth, availH / _svgBaseHeight);
-  _svgZoom = Math.max(0.2, Math.min(8, fitZoom || 1));
+  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight);
+  const fitZoom = Math.min(availW / rotated.width, availH / rotated.height);
+  _svgZoom = Math.max(_SVG_MIN_ZOOM, Math.min(8, fitZoom || 1));
 
-  const scaledW = _svgBaseWidth * _svgZoom;
-  const scaledH = _svgBaseHeight * _svgZoom;
+  const scaledW = rotated.width * _svgZoom;
+  const scaledH = rotated.height * _svgZoom;
   _svgPanX = Math.round((viewport.clientWidth - scaledW) / 2);
   _svgPanY = Math.round((viewport.clientHeight - scaledH) / 2);
 
@@ -818,7 +858,7 @@ function _zoomSvgAtCursor(viewport, clientX, clientY, factor) {
   const anchorX = clientX - rect.left;
   const anchorY = clientY - rect.top;
   const oldZoom = _svgZoom;
-  const nextZoom = Math.max(0.2, Math.min(8, oldZoom * factor));
+  const nextZoom = Math.max(_SVG_MIN_ZOOM, Math.min(8, oldZoom * factor));
   if (Math.abs(nextZoom - oldZoom) < 0.0001) return;
 
   const worldX = (anchorX - _svgPanX) / oldZoom;
@@ -844,6 +884,7 @@ function _renderStackSkeleton(els, floors, svgByKey) {
     const alignLabel = _floorAlignmentHasStoredValue(entry) ? 'Modify' : 'Align';
     const stateHtml = hasSvg
       ? `<span class="svg-floor-head-actions">
+          <span class="svg-floor-icon-btn" data-svg-rotate="${esc(entry.key)}" title="Rotate plan view 90 degrees" role="button" aria-label="Rotate ${esc(_floorLabel(entry))} plan view 90 degrees"><i class="bi bi-arrow-clockwise"></i></span>
           <span class="svg-floor-pill-btn" data-svg-upload="${esc(entry.key)}" title="Swap SVG">Swap</span>
           <span class="svg-floor-pill-btn" data-svg-align="${esc(entry.key)}" title="${esc(alignLabel)} Floor Plan">${esc(alignLabel)}</span>
         </span>`
@@ -1654,6 +1695,20 @@ function _bindStageInteractions(els) {
       return;
     }
 
+    const rotateBtn = event.target.closest('[data-svg-rotate]');
+    if (rotateBtn) {
+      const key = rotateBtn.getAttribute('data-svg-rotate') || '';
+      if (key && key !== _expandedFloorKey) {
+        _expandedFloorKey = key;
+        refreshFloorSvgPanel(_lastFilteredComps || [], _lastFloorCounts || {});
+      }
+      if (key && _activeInlineSvg && _activeFloorKey === key) {
+        _svgViewRotationByFloor.set(key, (_svgViewRotation(key) + 90) % 360);
+        _fitSvgToViewport(_activeViewport, _activeInlineSvg);
+      }
+      return;
+    }
+
     const toggle = event.target.closest('[data-floor-toggle]');
     if (toggle) {
       const key = toggle.getAttribute('data-floor-toggle') || '';
@@ -1857,6 +1912,7 @@ function resetFloorSvgPanel() {
   _svgBaseHeight = 0;
   _svgPanX = 0;
   _svgPanY = 0;
+  _svgViewRotationByFloor.clear();
   _expandedFloorKey = '';
   _pendingUploadFloorKey = '';
   _highlightRoomIds = new Set();

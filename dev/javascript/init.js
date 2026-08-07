@@ -231,6 +231,8 @@ function _bindFilterSideHandleDrag() {
 _bindFilterSideHandleDrag();
 if (typeof initComponentPlacementModal === 'function') initComponentPlacementModal();
 
+let _filterRangeAnchor = null;
+let _filterCategoryRangeAnchor = null;
 document.getElementById('filter-bar').addEventListener('click', e => {
   const treeStep = e.target.closest('[data-filter-tree-step]');
   if (treeStep) {
@@ -245,10 +247,36 @@ document.getElementById('filter-bar').addEventListener('click', e => {
   }
   const item = e.target.closest('.fp-item');
   if (item && !item.classList.contains('fp-zero')) {
-    toggle(item.dataset.dim, item.dataset.key); return;
+    const dim = item.dataset.dim;
+    const key = item.dataset.key;
+    if (e.shiftKey && _filterRangeAnchor?.dim === dim) {
+      const visibleKeys = [...item.closest('.fp-body').querySelectorAll(`.fp-item[data-dim="${dim}"]`)]
+        .filter(row => !row.classList.contains('fp-zero') && row.getClientRects().length)
+        .map(row => row.dataset.key);
+      selectFilterRange(dim, _selectionRange(visibleKeys, _filterRangeAnchor.key, key), !sel[dim].has(key));
+    } else {
+      toggle(dim, key);
+    }
+    _filterRangeAnchor = { dim, key };
+    return;
   }
   const cat = e.target.closest('.fp-cat-hdr');
-  if (cat) toggleCategory(cat.dataset.dim, cat.dataset.cat);
+  if (cat) {
+    const dim = cat.dataset.dim;
+    const category = cat.dataset.cat;
+    if (e.shiftKey && _filterCategoryRangeAnchor?.dim === dim) {
+      const visibleCategories = [...cat.closest('.fp-body').querySelectorAll(`.fp-cat-hdr[data-dim="${dim}"]`)]
+        .filter(header => header.getClientRects().length)
+        .map(header => header.dataset.cat);
+      const directKeys = (idx.catGroups?.[dim]?.[category] || []).map(name => name.toLowerCase())
+        .filter(key => sel[dim].has(key) || (lastCounts[dim]?.[key] || 0) > 0);
+      const selected = !directKeys.length || !directKeys.every(key => sel[dim].has(key));
+      selectFilterCategoryRange(dim, _selectionRange(visibleCategories, _filterCategoryRangeAnchor.category, category), selected);
+    } else {
+      toggleCategory(dim, category);
+    }
+    _filterCategoryRangeAnchor = { dim, category };
+  }
 });
 document.getElementById('filter-bar').addEventListener('input', e => {
   const inp = e.target.closest('.fp-search');
@@ -271,6 +299,8 @@ document.getElementById('pills').addEventListener('click', e => {
 });
 
 // ── Result list interactions ──────────────────────────────────
+let _resultRangeAnchor = null;
+let _resultGroupRangeAnchor = null;
 document.getElementById('comp-list').addEventListener('click', e => {
   const gb = e.target.closest('[data-grpidx]');
   if (gb) {
@@ -283,15 +313,32 @@ document.getElementById('comp-list').addEventListener('click', e => {
     openComponentInfo(cinfo.dataset.compKey || '', cinfo.dataset.compFac || '');
     return;
   }
-  const hl = e.target.closest('[data-grphl]');
-  if (hl) {
-    highlightGroupSelection(hl, !!(e.ctrlKey || e.metaKey));
+  const cardHighlightAction = e.target.closest('[data-card-highlight-action]');
+  if (cardHighlightAction) {
+    const key = cardHighlightAction.dataset.cardHighlightKey || '';
+    if (e.shiftKey && _resultRangeAnchor) {
+      const keys = [...document.querySelectorAll('#comp-list .selectable-result-card[data-card-highlight-key]')]
+        .filter(card => card.getClientRects().length)
+        .map(card => card.dataset.cardHighlightKey || '');
+      setResultHighlightRange(_selectionRange(keys, _resultRangeAnchor, key), !groupHighlightStore.has(key));
+    } else {
+      toggleResultHighlight(key);
+    }
+    _resultRangeAnchor = key;
     return;
   }
-  const documentEditButton = e.target.closest('[data-edit-doc]');
-  if (documentEditButton) {
-    const documentRow = docStore[+documentEditButton.dataset.editDoc];
-    if (documentRow) openDocumentEdit(documentRow);
+  const hl = e.target.closest('[data-grphl]');
+  if (hl) {
+    const key = hl.dataset.grphlkey || '';
+    if (e.shiftKey && _resultGroupRangeAnchor) {
+      const keys = [...document.querySelectorAll('#comp-list [data-grphlkey]')]
+        .filter(button => button.getClientRects().length)
+        .map(button => button.dataset.grphlkey || '');
+      setResultHighlightRange(_selectionRange(keys, _resultGroupRangeAnchor, key), !groupHighlightStore.has(key));
+    } else {
+      highlightGroupSelection(hl, !!(e.ctrlKey || e.metaKey));
+    }
+    _resultGroupRangeAnchor = key;
     return;
   }
   const eb = e.target.closest('[data-edit-entity]');
@@ -322,10 +369,40 @@ document.getElementById('comp-list').addEventListener('click', e => {
     }
     return;
   }
+  const selectableCard = e.target.closest('[data-card-highlight-key]');
+  if (selectableCard && !e.target.closest('button,a,input,select,textarea,[role="link"]')) {
+    const key = selectableCard.dataset.cardHighlightKey || '';
+    if (e.shiftKey && _resultRangeAnchor) {
+      const keys = [...document.querySelectorAll('#comp-list [data-card-highlight-key]')]
+        .filter(card => card.getClientRects().length)
+        .map(card => card.dataset.cardHighlightKey || '');
+      setResultHighlightRange(_selectionRange(keys, _resultRangeAnchor, key), !groupHighlightStore.has(key));
+    } else {
+      toggleResultHighlight(key);
+    }
+    _resultRangeAnchor = key;
+    return;
+  }
   const hdr = e.target.closest('.grp-hdr');
   if (hdr && hdr.dataset.cid) {
     _toggleGroupHeader(hdr);
   }
+});
+document.getElementById('comp-list').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const selectableCard = e.target.closest('[data-card-highlight-key]');
+  if (!selectableCard || e.target.closest('button,a,input,select,textarea,[role="link"]')) return;
+  e.preventDefault();
+  const key = selectableCard.dataset.cardHighlightKey || '';
+  if (e.shiftKey && _resultRangeAnchor) {
+    const keys = [...document.querySelectorAll('#comp-list [data-card-highlight-key]')]
+      .filter(card => card.getClientRects().length)
+      .map(card => card.dataset.cardHighlightKey || '');
+    setResultHighlightRange(_selectionRange(keys, _resultRangeAnchor, key), !groupHighlightStore.has(key));
+  } else {
+    toggleResultHighlight(key);
+  }
+  _resultRangeAnchor = key;
 });
 document.getElementById('comp-list').addEventListener('show.bs.collapse', e => {
   const btn=document.querySelector(`[data-bs-target="#${e.target.id}"]`);
@@ -338,10 +415,12 @@ document.getElementById('comp-list').addEventListener('hide.bs.collapse', e => {
 
 // ── Type info modal interactions ──────────────────────────────
 document.getElementById('type-modal').addEventListener('click', e => {
-  const documentEditButton = e.target.closest('[data-edit-doc]');
-  if (documentEditButton) {
-    const documentRow = docStore[+documentEditButton.dataset.editDoc];
-    if (documentRow) openDocumentEdit(documentRow);
+  const copyPathButton = e.target.closest('.cp-btn');
+  if (copyPathButton) {
+    navigator.clipboard.writeText(copyPathButton.dataset.p || '').then(() => {
+      copyPathButton.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+      setTimeout(() => { copyPathButton.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy path'; }, 2000);
+    });
     return;
   }
   const eb = e.target.closest('[data-edit-entity]');
@@ -350,27 +429,7 @@ document.getElementById('type-modal').addEventListener('click', e => {
   if (!b) return;
   const d = docStore[+b.dataset.doc];
   if (!d) return;
-  const tm = bootstrap.Modal.getInstance(document.getElementById('type-modal'));
-  if (tm) {
-    tm.hide();
-    document.getElementById('type-modal').addEventListener('hidden.bs.modal', () => openDoc(d), { once: true });
-  } else { openDoc(d); }
-});
-
-// ── Document modal interactions ───────────────────────────────
-document.getElementById('mdoc-body').addEventListener('click', e => {
-  const editBtn = e.target.closest('[data-edit-doc]');
-  if (editBtn) {
-    const documentRow = docStore[+editBtn.dataset.editDoc];
-    if (documentRow) openDocumentEdit(documentRow);
-    return;
-  }
-  const b=e.target.closest('.cp-btn');
-  if (!b) return;
-  navigator.clipboard.writeText(b.dataset.p).then(()=>{
-    b.innerHTML='<i class="bi bi-check2"></i>';
-    setTimeout(()=>{ b.innerHTML='<i class="bi bi-clipboard"></i>'; },2000);
-  });
+  openDoc(d, _typeModalViewContext);
 });
 
 // ── Group sortable and chip clicks ────────────────────────────
@@ -400,6 +459,18 @@ _gList && _gList.addEventListener('click', e => {
 
 // ── Edit modal interactions ───────────────────────────────────
 document.getElementById('edit-modal').addEventListener('click', e => {
+  const associationCheckbox = e.target.closest('.sys-assoc-chk,.comp-assoc-chk');
+  if (associationCheckbox) {
+    const list = associationCheckbox.closest('[style*="overflow-y"]');
+    const previous = list?._rangeAnchor || null;
+    const inputs = list ? [...list.querySelectorAll('input[type="checkbox"]')]
+      .filter(input => input.closest('label')?.style.display !== 'none') : [];
+    if (e.shiftKey && previous) {
+      _selectionRange(inputs, previous, associationCheckbox).forEach(input => { input.checked = associationCheckbox.checked; });
+    }
+    if (list) list._rangeAnchor = associationCheckbox;
+    return;
+  }
   const rmBtn = e.target.closest('.rm-doc-btn');
   if (rmBtn) {
     const row = rmBtn.closest('.edit-doc-row');

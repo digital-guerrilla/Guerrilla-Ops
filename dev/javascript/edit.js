@@ -4,8 +4,13 @@ let _editDocRemovals = [];
 let _editDocRefs = new Map();
 let _editDocRefCounter = 0;
 let _pendingNewType = null; // { name, facility } — queued when a component edit introduces a new TypeName
+let _editReturnInfoContext = null;
+let _editOpeningChildModal = false;
 
 function openEditModal(entityType, entityName, facility) {
+  _editReturnInfoContext = document.getElementById('type-modal')?.classList.contains('show')
+    ? _typeModalViewContext
+    : null;
   _editState = { entityType, entityName, facility: facility || '' };
   if (typeof resetComponentPlacementDraft === 'function') resetComponentPlacementDraft('edit');
   _editDocRemovals = [];
@@ -14,26 +19,8 @@ function openEditModal(entityType, entityName, facility) {
   const typeModalEl = document.getElementById('type-modal');
   const tm = bootstrap.Modal.getInstance(typeModalEl);
   if (tm && typeModalEl.classList.contains('show')) {
+    typeModalEl.addEventListener('hidden.bs.modal', () => setTimeout(_showEditModal, 0), { once: true });
     tm.hide();
-    typeModalEl.addEventListener('hidden.bs.modal', _showEditModal, { once: true });
-  } else {
-    _showEditModal();
-  }
-}
-
-function openDocumentEdit(documentRow) {
-  _editState = {
-    entityType:'document', entityName:f(documentRow,'Name') || 'Document',
-    facility:documentRow._facility || '', document:documentRow,
-  };
-  _editDocRemovals = [];
-  _editDocRefs = new Map([['doc-direct', documentRow]]);
-  _editDocRefCounter = 1;
-  const visibleModal = ['type-modal','doc-modal'].map(id => document.getElementById(id))
-    .find(element => element.classList.contains('show'));
-  if (visibleModal) {
-    bootstrap.Modal.getInstance(visibleModal)?.hide();
-    visibleModal.addEventListener('hidden.bs.modal', _showEditModal, { once:true });
   } else {
     _showEditModal();
   }
@@ -42,12 +29,12 @@ function openDocumentEdit(documentRow) {
 function _showEditModal() {
   if (!_editState) return;
   const { entityType, entityName } = _editState;
-  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building',document:'bi-file-earmark-text'};
-  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility',document:'Document'};
+  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building'};
+  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility'};
   document.getElementById('edit-modal-icon').className  = `bi ${icons[entityType]||'bi-pencil'} me-2`;
   document.getElementById('edit-modal-label').textContent = `${labels[entityType]||entityType}: ${entityName}`;
   document.getElementById('edit-modal-body').innerHTML = _buildEditBody(entityType, entityName);
-  new bootstrap.Modal(document.getElementById('edit-modal')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('edit-modal')).show();
 }
 
 // ── Edit form controls ────────────────────────────────────────
@@ -173,15 +160,6 @@ function _filterCheckboxList(inp) {
 function _buildEditBody(entityType, entityName) {
   let propsHtml = '', assocHtml = '';
   const _fac = _editState?.facility || '';
-
-  if (entityType === 'document') {
-    const documentRow = _editState?.document;
-    if (!documentRow) return '<p class="text-muted">Document not found.</p>';
-    return `<div style="max-width:720px;margin:0 auto">
-      ${_documentCategoryDatalist()}
-      ${_docEditRow(documentRow, _cobieField(documentRow, 'sheetName'), _cobieField(documentRow, 'rowName'), false, 'doc-direct')}
-    </div>`;
-  }
 
   if (entityType === 'component') {
     const obj = _findEntity(db.components, entityName, _fac);
@@ -367,12 +345,6 @@ function saveEdit() {
   const _fac = _editState.facility || '';
   let changedEntityName = entityName;
 
-  if (entityType === 'document') {
-    const nameInput = document.querySelector('#edit-modal-body .edit-doc-row [data-dfield="Name"]');
-    if (!nameInput?.value.trim()) { alert('Name is required.'); return; }
-    nameInput.value = nameInput.value.trim();
-  }
-
   const fields = {};
   document.querySelectorAll('#edit-modal-body .edit-field').forEach(el => {
     if (el.dataset.field) fields[el.dataset.field] = el.value;
@@ -467,20 +439,31 @@ function saveEdit() {
     }
   });
 
-  if (entityType === 'document') changedEntityName = f(_editState.document,'Name') || entityName;
-  const changedFacility = entityType === 'document'
-    ? _fac
-    : _cascadeEntityRename(entityType, entityName, changedEntityName, _fac);
+  const changedFacility = _cascadeEntityRename(entityType, entityName, changedEntityName, _fac);
   _logChange(entityType, changedEntityName, changedFacility, entityName);
   refreshDisplay();
   if (_pendingNewType) {
     const _pt = _pendingNewType; _pendingNewType = null;
+    _editOpeningChildModal = true;
     document.getElementById('edit-modal').addEventListener('hidden.bs.modal', () => {
-      openCreateModal('type', _pt.name, _pt.facility);
+      const returnContext = _editReturnInfoContext;
+      _editReturnInfoContext = null;
+      setTimeout(() => {
+        _editOpeningChildModal = false;
+        openCreateModal('type', _pt.name, _pt.facility, returnContext);
+      }, 0);
     }, { once: true });
   }
-  bootstrap.Modal.getInstance(document.getElementById('edit-modal'))?.hide();
+  const editModalEl = document.getElementById('edit-modal');
+  bootstrap.Modal.getInstance(editModalEl)?.hide();
 }
+
+document.getElementById('edit-modal')?.addEventListener('hidden.bs.modal', () => {
+  if (_editOpeningChildModal) return;
+  const returnContext = _editReturnInfoContext;
+  _editReturnInfoContext = null;
+  if (returnContext) setTimeout(() => restoreTypeModalView(returnContext), 0);
+});
 
 function _updateCompSystems(compName, newSystems, fac) {
   const cLow = compName.toLowerCase();

@@ -106,6 +106,10 @@
   --pill-type-text:   var(--text-dark);
   --pill-system-bg:   color-mix(in srgb, var(--brand-warn)  20%, var(--brand-surface));
   --pill-system-text: var(--text-dark);
+  --pill-component-bg: color-mix(in srgb, var(--brand-accent) 20%, var(--brand-surface));
+  --pill-component-text: var(--text-dark);
+  --pill-contact-bg:  color-mix(in srgb, var(--success) 16%, var(--brand-surface));
+  --pill-contact-text: var(--text-dark);
   --pill-fac-bg:      color-mix(in srgb, var(--cat-purple)  20%, var(--brand-surface));
   --pill-fac-text:    var(--text-dark);
   --pill-doc-bg:      color-mix(in srgb, var(--cat-cyan)    20%, var(--brand-surface));

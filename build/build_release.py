@@ -7,6 +7,7 @@ self-contained HTML file written to release/Guerrilla-Ops.html.
 Usage:
     python build_release.py
 """
+import base64
 import importlib
 import os
 import re
@@ -15,6 +16,10 @@ try:
     cssmin = importlib.import_module('rcssmin').cssmin
 except ImportError:
     cssmin = None
+try:
+    jsmin = importlib.import_module('rjsmin').jsmin
+except ImportError:
+    jsmin = None
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR   = os.path.dirname(SCRIPT_DIR)
@@ -98,6 +103,11 @@ def build():
     for filename in js_modules:
         validate_source(os.path.join(JS_DIR, filename))
     svg_markup = read(SVG_SOURCE).strip()
+    svg_data_url = 'data:image/svg+xml;base64,' + base64.b64encode(svg_markup.encode('utf-8')).decode('ascii')
+    favicon_source = '<link rel="icon" type="image/svg+xml" href="svgs/Guerrilla-Ops.svg">'
+    if favicon_source not in html:
+        raise ValueError('Missing canonical SVG favicon link in dev/index.html')
+    html = html.replace(favicon_source, f'<link rel="icon" type="image/svg+xml" href="{svg_data_url}">')
 
     # ── Inline CSS ─────────────────────────────────────────────
     css_parts = [read(os.path.join(CSS_DIR, filename)) for filename in css_files]
@@ -113,10 +123,9 @@ def build():
     for module in js_modules:
         path = os.path.join(JS_DIR, module)
         module_source = read(path)
-        if module == 'logo-theme.js':
-            module_source = module_source.replace("const EMBEDDED_LOGO_SVG = '';", f"const EMBEDDED_LOGO_SVG = {js_string_literal(svg_markup)};")
         js_parts.append(f'// ── {module} {"─" * max(1, 50 - len(module))}\n\n' + module_source)
     combined_js = '\n\n'.join(js_parts)
+    bundled_js = jsmin(combined_js) if jsmin is not None else combined_js
 
     # Remove all individual <script src="javascript/..."> tags
     html = re.sub(r'\n?<script src="javascript/[^"]+\.js"></script>', '', html)
@@ -124,7 +133,7 @@ def build():
     # Insert combined JS before </body>
     html = html.replace(
         '</body>',
-        f'<script>\n{combined_js}\n</script>\n\n</body>'
+        f'<script>\n{bundled_js}\n</script>\n\n</body>'
     )
 
     # ── Write output ───────────────────────────────────────────
@@ -138,13 +147,13 @@ def build():
         fh.write(root_html)
 
     css_kb   = sum(len(p.encode('utf-8')) for p in css_parts) / 1024
-    js_kb    = len(combined_js.encode('utf-8')) / 1024
+    js_kb    = len(bundled_js.encode('utf-8')) / 1024
     total_kb = len(html.encode('utf-8')) / 1024
     print(f'Built:  {output_path}')
     print(f'  copy: {root_path}')
     print(f'  CSS:  {css_kb:.1f} KB')
-    print(f'  JS:   {js_kb:.1f} KB  ({len(js_modules)} modules)')
-    print('  SVG:  embedded into bundled JS')
+    print(f'  JS:   {js_kb:.1f} KB  ({len(js_modules)} modules, {"minified" if jsmin else "unminified"})')
+    print('  SVG:  hardcoded logo JS with embedded favicon')
     print(f'  Total:{total_kb:.1f} KB')
 
 

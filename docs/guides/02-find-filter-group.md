@@ -74,6 +74,11 @@ The **Group** row controls the hierarchy in the results panel.
 4. Select a group header to open one level.
 5. Use **Expand All** to open every level.
 
+Group headers also provide **Info** and **Highlight** actions. **Info** opens
+the shared Information view for that Facility, Floor, Space, Type, or System.
+**Highlight** keeps the matching records visually emphasised until you remove
+the highlight or select **Remove all highlights**.
+
 Useful arrangements:
 
 | Task | Group order |

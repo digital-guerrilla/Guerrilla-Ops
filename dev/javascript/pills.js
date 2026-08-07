@@ -106,7 +106,7 @@ function toggleExpandAll() {
         } else if (pg.isDocMode) {
           body.innerHTML = pg.isDocCategory
             ? groupDocsByClassification(pg.docEntries, pg.dims || [], pg.depth || 0, pg.categoryKey)
-            : groupDocsNested(pg.docEntries, pg.dims || [], pg.depth || 0);
+            : groupDocsNested(pg.docEntries, pg.dims || [], pg.depth || 0, pg.parentPath || '');
         } else {
           body.innerHTML = groupNested(pg.comps, pg.dims, pg.depth, pg.parentPath || '');
         }

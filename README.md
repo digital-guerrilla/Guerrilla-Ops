@@ -16,7 +16,7 @@ systems and documents. No installation. No account. No data upload.
 </div>
 
 <p align="center">
-  <img src="docs/images/02-find-assets.png" alt="Guerrilla Ops asset browser" width="100%">
+  <img src="dev/svgs/Guerrilla-Ops.svg" alt="Guerrilla Ops asset browser" width="20%">
 </p>
 
 <p align="center">
@@ -35,9 +35,10 @@ systems and documents. No installation. No account. No data upload.
 | Explore | Maintain |
 | --- | --- |
 | Find assets without working through a large spreadsheet | Check COBie information for common gaps and broken links |
-| See where equipment is, what type it is and which system it belongs to | Edit records and create new items |
+| See where equipment is, what type it is and which system it belongs to | Edit records and create new items in a shared information view |
 | Bring manuals, certificates and other documents into one view | Save changes back to Excel |
 | Combine several building workbooks into one estate-wide view | Keep each building's information separate |
+| Review floor plans and coordinate data beside the results | Position components where spatial data is available |
 
 ## Get started
 
@@ -58,11 +59,15 @@ The guides below provide step-by-step help beyond this quick introduction.
 | [Getting started](docs/guides/01-getting-started.md) | Loading modes, appending workbooks, privacy and screen layout |
 | [Find, filter, and group](docs/guides/02-find-filter-group.md) | Search, cross-filter counts, active filters and result grouping |
 | [Asset View](docs/guides/03-asset-view.md) | Component cards, details, relationships and asset workflows |
-| [Document View](docs/guides/04-document-view.md) | Document context, categories, links and direct document editing |
+| [Document View](docs/guides/04-document-view.md) | Document context, categories, links and inline document editing |
 | [QA View](docs/guides/05-qa-view.md) | Audit findings, severity, corrections and report download |
 | [Edit and create records](docs/guides/06-edit-create.md) | Properties, associations, renaming, documents and new records |
 | [Save, discard, and close](docs/guides/07-save-close.md) | Standard and editable saves, rollback and session safety |
 | [Troubleshooting and data notes](docs/guides/08-troubleshooting-data.md) | Browser limits, file issues, links and COBie relationships |
+| [Plan viewer](docs/guides/09-plan-viewer.md) | Floor SVGs, room selection, plan controls and replacing drawings |
+| [3D viewer](docs/guides/10-3d-viewer.md) | Coordinate geometry, navigation, selection and floor overlays |
+| [Align Plan and 3D](docs/guides/11-align-plan-3d.md) | Match an SVG floor plan to Space coordinate geometry and save the transform |
+| [Locate components](docs/guides/12-locate-components.md) | Place Components on floor plans, set height and verify the position in 3D |
 
 Start from the [complete guide index](docs/guides/README.md) for suggested reading paths.
 
@@ -145,14 +150,17 @@ updated results. A report of the findings can also be downloaded.
 
 ## 4. Review, update and create records
 
-Open a record to update its properties and relationships. Depending on the
-record, you can change its type or space, update system membership, and add or
-remove linked documents.
+Open a record's **Info** view to update its properties and relationships.
+Double-click a value to edit it inline; press **Enter** or move away to apply
+the value, and use **Undo** to restore the original. Depending on the record,
+you can change its type or space, update system membership, position a
+component, and add or remove linked documents.
 
 ### Create a new item
 
-Select **Create**, choose the kind of item, and complete the form. You can add
-`Spaces`, `Types`, `Components`, `Systems` and `Contacts`.
+Select **Create**, choose the kind of item, and complete the new Information
+view. You can add `Spaces`, `Types`, `Components`, `Systems`, `Contacts`, and
+`Documents`.
 
 > [!TIP]
 > When several workbooks are open, choose the correct facility before saving.

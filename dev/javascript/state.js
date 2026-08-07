@@ -5,8 +5,8 @@ let docStore = [];
 let cardCtr  = 0;
 
 // Shared icon and label lookup tables used by grouped result views.
-const _GRP_ICONS  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'};
-const _GRP_LABELS = {type:'Type',system:'System',space:'Space',floor:'Floor',facility:'Facility'};
+const _GRP_ICONS  = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building',component:'bi-tools',contact:'bi-person-fill',document:'bi-file-earmark-text',doccat:'bi-folder2-open'};
+const _GRP_LABELS = {type:'Type',system:'System',space:'Space',floor:'Floor',facility:'Facility',doccat:'Document category'};
 
 const sel = { facility: new Set(), floor: new Set(), space: new Set(), type: new Set(), system: new Set(), doccat: new Set() };
 const selectedCategoryLevels = { facility:new Set(), space:new Set(), type:new Set(), system:new Set(), doccat:new Set() };

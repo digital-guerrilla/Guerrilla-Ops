@@ -23,9 +23,9 @@ On first load, the page opens to the upload screen. The top header appears after
 
 | Action | Session mode | Result when saving |
 | --- | --- | --- |
-| **Select Files** or **Load Files** | Standard | Updated workbooks are downloaded |
-| **Open Folder** or **Load Folder** | Standard | Every supported workbook in the selected folder is loaded; saves are downloaded |
-| **Open Editable XLSX** or **Open Editable** | Editable | Selected `.xlsx` files can be updated directly |
+| **Select Files** | Standard | Opens files from the start screen; updated workbooks are downloaded |
+| **Open Folder** | Standard | Opens all supported files in a folder from the start screen; saves are downloaded |
+| **Open Editable XLSX** | Editable | Opens `.xlsx` files from the start screen with permission to update them directly |
 | Drag files onto the start screen | Standard | Updated workbooks are downloaded |
 
 > [!IMPORTANT]
@@ -63,8 +63,8 @@ The screen is arranged from top to bottom:
 1. **Header**: workbook count, global search, unsaved-change count, Close, and the matching append action.
 2. **Summary**: totals for facilities, types, components, spaces, systems, and documents.
 3. **Filter panels**: Facility, Floor, Space, Type, System, and Document Category.
-4. **Results toolbar**: Asset View, Document View, QA View, Create, active filters, and grouping controls.
-5. **Results panel**: grouped components, documents, or QA findings.
+4. **Results toolbar**: Asset View, Document View, QA View, Create, active filters, highlights, and grouping controls.
+5. **Results panel**: grouped components, documents, or QA findings, with Plan and 3D side panels when spatial data is available.
 6. **Footer**: project attribution, license reference, and **Terms of use** popup link.
 
 ## Privacy and session safety

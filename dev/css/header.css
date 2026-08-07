@@ -21,6 +21,73 @@
   width: 100%;
   height: 100%;
 }
+.go-logo.go-logo-entrance {
+  opacity: 0;
+  transform: translateY(-160%);
+  will-change: transform, opacity;
+  animation: logo-fall-in 1600ms linear forwards;
+}
+.go-logo.go-logo-entrance svg {
+  animation: logo-color-cycle 1600ms steps(1, end) forwards;
+}
+@keyframes logo-fall-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-160%);
+    animation-timing-function: cubic-bezier(.55, 0, 1, .45);
+  }
+  42% {
+    opacity: 1;
+    transform: translateY(var(--logo-drop-distance, 220px));
+    animation-timing-function: cubic-bezier(0, .55, .45, 1);
+  }
+  68% {
+    transform: translateY(-40px);
+    animation-timing-function: cubic-bezier(.55, 0, 1, .45);
+  }
+  80% {
+    transform: translateY(0px);
+    animation-timing-function: cubic-bezier(0, .55, .45, 1);
+  }
+  87% {
+    transform: translateY(-16px);
+    animation-timing-function: cubic-bezier(.55, 0, 1, .45);
+  }
+  94% {
+    transform: translateY(0px);
+    animation-timing-function: cubic-bezier(0, .55, .45, 1);
+  }
+  97% {
+    transform: translateY(-5px);
+    animation-timing-function: cubic-bezier(.55, 0, 1, .45);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes logo-color-cycle {
+  0% {
+    --hex-1: var(--brand-accent); --hex-2: var(--brand-dark); --hex-3: var(--brand-surface);
+    --hex-4: var(--brand-warn); --hex-5: var(--brand-danger); --hex-6: var(--cat-blue); --hex-7: var(--cat-green);
+  }
+  42% {
+    --hex-1: var(--brand-dark); --hex-2: var(--brand-surface); --hex-3: var(--brand-warn);
+    --hex-4: var(--brand-danger); --hex-5: var(--cat-blue); --hex-6: var(--cat-green); --hex-7: var(--brand-accent);
+  }
+  80% {
+    --hex-1: var(--brand-warn); --hex-2: var(--brand-danger); --hex-3: var(--cat-blue);
+    --hex-4: var(--cat-green); --hex-5: var(--brand-accent); --hex-6: var(--brand-dark); --hex-7: var(--brand-surface);
+  }
+  94% {
+    --hex-1: var(--brand-danger); --hex-2: var(--cat-blue); --hex-3: var(--cat-green);
+    --hex-4: var(--brand-accent); --hex-5: var(--brand-dark); --hex-6: var(--brand-surface); --hex-7: var(--brand-warn);
+  }
+  100% {
+    --hex-1: var(--cat-blue); --hex-2: var(--cat-green); --hex-3: var(--brand-accent);
+    --hex-4: var(--brand-dark); --hex-5: var(--brand-surface); --hex-6: var(--brand-warn); --hex-7: var(--brand-danger);
+  }
+}
 #hdr .title { font-size: 1.05rem; font-weight: 600; letter-spacing: .02em; flex: 1; }
 #hdr .file-lbl {
   font-size: .78rem; opacity: .6; max-width: 280px;

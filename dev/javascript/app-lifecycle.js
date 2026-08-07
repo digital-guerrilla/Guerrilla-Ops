@@ -236,6 +236,9 @@ function showApp(filename) {
   document.getElementById('close-btn').classList.remove('d-none');
   _updateLoaderControls();
 
+  if (typeof _viewer3dRebuildRoomGeometryCache === 'function') {
+    _viewer3dRebuildRoomGeometryCache();
+  }
   applyFilters();
 }
 

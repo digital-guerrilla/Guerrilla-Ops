@@ -1,5 +1,5 @@
 // ── Change tracking and review ────────────────────────────────
-function _logChange(entityType, entityName, facility, originalName = entityName) {
+function _resolveChangeFacilities(entityType, entityName, facility) {
   let facNames = facility ? [facility] : [];
   if (!facNames.length && entityType === 'component') {
     const o = db.components.find(c => f(c,'Name') === entityName);
@@ -18,6 +18,23 @@ function _logChange(entityType, entityName, facility, originalName = entityName)
     facNames = [entityName];
   }
   if (!facNames.length) facNames = db.facilities.map(x=>x._facility).filter(Boolean);
+  return facNames;
+}
+
+function _clearChangeEntries(entityType, entityName, facility, originalName = entityName) {
+  const facNames = _resolveChangeFacilities(entityType, entityName, facility);
+  const facKey = [...facNames].sort().join();
+  const rootKey = String(originalName || entityName || '').toLowerCase();
+  _changeLog = _changeLog.filter(entry => !(
+    entry.entityType === entityType &&
+    [...entry.facNames].sort().join() === facKey &&
+    (entry.entityName.toLowerCase() === rootKey || entry.originalName.toLowerCase() === rootKey)
+  ));
+  _updateChangesBtn();
+}
+
+function _logChange(entityType, entityName, facility, originalName = entityName) {
+  let facNames = _resolveChangeFacilities(entityType, entityName, facility);
   const facKey = [...facNames].sort().join();
   const previous = _changeLog.find(entry =>
     entry.entityType === entityType &&

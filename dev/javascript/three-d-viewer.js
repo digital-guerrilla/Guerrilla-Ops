@@ -14,6 +14,15 @@ let _viewer3dHasAutoFit = false;
 let _viewer3dHoverTargets = [];
 let _viewer3dTooltipText = '';
 let _viewer3dTooltipEl = null;
+let _viewer3dFloorKey = '';
+const _viewer3dFloorImageCache = new Map();
+const _viewer3dRoomPolygonCache = new Map();
+const _viewer3dRoomGeometryCache = new Map();
+let _viewer3dRoomGeometryCacheReady = false;
+let _viewer3dFloorMeshDivisions = 1;
+let _viewer3dCoordIndexRows = null;
+let _viewer3dCoordIndexLength = -1;
+let _viewer3dCoordIndexCache = null;
 
 function _viewer3dClamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -39,6 +48,9 @@ function _viewer3dElements() {
     edgeToggle: document.getElementById('viewer3d-edge-toggle'),
     canvas: document.getElementById('viewer-3d-canvas'),
     empty: document.getElementById('viewer-3d-empty'),
+    floorControl: document.getElementById('viewer3d-floor-control'),
+    floorSelect: document.getElementById('viewer3d-floor-select'),
+    resetView: document.getElementById('viewer3d-reset-view'),
   };
 }
 
@@ -109,8 +121,12 @@ function _viewer3dCoordKeyParts(row) {
 }
 
 function _viewer3dCoordIndex() {
+  const rows = db.coordinates || [];
+  if (_viewer3dCoordIndexCache && rows === _viewer3dCoordIndexRows && rows.length === _viewer3dCoordIndexLength) {
+    return _viewer3dCoordIndexCache;
+  }
   const bySheet = Object.create(null);
-  (db.coordinates || []).forEach(row => {
+  rows.forEach(row => {
     const sheet = _cobieField(row, 'sheetName').toLowerCase();
     const parts = _viewer3dCoordKeyParts(row);
     const facility = String(row._facility || '').toLowerCase();
@@ -129,7 +145,16 @@ function _viewer3dCoordIndex() {
       entry.corners.push(row);
     }
   });
+  _viewer3dCoordIndexRows = rows;
+  _viewer3dCoordIndexLength = rows.length;
+  _viewer3dCoordIndexCache = bySheet;
   return bySheet;
+}
+
+function _viewer3dInvalidateCoordIndex() {
+  _viewer3dCoordIndexRows = null;
+  _viewer3dCoordIndexLength = -1;
+  _viewer3dCoordIndexCache = null;
 }
 
 function _viewer3dCoordFor(index, sheetName, facility, rowName) {
@@ -205,6 +230,21 @@ function _viewer3dMedian(values) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+function _viewer3dModalAverage(values) {
+  const groups = new Map();
+  values.filter(Number.isFinite).forEach(value => {
+    const key = Math.round(value);
+    const group = groups.get(key) || [];
+    group.push(value);
+    groups.set(key, group);
+  });
+  let mode = [];
+  groups.forEach(group => {
+    if (group.length > mode.length) mode = group;
+  });
+  return mode.length ? mode.reduce((sum, value) => sum + value, 0) / mode.length : null;
+}
+
 function _viewer3dCullOutliers(entries) {
   if (entries.length < 5) return entries;
   const metrics = entries.map(entry => ({
@@ -276,9 +316,126 @@ function _viewer3dVisibleSpaces(visibleFloors) {
   });
 }
 
+function _viewer3dFloorPlans(visibleFloors, coordIndex) {
+  const svgByKey = typeof _collectFloorSvgByKey === 'function' ? _collectFloorSvgByKey() : {};
+  return visibleFloors.map(floorRow => {
+    const name = f(floorRow, 'Name');
+    const key = _rowKey(floorRow, name);
+    const spaces = db.spaces
+      .filter(space =>
+        (space._facility || '') === (floorRow._facility || '') &&
+        _cobieField(space, 'floorName').toLowerCase() === name.toLowerCase()
+      )
+      .map(space => _viewer3dBounds(
+        _viewer3dCoordFor(coordIndex, 'space', space._facility, f(space, 'Name')),
+        2400
+      ))
+      .filter(bounds => bounds?.hasCorners);
+    if (!spaces.length) return { key, name, facility:floorRow._facility || '', svgRaw:svgByKey[key] || '', bounds:null };
+
+    const minX = Math.min(...spaces.map(bounds => bounds.minX));
+    const maxX = Math.max(...spaces.map(bounds => bounds.maxX));
+    const minZ = Math.min(...spaces.map(bounds => bounds.minZ));
+    const maxZ = Math.max(...spaces.map(bounds => bounds.maxZ));
+    return {
+      key,
+      name,
+      facility:floorRow._facility || '',
+      svgRaw:svgByKey[key] || '',
+      alignment:typeof _floorAlignmentFromRaw === 'function'
+        ? _floorAlignmentFromRaw(_floorAlignmentAttrValueForRow(floorRow))
+        : null,
+      bounds:{
+        minX, maxX, minZ, maxZ,
+        sizeX:Math.max(1, maxX - minX),
+        sizeZ:Math.max(1, maxZ - minZ),
+        y:_viewer3dModalAverage(spaces.map(bounds => bounds.minY)),
+      },
+    };
+  });
+}
+
+function _viewer3dRebuildRoomGeometryCache(floorKey = '') {
+  const coordIndex = _viewer3dCoordIndex();
+  const allFloorPlans = _viewer3dFloorPlans(db.floors, coordIndex);
+  const floorPlans = floorKey
+    ? allFloorPlans.filter(plan => plan.key === floorKey)
+    : allFloorPlans;
+  if (!floorKey) {
+    _viewer3dRoomGeometryCache.clear();
+    _viewer3dRoomPolygonCache.clear();
+  }
+  else {
+    [..._viewer3dRoomGeometryCache].forEach(([key, room]) => {
+      if (room.floorKey === floorKey) _viewer3dRoomGeometryCache.delete(key);
+    });
+    [..._viewer3dRoomPolygonCache.keys()].forEach(key => {
+      if (key.startsWith(floorKey + '::')) _viewer3dRoomPolygonCache.delete(key);
+    });
+  }
+
+  floorPlans.forEach(floorPlan => {
+    if (!floorPlan.bounds) return;
+    const floorSpaces = db.spaces.map(row => ({
+      row,
+      floorKey:_scopeKey(row._facility, _cobieField(row, 'floorName')),
+    })).filter(entry => entry.floorKey === floorPlan.key);
+    const boundsBySpace = new Map(floorSpaces.map(entry => [
+      entry.row,
+      _viewer3dBounds(_viewer3dCoordFor(coordIndex, 'space', entry.row._facility, f(entry.row, 'Name')), 2400),
+    ]));
+    const defaultHeight = _viewer3dMedian([...boundsBySpace.values()]
+      .filter(Boolean)
+      .map(bounds => bounds.sizeY)) || 2400;
+    const nextFloor = allFloorPlans
+      .filter(plan => plan.facility === floorPlan.facility && plan.bounds?.y > floorPlan.bounds.y)
+      .sort((a, b) => a.bounds.y - b.bounds.y)[0];
+    const storeyHeight = nextFloor ? nextFloor.bounds.y - floorPlan.bounds.y : defaultHeight;
+    const polygons = floorPlan.svgRaw ? _viewer3dSvgRoomPolygons(floorPlan) : new Map();
+
+    floorSpaces.forEach(entry => {
+      const name = f(entry.row, 'Name').toLowerCase();
+      const number = _viewer3dSpaceRoomNumber(entry.row).toLowerCase();
+      const identifiers = [name, number].filter(Boolean);
+      const polygon = identifiers.map(identifier => polygons.get(identifier)).find(Boolean) || null;
+      const coordinateBounds = boundsBySpace.get(entry.row);
+      let bounds = coordinateBounds;
+      if (polygon) {
+        const xs = polygon.map(point => point.x);
+        const zs = polygon.map(point => point.z);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+        const minY = floorPlan.bounds.y;
+        const sizeY = Math.min(coordinateBounds?.sizeY || defaultHeight, storeyHeight);
+        bounds = {
+          minX, maxX, minY, maxY:minY + sizeY, minZ, maxZ,
+          centerX:(minX + maxX) / 2, centerY:minY + sizeY / 2, centerZ:(minZ + maxZ) / 2,
+          sizeX:Math.max(1, maxX - minX), sizeY, sizeZ:Math.max(1, maxZ - minZ),
+        };
+      }
+      if (!bounds) return;
+      _viewer3dRoomGeometryCache.set(_scopeKey(entry.row._facility, f(entry.row, 'Name')), {
+        row:entry.row,
+        floorKey:entry.floorKey,
+        source:polygon ? 'svg' : 'coordinate',
+        polygon,
+        bounds,
+        identifiers,
+      });
+    });
+  });
+  _viewer3dRoomGeometryCacheReady = true;
+}
+
+function _viewer3dEnsureRoomGeometryCache() {
+  if (!_viewer3dRoomGeometryCacheReady) _viewer3dRebuildRoomGeometryCache();
+  return _viewer3dRoomGeometryCache;
+}
+
 function _viewer3dSceneData(filteredComps, counts) {
   const coordIndex = _viewer3dCoordIndex();
   if (!Object.keys(coordIndex).length) return null;
+  const roomGeometry = _viewer3dEnsureRoomGeometryCache();
 
   const highlightCtx = typeof getGroupHighlightContext === 'function'
     ? getGroupHighlightContext()
@@ -296,12 +453,8 @@ function _viewer3dSceneData(filteredComps, counts) {
   if (!visibleFloors.length) return null;
 
   const spaces = _viewer3dVisibleSpaces(visibleFloors)
-    .map(space => ({
-      row: space,
-      coord: _viewer3dCoordFor(coordIndex, 'space', space._facility, f(space, 'Name')),
-    }))
-    .map(entry => ({ ...entry, bounds:_viewer3dBounds(entry.coord, 2400) }))
-    .filter(entry => entry.bounds);
+    .map(space => roomGeometry.get(_scopeKey(space._facility, f(space, 'Name'))))
+    .filter(Boolean);
 
   const showComponents = sel.type.size > 0 || sel.system.size > 0 || hasComponentHighlight;
   const componentRows = [];
@@ -327,7 +480,11 @@ function _viewer3dSceneData(filteredComps, counts) {
     .map(entry => ({ ...entry, bounds:_viewer3dBounds(entry.coord, 700) }))
     .filter(entry => entry.bounds);
 
-  const culledSpaces = _viewer3dCullOutliers(spaces);
+  const svgSpaces = spaces.filter(entry => entry.source === 'svg');
+  const culledSpaces = [
+    ...svgSpaces,
+    ..._viewer3dCullOutliers(spaces.filter(entry => entry.source !== 'svg')),
+  ];
   const culledComponents = _viewer3dCullOutliers(components);
 
   const spacePointsByFloor = Object.create(null);
@@ -347,9 +504,14 @@ function _viewer3dSceneData(filteredComps, counts) {
 
   culledSpaces.forEach(entry => {
     const spaceName = f(entry.row, 'Name').toLowerCase();
+    const roomNumber = _viewer3dSpaceRoomNumber(entry.row).toLowerCase();
     const isSelectedSpace = (sel.space.size > 0 && sel.space.has(spaceName)) || highlightedSpaces.has(spaceName);
+    const floorKey = _scopeKey(entry.row._facility, _cobieField(entry.row, 'floorName'));
     objects.push({
       type:'cube',
+      kind:'space',
+      floorKey,
+      highlighted:isSelectedSpace,
       x:entry.bounds.centerX,
       y:entry.bounds.centerY,
       z:entry.bounds.centerZ,
@@ -363,6 +525,8 @@ function _viewer3dSceneData(filteredComps, counts) {
       fillAlpha: isSelectedSpace ? 0.24 : 0.16,
       tooltip: _viewer3dSpaceTooltip(entry.row),
       spaceKey: spaceName,
+      roomIdentifiers:entry.identifiers,
+      polygon:entry.polygon,
     });
     const minPoint = { x:entry.bounds.minX, y:entry.bounds.minY, z:entry.bounds.minZ };
     const maxPoint = { x:entry.bounds.maxX, y:entry.bounds.maxY, z:entry.bounds.maxZ };
@@ -413,6 +577,7 @@ function _viewer3dSceneData(filteredComps, counts) {
     points:scenePoints,
     focusPoints:focusPoints.length ? focusPoints : scenePoints,
     showComponents,
+    floorPlans:_viewer3dFloorPlans(visibleFloors, coordIndex),
   };
 }
 
@@ -438,13 +603,9 @@ function _viewer3dProject(point, scale, perspective, width, height, fovScale = 1
 
 function _viewer3dProjectAt(point, scale, perspective, width, height, fovScale = 1, rotX = _viewer3dRotX, rotY = _viewer3dRotY, panX = _viewer3dPanX, panY = _viewer3dPanY) {
   const rotated = _viewer3dRotateAt(point, rotX, rotY);
-  const minDenominator = Math.max(1, perspective * 0.08);
-  const rawDenominator = perspective + rotated.z + perspective * 0.15;
-  const safeDenominator = Math.max(minDenominator, rawDenominator);
-  const factor = _viewer3dClamp((perspective / safeDenominator) * fovScale, 0, 7.5);
   return {
-    x: (width / 2) + panX + (rotated.x * scale * factor),
-    y: (height / 2) + panY - (rotated.y * scale * factor),
+    x: (width / 2) + panX + (rotated.x * scale),
+    y: (height / 2) + panY - (rotated.y * scale),
     depth: rotated.z,
   };
 }
@@ -471,6 +632,9 @@ function _viewer3dRenderSceneToCanvas(canvas, scene, options = {}) {
   const panY = Number.isFinite(options.panY) ? options.panY : _viewer3dPanY;
   const zoom = Number.isFinite(options.zoom) ? options.zoom : _viewer3dZoom;
   const background = options.background || theme.background;
+  const floorPlans = scene.floorPlans || [];
+  const floorPlan = floorPlans.find(entry => entry.key === _viewer3dFloorKey);
+  const floorPlanSelected = !!(floorPlan?.bounds && floorPlan.svgRaw);
   const focusSource = scene.focusPoints?.length ? scene.focusPoints : scene.points;
   const xs = focusSource.map(point => point.x);
   const ys = focusSource.map(point => point.y);
@@ -497,33 +661,40 @@ function _viewer3dRenderSceneToCanvas(canvas, scene, options = {}) {
   const fovT = Math.pow(fovRamp, 1.35);
   const fovDegrees = fovStartDeg + ((fovEndDeg - fovStartDeg) * fovT);
   const fovScale = Math.tan((fovStartDeg * Math.PI) / 360) / Math.tan((fovDegrees * Math.PI) / 360);
-
   const renderBatches = [];
   const hoverTargets = [];
   (scene.objects || []).forEach(object => {
     const localX = object.x - center.x;
     const localY = object.y - center.y;
     const localZ = object.z - center.z;
-    const edges = object.type === 'plane'
-      ? _viewer3dPlaneEdges(localX, localY, localZ, object.sizeX, object.sizeY)
-      : _viewer3dCubeEdges(localX, localY, localZ, object.sizeX, object.sizeY, object.sizeZ);
+    const roomPolygon = object.kind === 'space' ? object.polygon : null;
+    const localPolygon = roomPolygon?.map(point => ({ x:point.x - center.x, z:point.z - center.z })) || null;
+    const edges = localPolygon
+      ? _viewer3dPrismEdges(localPolygon, localY - object.sizeY / 2, localY + object.sizeY / 2)
+      : (object.type === 'plane'
+        ? _viewer3dPlaneEdges(localX, localY, localZ, object.sizeX, object.sizeY)
+        : _viewer3dCubeEdges(localX, localY, localZ, object.sizeX, object.sizeY, object.sizeZ));
     const depth = _viewer3dRotateAt({ x:localX, y:localY, z:localZ }, rotX, rotY).z;
     const batch = {
       edges,
       color:object.color,
       depth,
       lineWidth:object.lineWidth || 1,
-      alphaMul:object.alphaMul || 1,
+      alphaMul:(object.alphaMul || 1) * _viewer3dRoomOpacity(object, floorPlanSelected ? floorPlan.key : ''),
       fills:[],
       tooltip:object.tooltip || '',
       spaceKey:object.spaceKey || '',
+      interactive:_viewer3dRoomInteractive(object, floorPlanSelected ? floorPlan.key : ''),
     };
 
     if (object.type === 'cube' && object.fillColor && object.fillAlpha > 0) {
-      const faces = _viewer3dCubeFaces(localX, localY, localZ, object.sizeX, object.sizeY, object.sizeZ);
+      const faces = localPolygon
+        ? _viewer3dPrismFaces(localPolygon, localY - object.sizeY / 2, localY + object.sizeY / 2)
+        : _viewer3dCubeFaces(localX, localY, localZ, object.sizeX, object.sizeY, object.sizeZ);
       faces.forEach(face => {
         const depthAverage = face.reduce((sum, point) => sum + _viewer3dRotateAt(point, rotX, rotY).z, 0) / face.length;
-        batch.fills.push({ points:face, color:object.fillColor, alpha:object.fillAlpha, depth:depthAverage });
+        const dimMultiplier = _viewer3dRoomOpacity(object, floorPlanSelected ? floorPlan.key : '');
+        batch.fills.push({ points:face, color:object.fillColor, alpha:object.fillAlpha * dimMultiplier, depth:depthAverage });
       });
       batch.fills.sort((a, b) => b.depth - a.depth);
     }
@@ -537,6 +708,10 @@ function _viewer3dRenderSceneToCanvas(canvas, scene, options = {}) {
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, width, height);
+
+  if (floorPlan?.bounds && floorPlan.svgRaw) {
+    _viewer3dDrawFloorPlan(ctx, floorPlan, center, scale, perspective, width, height, fovScale, rotX, rotY, panX, panY);
+  }
 
   renderBatches.forEach(batch => {
     batch.fills.forEach(fill => {
@@ -564,7 +739,7 @@ function _viewer3dRenderSceneToCanvas(canvas, scene, options = {}) {
     });
     ctx.stroke();
 
-    if (batch.tooltip) {
+    if (batch.interactive && batch.tooltip) {
       let bestFace = null;
       batch.fills.forEach(fill => {
         if (!bestFace || fill.depth < bestFace.depth) bestFace = fill;
@@ -635,6 +810,334 @@ function _viewer3dPlaneEdges(cx, cy, cz, sizeX, sizeY) {
     { x:cx+hx, y:cy+hy, z:cz }, { x:cx-hx, y:cy+hy, z:cz },
   ];
   return [[0,1],[1,2],[2,3],[3,0]].map(([a,b]) => [corners[a], corners[b]]);
+}
+
+function _viewer3dPrismEdges(polygon, minY, maxY) {
+  const edges = [];
+  polygon.forEach((point, index) => {
+    const next = polygon[(index + 1) % polygon.length];
+    edges.push([{ x:point.x, y:minY, z:point.z }, { x:next.x, y:minY, z:next.z }]);
+    edges.push([{ x:point.x, y:maxY, z:point.z }, { x:next.x, y:maxY, z:next.z }]);
+    if (_viewer3dVertexTurnAngle(polygon, index) >= 45) {
+      edges.push([{ x:point.x, y:minY, z:point.z }, { x:point.x, y:maxY, z:point.z }]);
+    }
+  });
+  return edges;
+}
+
+function _viewer3dVertexTurnAngle(polygon, index) {
+  if (!polygon?.length || polygon.length < 3) return 0;
+  const point = polygon[index];
+  const previous = polygon[(index - 1 + polygon.length) % polygon.length];
+  const next = polygon[(index + 1) % polygon.length];
+  const incomingX = previous.x - point.x;
+  const incomingZ = previous.z - point.z;
+  const outgoingX = next.x - point.x;
+  const outgoingZ = next.z - point.z;
+  const denominator = Math.hypot(incomingX, incomingZ) * Math.hypot(outgoingX, outgoingZ);
+  if (!denominator) return 0;
+  const cosine = _viewer3dClamp(
+    ((incomingX * outgoingX) + (incomingZ * outgoingZ)) / denominator,
+    -1,
+    1
+  );
+  const interiorAngle = Math.acos(cosine) * 180 / Math.PI;
+  return 180 - interiorAngle;
+}
+
+function _viewer3dPrismFaces(polygon, minY, maxY) {
+  const bottom = polygon.map(point => ({ x:point.x, y:minY, z:point.z }));
+  const top = polygon.map(point => ({ x:point.x, y:maxY, z:point.z }));
+  const sides = polygon.map((point, index) => {
+    const next = polygon[(index + 1) % polygon.length];
+    return [
+      { x:point.x, y:minY, z:point.z },
+      { x:next.x, y:minY, z:next.z },
+      { x:next.x, y:maxY, z:next.z },
+      { x:point.x, y:maxY, z:point.z },
+    ];
+  });
+  return [bottom, top, ...sides];
+}
+
+function _viewer3dRoomOpacity(object, selectedFloorKey) {
+  if (object?.kind !== 'space' || !selectedFloorKey) return 1;
+  if (object.floorKey !== selectedFloorKey) return 0.04;
+  return object.highlighted ? 0.9 : 0.35;
+}
+
+function _viewer3dRoomInteractive(object, selectedFloorKey) {
+  if (object?.kind !== 'space') return false;
+  return !selectedFloorKey || object.floorKey === selectedFloorKey;
+}
+
+function _viewer3dClosedSvgPoints(node) {
+  if (!node) return null;
+  const tag = String(node.tagName || '').toLowerCase();
+  if (tag === 'rect') {
+    const x = Number(node.getAttribute('x')) || 0;
+    const y = Number(node.getAttribute('y')) || 0;
+    const width = Number(node.getAttribute('width'));
+    const height = Number(node.getAttribute('height'));
+    if (!(width > 0 && height > 0)) return null;
+    return [{ x, y }, { x:x + width, y }, { x:x + width, y:y + height }, { x, y:y + height }];
+  }
+  if (tag === 'polygon') {
+    const points = String(node.getAttribute('points') || '').trim().split(/[\s,]+/).map(Number);
+    if (points.length < 6 || points.length % 2 || points.some(value => !Number.isFinite(value))) return null;
+    return Array.from({ length:points.length / 2 }, (_, index) => ({ x:points[index * 2], y:points[index * 2 + 1] }));
+  }
+  if (tag !== 'path' || typeof node.getTotalLength !== 'function') return null;
+  const data = String(node.getAttribute('d') || '').trim();
+  if (!/[zZ]\s*$/.test(data) || (data.match(/[mM]/g) || []).length !== 1) return null;
+  let length;
+  try { length = node.getTotalLength(); } catch (_) { return null; }
+  if (!Number.isFinite(length) || length <= 0) return null;
+  const count = _viewer3dClamp(Math.ceil(length / 12), 12, 96);
+  return Array.from({ length:count }, (_, index) => node.getPointAtLength(length * index / count));
+}
+
+function _viewer3dSvgRootPoint(point, nodeMatrix, rootMatrix) {
+  if (!point || !nodeMatrix) return null;
+  const viewportX = (nodeMatrix.a * point.x) + (nodeMatrix.c * point.y) + nodeMatrix.e;
+  const viewportY = (nodeMatrix.b * point.x) + (nodeMatrix.d * point.y) + nodeMatrix.f;
+  if (!rootMatrix) return { x:viewportX, y:viewportY };
+  const determinant = (rootMatrix.a * rootMatrix.d) - (rootMatrix.b * rootMatrix.c);
+  if (Math.abs(determinant) <= 1e-12) return null;
+  const offsetX = viewportX - rootMatrix.e;
+  const offsetY = viewportY - rootMatrix.f;
+  return {
+    x:((rootMatrix.d * offsetX) - (rootMatrix.c * offsetY)) / determinant,
+    y:((-rootMatrix.b * offsetX) + (rootMatrix.a * offsetY)) / determinant,
+  };
+}
+
+function _viewer3dSvgRoomPolygons(floorPlan) {
+  const cacheKey = floorPlan.key + '::' + floorPlan.svgRaw + '::' + JSON.stringify(floorPlan.alignment || {});
+  if (_viewer3dRoomPolygonCache.has(cacheKey)) return _viewer3dRoomPolygonCache.get(cacheKey);
+  const polygons = new Map();
+  let svgRoot = _activeFloorKey === floorPlan.key ? _activeInlineSvg : null;
+  let temporaryHost = null;
+    if (!svgRoot && typeof DOMParser !== 'undefined' && typeof document !== 'undefined' &&
+      typeof document.createElement === 'function' &&
+      typeof _extractInlineSvgMarkup === 'function' && typeof _sanitizeInlineSvg === 'function') {
+    const markup = _extractInlineSvgMarkup(floorPlan.svgRaw);
+    svgRoot = markup ? _sanitizeInlineSvg(markup) : null;
+    if (svgRoot) {
+      temporaryHost = document.createElement('div');
+      temporaryHost.style.cssText = 'position:fixed;left:-100000px;top:0;width:1000px;height:1000px;visibility:hidden;pointer-events:none';
+      temporaryHost.appendChild(svgRoot);
+      document.body.appendChild(temporaryHost);
+    }
+  }
+  if (!svgRoot) return polygons;
+  const drawing = _svgDrawingBounds(svgRoot);
+  if (!drawing?.width || !drawing?.height) {
+    temporaryHost?.remove();
+    return polygons;
+  }
+
+  const spacesByIdentifier = new Map();
+  db.spaces.forEach(space => {
+    if ((space._facility || '') !== floorPlan.facility) return;
+    if (_cobieField(space, 'floorName').toLowerCase() !== floorPlan.name.toLowerCase()) return;
+    const name = f(space, 'Name').trim().toLowerCase();
+    const number = _viewer3dSpaceRoomNumber(space).trim().toLowerCase();
+    [name, number].filter(Boolean).forEach(identifier => spacesByIdentifier.set(identifier, { name, number }));
+  });
+
+  const rootMatrix = typeof svgRoot.getCTM === 'function' ? svgRoot.getCTM() : null;
+  svgRoot.querySelectorAll('[id]').forEach(node => {
+    const identifier = String(node.id || '').trim().toLowerCase();
+    const room = spacesByIdentifier.get(identifier);
+    if (!room) return;
+    const points = _viewer3dClosedSvgPoints(node);
+    const matrix = typeof node.getCTM === 'function' ? node.getCTM() : null;
+    if (!points?.length || !matrix) return;
+    const worldPoints = points.map(point => {
+      const rootPoint = _viewer3dSvgRootPoint(point, matrix, rootMatrix);
+      if (!rootPoint) return null;
+      const svgU = (rootPoint.x - drawing.x) / drawing.width;
+      const svgV = (rootPoint.y - drawing.y) / drawing.height;
+      const floorUv = _svgUvToFloorUv(svgU, svgV, floorPlan.alignment);
+      return _roomUvToWorldXZ(floorPlan.bounds, floorUv.u, floorUv.v, false);
+    }).filter(point => point && Number.isFinite(point.x) && Number.isFinite(point.z));
+    if (worldPoints.length < 3) return;
+    const area = Math.abs(worldPoints.reduce((sum, point, index) => {
+      const next = worldPoints[(index + 1) % worldPoints.length];
+      return sum + (point.x * next.z) - (next.x * point.z);
+    }, 0) / 2);
+    if (area < 1) return;
+    [room.name, room.number].filter(Boolean).forEach(key => polygons.set(key, worldPoints));
+  });
+  temporaryHost?.remove();
+  _viewer3dRoomPolygonCache.set(cacheKey, polygons);
+  return polygons;
+}
+
+function _viewer3dFloorImage(floorPlan) {
+  const cacheKey = floorPlan.key + '::' + floorPlan.svgRaw;
+  const cached = _viewer3dFloorImageCache.get(cacheKey);
+  if (cached) return cached;
+
+  const entry = { image:null, loaded:false };
+  const markup = typeof _extractInlineSvgMarkup === 'function'
+    ? _extractInlineSvgMarkup(floorPlan.svgRaw)
+    : '';
+  const cleanSvg = markup && typeof _sanitizeInlineSvg === 'function' ? _sanitizeInlineSvg(markup) : null;
+  if (!cleanSvg) {
+    _viewer3dFloorImageCache.set(cacheKey, entry);
+    return entry;
+  }
+
+  const viewport = typeof _svgCanvasSizeForFlip === 'function' ? _svgCanvasSizeForFlip(cleanSvg) : null;
+  if (viewport) {
+    const rasterScale = Math.min(1, 1600 / Math.max(viewport.width, viewport.height));
+    cleanSvg.setAttribute('width', String(Math.max(1, Math.round(viewport.width * rasterScale))));
+    cleanSvg.setAttribute('height', String(Math.max(1, Math.round(viewport.height * rasterScale))));
+  }
+
+  const image = new Image();
+  image.onload = () => {
+    entry.loaded = true;
+    _renderThreeDViewer();
+  };
+  image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(cleanSvg));
+  entry.image = image;
+  _viewer3dFloorImageCache.set(cacheKey, entry);
+  return entry;
+}
+
+function _viewer3dDrawFloorTriangle(ctx, image, source, destination, width, height) {
+  const xs = destination.map(point => point.x);
+  const ys = destination.map(point => point.y);
+  if (Math.max(...xs) < -2 || Math.min(...xs) > width + 2 || Math.max(...ys) < -2 || Math.min(...ys) > height + 2) return;
+
+  const sourceMinX = Math.min(...source.map(point => point.x));
+  const sourceMinY = Math.min(...source.map(point => point.y));
+  const sourceMaxX = Math.max(...source.map(point => point.x));
+  const sourceMaxY = Math.max(...source.map(point => point.y));
+  const sourceWidth = sourceMaxX - sourceMinX;
+  const sourceHeight = sourceMaxY - sourceMinY;
+  if (sourceWidth <= 0 || sourceHeight <= 0) return;
+  const [sourceA, sourceB, sourceC] = source.map(point => ({
+    x:point.x - sourceMinX,
+    y:point.y - sourceMinY,
+  }));
+  const [destA, destB, destC] = destination;
+  const determinant = sourceA.x * (sourceB.y - sourceC.y) +
+    sourceB.x * (sourceC.y - sourceA.y) +
+    sourceC.x * (sourceA.y - sourceB.y);
+  if (Math.abs(determinant) < 1e-8) return;
+
+  const matrixA = (destA.x * (sourceB.y - sourceC.y) + destB.x * (sourceC.y - sourceA.y) + destC.x * (sourceA.y - sourceB.y)) / determinant;
+  const matrixB = (destA.y * (sourceB.y - sourceC.y) + destB.y * (sourceC.y - sourceA.y) + destC.y * (sourceA.y - sourceB.y)) / determinant;
+  const matrixC = (destA.x * (sourceC.x - sourceB.x) + destB.x * (sourceA.x - sourceC.x) + destC.x * (sourceB.x - sourceA.x)) / determinant;
+  const matrixD = (destA.y * (sourceC.x - sourceB.x) + destB.y * (sourceA.x - sourceC.x) + destC.y * (sourceB.x - sourceA.x)) / determinant;
+  const matrixE = (destA.x * (sourceB.x * sourceC.y - sourceC.x * sourceB.y) + destB.x * (sourceC.x * sourceA.y - sourceA.x * sourceC.y) + destC.x * (sourceA.x * sourceB.y - sourceB.x * sourceA.y)) / determinant;
+  const matrixF = (destA.y * (sourceB.x * sourceC.y - sourceC.x * sourceB.y) + destB.y * (sourceC.x * sourceA.y - sourceA.x * sourceC.y) + destC.y * (sourceA.x * sourceB.y - sourceB.x * sourceA.y)) / determinant;
+
+  const centerX = (destA.x + destB.x + destC.x) / 3;
+  const centerY = (destA.y + destB.y + destC.y) / 3;
+  const clipPoints = destination.map(point => {
+    const deltaX = point.x - centerX;
+    const deltaY = point.y - centerY;
+    const distance = Math.hypot(deltaX, deltaY) || 1;
+    const expansion = (distance + 0.45) / distance;
+    return { x:centerX + deltaX * expansion, y:centerY + deltaY * expansion };
+  });
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(clipPoints[0].x, clipPoints[0].y);
+  ctx.lineTo(clipPoints[1].x, clipPoints[1].y);
+  ctx.lineTo(clipPoints[2].x, clipPoints[2].y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.transform(matrixA, matrixB, matrixC, matrixD, matrixE, matrixF);
+  ctx.drawImage(image, sourceMinX, sourceMinY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+  ctx.restore();
+}
+
+function _viewer3dDrawFloorPlan(ctx, floorPlan, center, scale, perspective, width, height, fovScale, rotX, rotY, panX, panY, elevation = floorPlan.bounds.y, opacity = 0.68) {
+  const cached = _viewer3dFloorImage(floorPlan);
+  const image = cached.image;
+  if (!cached.loaded || !image?.naturalWidth || !image?.naturalHeight) return;
+
+  const bounds = floorPlan.bounds;
+  const projectUv = (svgU, svgV) => {
+    const floorUv = _svgUvToFloorUv(svgU, svgV, floorPlan.alignment);
+    const world = _roomUvToWorldXZ(bounds, floorUv.u, floorUv.v, false);
+    return _viewer3dProjectAt(
+      { x:world.x - center.x, y:elevation - center.y, z:world.z - center.z },
+      scale, perspective, width, height, fovScale, rotX, rotY, panX, panY
+    );
+  };
+
+  const projectedCorners = {
+    topLeft:projectUv(0, 0),
+    topRight:projectUv(1, 0),
+    bottomLeft:projectUv(0, 1),
+    bottomRight:projectUv(1, 1),
+  };
+  const bilinearPoint = (u, v) => ({
+    x:(projectedCorners.topLeft.x * (1 - u) * (1 - v)) +
+      (projectedCorners.topRight.x * u * (1 - v)) +
+      (projectedCorners.bottomLeft.x * (1 - u) * v) +
+      (projectedCorners.bottomRight.x * u * v),
+    y:(projectedCorners.topLeft.y * (1 - u) * (1 - v)) +
+      (projectedCorners.topRight.y * u * (1 - v)) +
+      (projectedCorners.bottomLeft.y * (1 - u) * v) +
+      (projectedCorners.bottomRight.y * u * v),
+  });
+  const perspectiveError = [
+    [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75],
+  ].reduce((maxError, [u, v]) => {
+    const actual = projectUv(u, v);
+    const affine = bilinearPoint(u, v);
+    return Math.max(maxError, Math.hypot(actual.x - affine.x, actual.y - affine.y));
+  }, 0);
+  const divisions = _viewer3dClamp(Math.ceil(Math.sqrt(perspectiveError / 0.75)), 1, 8);
+  _viewer3dFloorMeshDivisions = divisions;
+  const sourceWidth = image.naturalWidth / divisions;
+  const sourceHeight = image.naturalHeight / divisions;
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  for (let row = 0; row < divisions; row++) {
+    for (let column = 0; column < divisions; column++) {
+      const u0 = column / divisions;
+      const v0 = row / divisions;
+      const u1 = (column + 1) / divisions;
+      const v1 = (row + 1) / divisions;
+      const topLeft = projectUv(u0, v0);
+      const topRight = projectUv(u1, v0);
+      const bottomLeft = projectUv(u0, v1);
+      const bottomRight = projectUv(u1, v1);
+      const sourceX = column * sourceWidth;
+      const sourceY = row * sourceHeight;
+      const sourceTopLeft = { x:sourceX, y:sourceY };
+      const sourceTopRight = { x:sourceX + sourceWidth, y:sourceY };
+      const sourceBottomLeft = { x:sourceX, y:sourceY + sourceHeight };
+      const sourceBottomRight = { x:sourceX + sourceWidth, y:sourceY + sourceHeight };
+      _viewer3dDrawFloorTriangle(
+        ctx,
+        image,
+        [sourceTopLeft, sourceTopRight, sourceBottomRight],
+        [topLeft, topRight, bottomRight],
+        width,
+        height
+      );
+      _viewer3dDrawFloorTriangle(
+        ctx,
+        image,
+        [sourceTopLeft, sourceBottomRight, sourceBottomLeft],
+        [topLeft, bottomRight, bottomLeft],
+        width,
+        height
+      );
+    }
+  }
+  ctx.restore();
 }
 
 function _viewer3dResolveColor(theme, color) {
@@ -912,12 +1415,66 @@ function _bindThreeDCanvas(els) {
   });
 }
 
+function _viewer3dRefreshFloorControl(els) {
+  if (!els?.floorControl || !els.floorSelect) return;
+  const floors = _viewer3dScene?.floorPlans || [];
+  const hasSvg = floors.some(entry => entry.svgRaw && entry.bounds);
+  els.floorControl.classList.toggle('d-none', !hasSvg);
+  if (!hasSvg) {
+    _viewer3dFloorKey = '';
+    els.floorSelect.innerHTML = '<option value="">Floor plan…</option>';
+    return;
+  }
+
+  if (_viewer3dFloorKey && !floors.some(entry => entry.key === _viewer3dFloorKey && entry.svgRaw && entry.bounds)) {
+    _viewer3dFloorKey = '';
+  }
+  els.floorSelect.innerHTML = '<option value="">Floor plan…</option>' + floors.map(entry => {
+    const available = !!(entry.svgRaw && entry.bounds);
+    const facility = db.facilities.length > 1 && entry.facility ? ` - ${entry.facility}` : '';
+    return `<option value="${esc(entry.key)}"${available ? '' : ' disabled'}>${esc(entry.name + facility)}${available ? '' : ' (No SVG)'}</option>`;
+  }).join('');
+  els.floorSelect.value = _viewer3dFloorKey;
+}
+
+function _viewer3dOpenFloorInPlanView(floorKey) {
+  if (!floorKey || typeof refreshFloorSvgPanel !== 'function') return;
+  _expandedFloorKey = floorKey;
+  _floorSvgCollapsed = false;
+  refreshFloorSvgPanel(_lastFilteredComps || [], _lastFloorCounts || {});
+}
+
+function _viewer3dResetView() {
+  _viewer3dRotX = -0.55;
+  _viewer3dRotY = 0.7;
+  _viewer3dPanX = 0;
+  _viewer3dPanY = 0;
+  _viewer3dZoom = 1;
+  _viewer3dTooltipHide();
+  _renderThreeDViewer();
+}
+
+function _bindThreeDFloorControl(els) {
+  if (!els?.floorSelect || els.floorSelect.dataset.bound === '1') return;
+  els.floorSelect.dataset.bound = '1';
+  els.floorSelect.addEventListener('change', () => {
+    _viewer3dFloorKey = els.floorSelect.value;
+    _viewer3dHoverTargets = [];
+    _viewer3dSetCanvasTooltip(els.canvas, '');
+    _viewer3dTooltipHide();
+    _viewer3dOpenFloorInPlanView(_viewer3dFloorKey);
+    _renderThreeDViewer();
+  });
+  els.resetView?.addEventListener('click', _viewer3dResetView);
+}
+
 function initThreeDViewerPanel() {
   const els = _viewer3dElements();
   if (!els.panel || !els.edgeToggle || !els.canvas) return;
   _viewer3dSetWidth(els, _viewer3dDesiredWidth());
   _bindThreeDPanelToggle(els);
   _bindThreeDCanvas(els);
+  _bindThreeDFloorControl(els);
   _viewer3dApplyCollapsedState(els);
 }
 
@@ -954,6 +1511,7 @@ function refreshThreeDViewerPanel(filteredComps, counts) {
     }
     _viewer3dSceneKey = nextKey;
   }
+  _viewer3dRefreshFloorControl(els);
   _viewer3dApplyCollapsedState(els);
   _renderThreeDViewer();
 }
@@ -976,7 +1534,13 @@ function resetThreeDViewerPanel() {
   _viewer3dRotY = 0.7;
   _viewer3dHoverTargets = [];
   _viewer3dTooltipText = '';
+  _viewer3dFloorKey = '';
+  _viewer3dFloorImageCache.clear();
+  _viewer3dRoomPolygonCache.clear();
+  _viewer3dRoomGeometryCache.clear();
+  _viewer3dRoomGeometryCacheReady = false;
   if (els.canvas) els.canvas.title = '';
+  _viewer3dRefreshFloorControl(els);
   _viewer3dTooltipHide();
   _viewer3dSetEmpty(els, '');
 }

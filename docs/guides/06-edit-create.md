@@ -4,18 +4,27 @@
 
 Edits and new records are applied to the in-memory COBie data immediately. They are not written to a workbook until you use an action in **Unsaved Changes**.
 
-![Record editor](../images/04-edit-record.png)
+![Information view with inline editing](../images/04-edit-record.png)
 
 ## Edit an existing record
 
-Open an edit action from a group information window, document card, or QA finding. For components, open **Component info** from the card first, then select the edit action in that popup.
+Select **Info** on a component, document, or group header to open the shared
+Information view. It usually separates the record into cards for properties,
+associations, attributes, and documents.
 
-The editor usually separates:
+- Double-click a value to start editing.
+- Press **Enter** or move away from the field to apply it.
+- Press **Escape** to cancel the active field edit.
+- Use **Undo** on a changed row to restore its original workbook value.
+- Select association checkboxes to apply relationship changes.
+- Use **Clear All** where a many-value association supports it.
 
-- **Properties**: the fields stored on the record.
-- **Associations**: linked Type, Space, Floor, Systems, Components, or Documents.
+Applied changes are recorded under **Unsaved Changes** immediately. Closing an
+existing Information view does not discard changes already applied there.
 
-Select **Save Changes** to apply the form to the dashboard. Select **Cancel** to close it without applying the form.
+QA findings are the exception: their pencil action opens a correction form.
+Select **Save Changes** to apply that form or **Cancel** to close it without
+applying the form.
 
 ## Rename records carefully
 
@@ -34,7 +43,7 @@ Review QA View after a significant rename.
 
 ## Change associations
 
-Depending on the record type, the editor can provide:
+Depending on the record type, the Information view can provide:
 
 - Type autocomplete for a Component.
 - Space autocomplete for a Component.
@@ -43,25 +52,30 @@ Depending on the record type, the editor can provide:
 - Floor selection for a Space.
 - Linked Document rows.
 
-Use the filter field above a long checkbox list to find the required System or Component.
+Use the search field above a long option list to find the required System or
+Component. Classification groups can be expanded or collapsed, and long lists
+load additional choices as needed.
 
 If a Component is assigned a new Type name that does not exist, Guerrilla Ops prompts the workflow to create that Type after saving the Component.
 
-## Edit linked documents
+## Manage linked documents
 
-A linked document row includes Name, Description, Category, and Link.
+The **Documents** card groups linked records by classification.
 
-- Select **Edit** beside Link to replace the complete Directory value.
-- Select **Paste** to read a path or URL from the clipboard when browser permission allows it.
-- Select **Browse** to choose a file. The browser may expose only its filename.
-- Select the trash action to remove the Document row.
-- Select **Add** to append a new linked Document row.
+- Select a document to open Document Information.
+- Double-click Name, Description, Category, or Link to edit it inline.
+- Use **Open link** or **Copy path** to check the complete Directory value.
+- Use the card's add action to create a linked Document draft.
+- Select **Save Document** to create it or **Cancel** to discard the draft.
 
 The hidden COBie `File` value on an existing row is retained for compatibility; the interface uses `Directory` as the complete link.
 
 ## Create a record
 
-Select **Create**, then choose a record type.
+Select **Create**, then choose Space, Type, Component, System, Contact, or
+Document. A blank Information draft opens with explicit **Save** and **Cancel**
+buttons. Draft edits and associations are not added to the database until the
+Save button is selected.
 
 ### Space
 
@@ -82,6 +96,26 @@ Enter Name, Category, and Description, then select the member Components.
 ### Contact
 
 Enter the unique Name, usually the COBie email identifier, plus person, company, contact, category, location, and organisation details.
+
+### Document
+
+Enter Name, Category, Description, and Link, then review the Facility and other
+available associations. Documents created from an entity's Documents card are
+pre-linked to that entity.
+
+## Position a component
+
+Component Information can expose a location action when the selected Space has
+usable Coordinate bounds and a floor plan is available. Use it to place the
+component on the plan and set its height. Saving the placement updates the
+component Coordinate rows and the 3D preview.
+
+Plan-to-coordinate mapping uses the saved floor alignment. Complete
+[Align Plan and 3D](11-align-plan-3d.md) before positioning components when the
+SVG and coordinate room boxes do not already coincide.
+
+See [Locate components](12-locate-components.md) for the complete placement,
+height, 3D preview, and verification workflow.
 
 ## Choose the Facility
 

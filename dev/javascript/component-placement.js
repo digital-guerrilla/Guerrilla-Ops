@@ -16,28 +16,29 @@ let _componentPlacementSvgBaseWidth = 0;
 let _componentPlacementSvgBaseHeight = 0;
 let _componentPlacementSvgDragging = false;
 let _componentPlacementSuppressClick = false;
-const _componentPlacementAppliedByMode = { create:null, edit:null };
+const _componentPlacementAppliedByMode = { edit:null };
+let _componentPlacementRefreshInfo = false;
 
 function _componentPlacementClone(value) {
   return value ? JSON.parse(JSON.stringify(value)) : null;
 }
 
 function _componentPlacementConsumeApplied(mode) {
-  const key = mode === 'edit' ? 'edit' : 'create';
-  const value = _componentPlacementAppliedByMode[key] || null;
-  _componentPlacementAppliedByMode[key] = null;
+  if (mode !== 'edit') return null;
+  const value = _componentPlacementAppliedByMode.edit || null;
+  _componentPlacementAppliedByMode.edit = null;
   return _componentPlacementClone(value);
 }
 
 function resetComponentPlacementDraft(mode = '') {
   _componentPlacementDraft = null;
   _componentPlacementPreviewSceneCache = null;
-  if (mode === 'create' || mode === 'edit') _componentPlacementAppliedByMode[mode] = null;
+  if (mode === 'edit') _componentPlacementAppliedByMode.edit = null;
 }
 
 function renderComponentSpaceField(mode, currentValue, options = []) {
-  const fieldClass = mode === 'create' ? 'create-field' : 'edit-field';
-  const listId = `${mode === 'create' ? 'cdl' : 'dl'}_component_space`;
+  const fieldClass = 'edit-field';
+  const listId = 'dl_component_space';
   const items = options.slice(0, 400).map(option => typeof option === 'string'
     ? `<option value="${esc(option)}">`
     : `<option value="${esc(option.name)}">${esc(option.desc || '')}</option>`
@@ -70,7 +71,7 @@ function _componentPlacementModalElements() {
 }
 
 function _componentPlacementSourceModalId() {
-  return _componentPlacementMode === 'create' ? 'create-modal' : 'edit-modal';
+  return _componentPlacementMode === 'info' ? 'type-modal' : 'edit-modal';
 }
 
 function _componentPlacementSourceField(selector) {
@@ -79,16 +80,18 @@ function _componentPlacementSourceField(selector) {
 }
 
 function _componentPlacementFacility() {
-  if (_componentPlacementMode === 'edit') return _editState?.facility || '';
-  if (db.facilities.length <= 1) return db.facilities[0]?._facility || '';
-  return document.getElementById('create-fac-sel')?.value || db.facilities[0]?._facility || '';
+  return _componentPlacementMode === 'info'
+    ? String(_projectModalContext?.facility || _projectModalContext?.row?._facility || '')
+    : (_editState?.facility || '');
 }
 
 function _componentPlacementActiveSpace() {
+  if (_componentPlacementMode === 'info') return f(_projectModalContext?.row, 'Space').trim();
   return String(_componentPlacementSourceField('[data-field="Space"]')?.value || '').trim();
 }
 
 function _componentPlacementActiveName() {
+  if (_componentPlacementMode === 'info') return f(_projectModalContext?.row, 'Name').trim();
   return String(_componentPlacementSourceField('[data-field="Name"]')?.value || '').trim();
 }
 
@@ -177,6 +180,28 @@ function _componentPlacementFitSvg(viewport, svgRoot) {
   _componentPlacementApplySvgView(viewport, svgRoot);
 }
 
+function _componentPlacementFocusPosition(viewport, svgRoot, placement) {
+  if (!viewport || !svgRoot || !placement?.existingPosition) return false;
+  if (!_componentPlacementSvgBaseWidth || !_componentPlacementSvgBaseHeight) {
+    _componentPlacementFitSvg(viewport, svgRoot);
+  }
+  const marker = svgRoot.querySelector('[data-component-placement-marker]');
+  const markerRect = marker?.getBoundingClientRect();
+  const viewportRect = viewport.getBoundingClientRect();
+  if (!markerRect?.width || !viewportRect.width || !viewportRect.height) return false;
+  const markerX = markerRect.left + (markerRect.width / 2) - viewportRect.left;
+  const markerY = markerRect.top + (markerRect.height / 2) - viewportRect.top;
+  const oldZoom = _componentPlacementSvgZoom;
+  const nextZoom = Math.min(8, oldZoom * 2.2);
+  const worldX = (markerX - _componentPlacementSvgPanX) / oldZoom;
+  const worldY = (markerY - _componentPlacementSvgPanY) / oldZoom;
+  _componentPlacementSvgZoom = nextZoom;
+  _componentPlacementSvgPanX = (viewport.clientWidth / 2) - (worldX * nextZoom);
+  _componentPlacementSvgPanY = (viewport.clientHeight / 2) - (worldY * nextZoom);
+  _componentPlacementApplySvgView(viewport, svgRoot);
+  return true;
+}
+
 function _componentPlacementZoomSvgAtCursor(viewport, svgRoot, clientX, clientY, factor) {
   if (!viewport || !svgRoot) return;
   const rect = viewport.getBoundingClientRect();
@@ -193,13 +218,24 @@ function _componentPlacementZoomSvgAtCursor(viewport, svgRoot, clientX, clientY,
   _componentPlacementApplySvgView(viewport, svgRoot);
 }
 
+function _componentPlacementMarkerCoordinate(value, fallback) {
+  if (value === null || value === undefined || value === '') return fallback;
+  return _finiteNumber(value, fallback);
+}
+
 function _componentPlacementDrawMarker(svgRoot, placement) {
   svgRoot?.querySelector('[data-component-placement-marker]')?.remove();
   if (!svgRoot || !placement?.spaceName) return null;
   const drawing = _svgDrawingBounds(svgRoot);
   if (!drawing?.width || !drawing?.height) return null;
-  const markerX = _finiteNumber(placement.markerX) ?? drawing.x + (_unitInterval(placement.floorU ?? placement.roomU) * drawing.width);
-  const markerY = _finiteNumber(placement.markerY) ?? drawing.y + (_unitInterval(placement.floorV ?? placement.roomV) * drawing.height);
+  const markerX = _componentPlacementMarkerCoordinate(
+    placement.markerX,
+    drawing.x + (_unitInterval(placement.floorU ?? placement.roomU) * drawing.width),
+  );
+  const markerY = _componentPlacementMarkerCoordinate(
+    placement.markerY,
+    drawing.y + (_unitInterval(placement.floorV ?? placement.roomV) * drawing.height),
+  );
   const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
   marker.setAttribute('data-component-placement-marker', '');
   marker.setAttribute('class', 'component-placement-marker');
@@ -512,8 +548,10 @@ function _componentPlacementRender() {
 
   _componentPlacementPreviewDraw(els.previewCanvas, _componentPlacementDraft, floorEntry);
 
-  els.status.textContent = _componentPlacementDraft?.spaceName
-    ? `Selected room: ${_componentPlacementDraft.spaceName}`
+  els.status.textContent = _componentPlacementDraft?.existingPosition
+    ? `Current saved position in ${_componentPlacementDraft.spaceName}`
+    : _componentPlacementDraft?.spaceName
+      ? `Selected room: ${_componentPlacementDraft.spaceName}`
     : 'Click a room on the SVG to choose the placement space.';
   if (els.apply) els.apply.disabled = !_componentPlacementDraft?.spaceName;
 }
@@ -632,6 +670,7 @@ function _removeComponentCoordinateRows(facility, componentName) {
     attrs.splice(i, 1);
     removed++;
   }
+  if (removed && typeof _viewer3dInvalidateCoordIndex === 'function') _viewer3dInvalidateCoordIndex();
   return removed;
 }
 
@@ -656,6 +695,7 @@ function _renameComponentCoordinateRows(facility, oldName, newName) {
     row.RowName = `${newClean}_${parts.cornerName}`;
     renamed++;
   });
+  if (renamed && typeof _viewer3dInvalidateCoordIndex === 'function') _viewer3dInvalidateCoordIndex();
   return renamed;
 }
 
@@ -666,14 +706,17 @@ function _writeComponentCoordinates(facility, componentName, placement) {
   if (!rows.length) return false;
   _removeComponentCoordinateRows(facility, cleanName);
   rows.forEach(row => db.coordinates.push(row));
+  if (typeof _viewer3dInvalidateCoordIndex === 'function') _viewer3dInvalidateCoordIndex();
   _logChange('coordinate', cleanName, facility || '');
   return true;
 }
 
 function _componentPlacementDraftFromCoordinates() {
-  if (_componentPlacementMode !== 'edit' || !_editState) return null;
-  const facility = _editState.facility || '';
-  const componentName = _editState.entityName || '';
+  if (!['edit', 'info'].includes(_componentPlacementMode)) return null;
+  if (_componentPlacementMode === 'edit' && !_editState) return null;
+  if (_componentPlacementMode === 'info' && _projectModalContext?.entityType !== 'component') return null;
+  const facility = _componentPlacementFacility();
+  const componentName = _componentPlacementActiveName();
   const spaceName = _componentPlacementActiveSpace();
   const floorEntry = _componentPlacementFloorForSpace(spaceName);
   if (!componentName || !spaceName || !floorEntry) return null;
@@ -697,12 +740,14 @@ function _componentPlacementDraftFromCoordinates() {
     floorV:rawUv.v,
     height:Math.max(0, componentBottom - spaceBounds.minY),
     roomBounds:spaceBounds,
+    existingPosition:true,
   };
 }
 
 function openComponentPlacementModal(mode) {
-  if (mode !== 'create' && mode !== 'edit') return;
   if (mode === 'edit' && !_editState) return;
+  if (mode === 'info' && _projectModalContext?.entityType !== 'component') return;
+  if (!['edit', 'info'].includes(mode)) return;
   _componentPlacementMode = mode;
   _componentPlacementPreviewZoom = 1;
   _componentPlacementPreviewRotX = -0.55;
@@ -712,7 +757,7 @@ function openComponentPlacementModal(mode) {
   _componentPlacementPreviewSceneCache = null;
   _componentPlacementFloorKey = '';
   _componentPlacementResetSvgView();
-  _componentPlacementReturnModalId = mode === 'create' ? 'create-modal' : 'edit-modal';
+  _componentPlacementReturnModalId = mode === 'info' ? 'type-modal' : 'edit-modal';
   const els = _componentPlacementModalElements();
   if (!els.modal) return;
   const sourceModal = document.getElementById(_componentPlacementReturnModalId);
@@ -724,6 +769,8 @@ function openComponentPlacementModal(mode) {
   if (sourceModal?.classList.contains('show')) {
     const sourceInstance = bootstrap.Modal.getInstance(sourceModal);
     if (sourceInstance) {
+      if (typeof _editOpeningChildModal !== 'undefined') _editOpeningChildModal = true;
+      if (mode === 'info' && typeof _projectOpeningChildModal !== 'undefined') _projectOpeningChildModal = true;
       sourceModal.addEventListener('hidden.bs.modal', showPlacement, { once: true });
       sourceInstance.hide();
       return;
@@ -743,17 +790,30 @@ function initComponentPlacementModal() {
     requestAnimationFrame(() => {
       const viewport = els.stage?.querySelector('.component-placement-viewport');
       const svgRoot = viewport?.querySelector('svg');
-      if (viewport && svgRoot) _componentPlacementFitSvg(viewport, svgRoot);
+      if (viewport && svgRoot) {
+        _componentPlacementFitSvg(viewport, svgRoot);
+        _componentPlacementFocusPosition(viewport, svgRoot, _componentPlacementDraft);
+      }
     });
   });
   els.modal.addEventListener('hidden.bs.modal', () => {
+    const completedMode = _componentPlacementMode;
     _componentPlacementMode = '';
     _componentPlacementDraft = null;
     _componentPlacementPreviewSceneCache = null;
     const returnModal = _componentPlacementReturnModalId ? document.getElementById(_componentPlacementReturnModalId) : null;
     _componentPlacementReturnModalId = '';
+    if (typeof _editOpeningChildModal !== 'undefined') _editOpeningChildModal = false;
+    if (typeof _projectOpeningChildModal !== 'undefined') _projectOpeningChildModal = false;
+    if (completedMode === 'info' && _componentPlacementRefreshInfo && _typeModalViewContext?.kind === 'component') {
+      const component = _findEntity(db.components, _typeModalViewContext.entityName, _typeModalViewContext.facility || '');
+      if (component) document.getElementById('mtype-body').innerHTML = buildEntityInfoBody(
+        'component', f(component, 'Name'), component._facility || '', component,
+      );
+    }
+    _componentPlacementRefreshInfo = false;
     if (returnModal && !returnModal.classList.contains('show')) {
-      bootstrap.Modal.getOrCreateInstance(returnModal).show();
+      setTimeout(() => bootstrap.Modal.getOrCreateInstance(returnModal).show(), 0);
     }
   });
   els.modal.addEventListener('click', event => {
@@ -771,8 +831,20 @@ function initComponentPlacementModal() {
       }
       current.height = height;
       _componentPlacementDraft = current;
-      if (_componentPlacementMode === 'create' || _componentPlacementMode === 'edit') {
-        _componentPlacementAppliedByMode[_componentPlacementMode] = _componentPlacementClone(current);
+      if (_componentPlacementMode === 'edit') {
+        _componentPlacementAppliedByMode.edit = _componentPlacementClone(current);
+      } else if (_componentPlacementMode === 'info') {
+        const component = _projectModalContext?.row;
+        const facility = _componentPlacementFacility();
+        const componentName = f(component, 'Name');
+        if (component && componentName) {
+          _projectSetFieldValue(component, ['Space'], current.spaceName);
+          _writeComponentCoordinates(facility, componentName, current);
+          buildIdx();
+          _projectSyncEntityChangeState('component', component, componentName, facility);
+          _projectAssociationsChanged = true;
+          _componentPlacementRefreshInfo = true;
+        }
       }
       const spaceField = _componentPlacementSourceField('[data-field="Space"]');
       if (spaceField) spaceField.value = current.spaceName;

@@ -27,6 +27,13 @@ function _findEntity(rows, name, facility = '') {
     f(row, 'Name').toLowerCase() === key && (!facility || row._facility === facility)
   ) || null;
 }
+
+function _selectionRange(items, anchor, target) {
+  const start = items.indexOf(anchor);
+  const end = items.indexOf(target);
+  if (start < 0 || end < 0) return target === undefined ? [] : [target];
+  return items.slice(Math.min(start, end), Math.max(start, end) + 1);
+}
 function _facilityProjectCode(facObj) {
   return f(facObj, 'ProjectCode', 'Project Code', 'ProjectName', 'Project Name', 'ProjectId', 'Project ID', 'Code');
 }
@@ -287,6 +294,68 @@ function _docHref(path) {
   if (/^\\\\/.test(path)) return 'file:' + path.replace(/\\/g,'/');
   if (/^[a-z]:[\\\/]/i.test(path)) return 'file:///' + path.replace(/\\/g,'/');
   return path;
+}
+
+// Shared result-view templates used by asset and document modes.
+function _groupNodeKey(dim, name, facility, depth, parentPath) {
+  return JSON.stringify([
+    String(parentPath || ''),
+    String(depth || 0),
+    String(dim || '').toLowerCase(),
+    String(name || '').toLowerCase(),
+    String(facility || '').toLowerCase(),
+  ]);
+}
+
+function _groupNodeIsOpen(key) {
+  const expandAll = typeof allExpanded !== 'undefined' && allExpanded;
+  const expanded = typeof groupExpandedState !== 'undefined' && groupExpandedState?.has(key);
+  return !!(expandAll || expanded);
+}
+
+function _groupHighlightBuildKey(dim, name, facility) {
+  return JSON.stringify([
+    String(dim || '').trim().toLowerCase(),
+    String(name || '').trim().toLowerCase(),
+    String(facility || '').trim().toLowerCase(),
+  ]);
+}
+
+function buildGroupActions(dim, name, facility, count) {
+  const infoAllowed = !!name && (dim === 'doccat' || !name.startsWith('(')) &&
+    (dim === 'facility' || db.facilities.length <= 1 || !!facility);
+  let infoIndex = -1;
+  if (infoAllowed) {
+    infoIndex = groupInfoStore.length;
+    groupInfoStore.push({ dim, name, facility });
+  }
+  const key = _groupHighlightBuildKey(dim, name, facility);
+  const activeClass = typeof groupHighlightStore !== 'undefined' && groupHighlightStore.has(key) ? ' is-active' : '';
+  return `<span class="grp-actions">
+    <span class="grp-action grp-count" title="Count"><span class="grp-action-label">Count</span><span class="grp-cnt">${count}</span></span>
+    ${infoIndex >= 0 ? `<button class="type-info-btn" data-grpidx="${infoIndex}" title="${esc(_GRP_LABELS[dim] || 'Group')} info"><i class="bi bi-info-circle"></i><span>Info</span></button>` : '<span class="grp-action-unavailable">Info</span>'}
+    <button class="grp-highlight-btn${activeClass}" data-grphl="${infoIndex >= 0 ? infoIndex : 'group'}" data-grphlkey="${esc(key)}" title="Toggle highlight"><i class="bi bi-highlighter"></i><span>Highlight</span></button>
+  </span>`;
+}
+
+function buildGroupHeader({ dim, name, facility = '', count = 0, subtitle = '', icon = 'bi-folder', cid, gkey = '', isOpen = false, displayName = '' }) {
+  return `<div class="grp-hdr grp-cat-${dim}${isOpen ? '' : ' grp-collapsed'}" data-cid="${cid}"${gkey ? ` data-gkey="${esc(gkey)}"` : ''}>
+    <i class="bi bi-chevron-down grp-chev"></i>
+    <i class="bi ${icon} me-1 grp-icon"></i>
+    <span class="grp-name">${esc(displayName || withDesc(name, dim))}</span>
+    ${subtitle ? `<span class="grp-meta">${esc(subtitle)}</span>` : '<span class="grp-meta"></span>'}
+    ${buildGroupActions(dim, name, facility, count)}
+  </div>`;
+}
+
+function buildSelectableResultCard(highlightKey, contentHtml, infoHtml, extraClass = '') {
+  const activeClass = typeof groupHighlightStore !== 'undefined' && groupHighlightStore.has(highlightKey) ? ' is-active' : '';
+  return `<div class="cc selectable-result-card${activeClass}${extraClass ? ` ${extraClass}` : ''}" data-card-highlight-key="${esc(highlightKey)}" role="button" tabindex="0" aria-pressed="${activeClass ? 'true' : 'false'}">
+    <div class="d-flex align-items-start gap-2">
+      <div class="selectable-result-card-content">${contentHtml}</div>
+      <div class="selectable-result-card-actions">${infoHtml}</div>
+    </div>
+  </div>`;
 }
 
 function _isSvgReference(value) {

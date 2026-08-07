@@ -45,7 +45,9 @@ The exact findings depend on the sheets and relationships in the loaded workbook
 
 ## Fix a finding
 
-Where a finding maps to an editable record, select its pencil action.
+Where a finding maps to an editable record, select its pencil action. QA uses
+the correction form rather than the inline Information view so the related
+changes can be reviewed together before they are applied.
 
 1. Read the finding message carefully.
 2. Open the affected record.

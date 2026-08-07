@@ -48,16 +48,6 @@ function renderComps(comps, documentEntries = []) {
 }
 
 // ── Asset result grouping and pagination ─────────────────────
-function _groupNodeKey(dim, name, facility, depth, parentPath) {
-  return JSON.stringify([
-    String(parentPath || ''),
-    String(depth || 0),
-    String(dim || '').toLowerCase(),
-    String(name || '').toLowerCase(),
-    String(facility || '').toLowerCase(),
-  ]);
-}
-
 function groupNested(comps, dims, depth = 0, parentPath = '') {
   if (!dims.length || !comps.length) return renderLeaf(comps);
   const [dim, ...rest] = dims;
@@ -71,7 +61,6 @@ function groupNested(comps, dims, depth = 0, parentPath = '') {
     const gkey = _groupNodeKey(dim, name, facility, depth, parentPath);
     const isOpen = allExpanded || groupExpandedState.has(gkey);
     const sub  = getGroupSubtitle(dim, name, facility);
-    const iBtn = buildGroupInfoBtn(dim, name, facility);
     let bodyHtml = '';
     if (isOpen) {
       bodyHtml = rest.length ? groupNested(cs, rest, depth + 1, gkey) : renderLeaf(cs);
@@ -79,13 +68,7 @@ function groupNested(comps, dims, depth = 0, parentPath = '') {
       pendingGroups[cid] = { comps: cs, dims: rest, depth: depth + 1, parentPath: gkey };
     }
     return `<div class="grp-block grp-d${lvl}">
-      <div class="grp-hdr grp-cat-${dim}${isOpen ? '' : ' grp-collapsed'}" data-cid="${cid}" data-gkey="${esc(gkey)}">
-        <i class="bi bi-chevron-down grp-chev"></i>
-        <i class="bi ${ico} me-1" style="opacity:.72;font-size:.82rem"></i>
-        <span class="grp-name">${esc(withDesc(name, dim))}</span>
-        ${sub ? `<span class="grp-meta">${esc(sub)}</span>` : ''}
-        <span class="grp-actions"><span class="grp-cnt">${cs.length}</span>${iBtn}</span>
-      </div>
+      ${buildGroupHeader({ dim, name, facility, count:cs.length, subtitle:sub, icon:ico, cid, gkey, isOpen })}
       <div class="grp-body${isOpen ? '' : ' grp-closed'}" id="${cid}">${bodyHtml}</div>
     </div>`;
   }).join('');
@@ -189,25 +172,6 @@ function getGroupSubtitle(dim, name, facility) {
   return '';
 }
 
-function _groupHighlightBuildKey(dim, name, facility) {
-  return JSON.stringify([
-    String(dim || '').trim().toLowerCase(),
-    String(name || '').trim().toLowerCase(),
-    String(facility || '').trim().toLowerCase(),
-  ]);
-}
-
-function buildGroupInfoBtn(dim, name, facility) {
-  if (!name || name.startsWith('(')) return '';
-  if (dim !== 'facility' && db.facilities.length > 1 && !facility) return '';
-  const i = groupInfoStore.length;
-  groupInfoStore.push({ dim, name, facility });
-  const key = _groupHighlightBuildKey(dim, name, facility);
-  const activeClass = groupHighlightStore.has(key) ? ' is-active' : '';
-  return `<button class="type-info-btn" data-grpidx="${i}" title="${_GRP_LABELS[dim]} info"><i class="bi bi-info-circle"></i></button>
-    <button class="grp-highlight-btn${activeClass}" data-grphl="${i}" data-grphlkey="${esc(key)}" title="Toggle highlight marker"><i class="bi bi-highlighter"></i></button>`;
-}
-
 function _groupHighlightKeyParts(key) {
   const text = String(key || '');
   try {
@@ -303,17 +267,22 @@ function clearAllHighlights() {
 function highlightGroupSelection(button, additive = false) {
   if (!button) return;
   const key = (button.dataset.grphlkey || '').trim();
-  if (!key) return;
-  const alreadyActive = groupHighlightStore.has(key);
+  toggleResultHighlight(key);
+}
 
-  if (alreadyActive) {
-    groupHighlightStore.delete(key);
-  } else {
-    groupHighlightStore.add(key);
-  }
-
-  button.classList.toggle('is-active', groupHighlightStore.has(key));
+function setResultHighlightRange(keys, selected) {
+  const normalized = [...new Set(keys.map(key => String(key || '').trim()).filter(Boolean))];
+  if (!normalized.length) return;
+  normalized.forEach(key => {
+    if (selected) groupHighlightStore.add(key); else groupHighlightStore.delete(key);
+  });
   applyFilters();
+}
+
+function toggleResultHighlight(key) {
+  key = String(key || '').trim();
+  if (!key) return;
+  setResultHighlightRange([key], !groupHighlightStore.has(key));
 }
 
 // ── Component card ────────────────────────────────────────────
@@ -329,27 +298,18 @@ function card(c) {
   const inst = fmtDate(c['InstallationDate']  || c['Installation Date']);
   const wst  = fmtDate(c['WarrantyStartDate'] || c['Warranty Start Date']);
   const compHighlightKey = _groupHighlightBuildKey('component', name, c._facility || '');
-  const compHighlightClass = groupHighlightStore.has(compHighlightKey) ? ' is-active' : '';
-
   const cdocs  = docsFor('Component', name, c._facility);
   const badges  = badgesByCat(cdocs);
-
-  return `<div class="cc">
-    <div class="d-flex align-items-start gap-2">
-      <div style="flex:1;min-width:0">
-        <div class="cc-name">${esc(name)}${desc ? `<span class="cc-desc"> : ${esc(desc)}</span>` : ''}</div>
-        <div class="cc-meta">
-          ${tn ? `<span><i class="bi bi-tag me-1"></i>${esc(withDesc(tn,'type'))}</span>` : ''}
-          ${sp ? `<span><i class="bi bi-geo-alt me-1"></i>${esc(withDesc(sp,'space'))}</span>` : ''}
-        </div>
-      </div>
-      <button class="xbtn" data-compinfo="1" data-comp-key="${esc(name)}" data-comp-fac="${esc(c._facility||'')}" title="Component info">
-        <i class="bi bi-info-circle"></i>
-      </button>
-      <button class="grp-highlight-btn${compHighlightClass}" data-grphl="component" data-grphlkey="${esc(compHighlightKey)}" title="Toggle component highlight"><i class="bi bi-highlighter"></i></button>
+  const content = `<div class="cc-name">${esc(name)}${desc ? `<span class="cc-desc"> : ${esc(desc)}</span>` : ''}</div>
+    <div class="cc-meta">
+      ${tn ? `<span><i class="bi bi-tag me-1"></i>${esc(withDesc(tn,'type'))}</span>` : ''}
+      ${sp ? `<span><i class="bi bi-geo-alt me-1"></i>${esc(withDesc(sp,'space'))}</span>` : ''}
     </div>
-    ${badges?`<div class="mt-2">${badges}</div>`:''}
-  </div>`;
+    ${badges ? `<div class="mt-2">${badges}</div>` : ''}`;
+  const activeClass = groupHighlightStore.has(compHighlightKey) ? ' is-active' : '';
+  const actions = `<button class="xbtn" data-compinfo="1" data-comp-key="${esc(name)}" data-comp-fac="${esc(c._facility||'')}" title="Component info"><i class="bi bi-info-circle"></i><span>Info</span></button>
+    <button class="grp-highlight-btn${activeClass}" data-card-highlight-action data-card-highlight-key="${esc(compHighlightKey)}" title="Toggle component highlight" aria-pressed="${activeClass ? 'true' : 'false'}"><i class="bi bi-highlighter"></i><span>Highlight</span></button>`;
+  return buildSelectableResultCard(compHighlightKey, content, actions, 'component-result-card');
 }
 
 function badgesByCat(docs) {
@@ -371,27 +331,20 @@ function badge(doc, fromType) {
   return _docListItem(doc, fromType);
 }
 
-function _docEditButton(doc, withText = false) {
-  const documentIndex = docStore.length;
-  docStore.push(doc);
-  return `<button class="xbtn" data-edit-doc="${documentIndex}" title="Edit document">
-    <i class="bi bi-pencil${withText?' me-1':''}"></i>${withText?'Edit':''}</button>`;
-}
-
 function _docListItem(doc, fromType = false) {
   const index = docStore.length; docStore.push(doc);
   const number = f(doc,'Name') || '(Unnamed document)';
   const description = f(doc,'Description') || 'No description';
   const path = _docTarget(f(doc,'Directory'));
+  const isUnsaved = _isDocumentUnsaved(doc);
   const title = fromType ? 'Type-level document' : 'View document details';
-  return `<div class="doc-list-item"${fromType?' data-doc-level="type"':''}>
+  return `<div class="doc-list-item${isUnsaved ? ' doc-list-item-unsaved' : ''}"${fromType?' data-doc-level="type"':''}>
     <div class="doc-list-copy" data-doc="${index}" title="${title}">
       <div class="doc-list-number">${docIcon(path||number)} ${esc(number)}</div>
       <div class="doc-list-desc">${esc(description)}</div>
     </div>
     <div class="doc-list-actions">
       ${path?`<a href="${esc(_docHref(path))}" target="_blank" rel="noopener" class="xbtn" title="Open link"><i class="bi bi-box-arrow-up-right me-1"></i>Link</a>`:''}
-      ${_docEditButton(doc)}
     </div>
   </div>`;
 }
@@ -408,7 +361,7 @@ function _toggleGroupHeader(header, forceOpen) {
     } else if (pending.isDocMode) {
       body.innerHTML = pending.isDocCategory
         ? groupDocsByClassification(pending.docEntries, pending.dims || [], pending.depth || 0, pending.categoryKey)
-        : groupDocsNested(pending.docEntries, pending.dims || [], pending.depth || 0);
+        : groupDocsNested(pending.docEntries, pending.dims || [], pending.depth || 0, pending.parentPath || '');
     } else {
       body.innerHTML = groupNested(pending.comps, pending.dims, pending.depth, pending.parentPath || '');
     }

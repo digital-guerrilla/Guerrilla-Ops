@@ -1,6 +1,6 @@
 # Troubleshooting and data notes
 
-[Guide index](README.md) | Previous: [Save, discard, and close](07-save-close.md)
+[Guide index](README.md) | Previous: [Save, discard, and close](07-save-close.md) | Next: [Plan viewer](09-plan-viewer.md)
 
 Use this guide for common loading, browser, filtering, document-link, and COBie relationship issues.
 
@@ -91,6 +91,8 @@ Unsaved changes exist only in browser memory. Browser refresh cannot recover the
 | System | System records and Component memberships |
 | Document | Document metadata, category, complete Directory link, and linked row |
 | Contact | People and organisations, including `CreatedBy` references |
+| Coordinates | Geometry used for 3D view |
+| Attributes | used to store floor plan svgs and any other attributes |
 
 Other workbook sheets are not used by the dashboard but are retained in supported `.xlsx` save flows.
 
@@ -123,3 +125,6 @@ Record:
 - Whether Excel reports workbook repairs.
 
 Use a copy of sensitive workbooks when reproducing a problem.
+
+For spatial-data-specific checks, continue to the [Plan viewer](09-plan-viewer.md),
+[3D viewer](10-3d-viewer.md), and [Align Plan and 3D](11-align-plan-3d.md) guides.

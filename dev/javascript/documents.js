@@ -48,7 +48,11 @@ function renderDocumentMode(list, entries) {
     return;
   }
   const dims = groupState.order.filter(d => groupState.active.has(d));
-  list.innerHTML = dims.length ? groupDocsNested(entries, dims) : renderDocsByCat(entries);
+  list.innerHTML = dims.length ? groupDocsNested(entries, dims) : renderDocumentCards(entries);
+}
+
+function renderDocumentCards(entries) {
+  return entries.map(entry => docCard(entry)).join('');
 }
 
 function _docEntryValues(entry, dimension) {
@@ -62,8 +66,9 @@ function _docEntryValues(entry, dimension) {
   return [`(No ${labels[dimension] || 'Value'})`];
 }
 
-function groupDocsNested(entries, dims, depth = 0) {
-  if(!dims.length||!entries.length) return renderDocsByCat(entries);
+function groupDocsNested(entries, dims, depth = 0, parentPath = '') {
+  if (!entries.length) return '';
+  if (!dims.length) return renderDocumentCards(entries);
   const [dim,...rest] = dims;
   if (dim === 'doccat') return groupDocsByClassification(entries, rest, depth);
   const map = new Map();
@@ -75,23 +80,36 @@ function groupDocsNested(entries, dims, depth = 0) {
   const lvl = depth;
   return [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,grpE])=>{
     const cid='col_'+(collapseCounter++);
-    pendingGroups[cid]={docEntries:grpE,dims:rest,depth:depth+1,isDocMode:true};
+    const facilities = [...new Set(grpE.flatMap(entry => entry.facilityNames || []).filter(Boolean))];
+    const facility = facilities.length === 1 ? facilities[0] : '';
+    const gkey = _groupNodeKey(dim, name, facility, depth, parentPath);
+    const isOpen = _groupNodeIsOpen(gkey);
+    if (!isOpen) pendingGroups[cid]={docEntries:grpE,dims:rest,depth:depth+1,parentPath:gkey,isDocMode:true};
     const sub=dim!=='doccat'?getGroupSubtitle(dim,name):'';
+    const bodyHtml = isOpen ? groupDocsNested(grpE, rest, depth + 1, gkey) : '';
     return `<div class="grp-block grp-d${lvl}">
-      <div class="grp-hdr grp-cat-${dim} grp-collapsed" data-cid="${cid}">
-        <i class="bi bi-chevron-down grp-chev"></i>
-        <i class="bi ${ico} me-1" style="opacity:.72;font-size:.82rem"></i>
-        <span class="grp-name">${esc(withDesc(name,dim))}</span>
-        ${sub?`<span class="grp-meta">${esc(sub)}</span>`:''}
-        <span class="grp-cnt">${grpE.length}</span>
-      </div>
-      <div class="grp-body grp-closed" id="${cid}"></div>
+      ${buildGroupHeader({ dim, name, facility, count:grpE.length, subtitle:sub, icon:ico, cid, gkey, isOpen })}
+      <div class="grp-body${isOpen ? '' : ' grp-closed'}" id="${cid}">${bodyHtml}</div>
     </div>`;
   }).join('');
 }
 
 function renderDocsByCat(entries) {
   return groupDocsByClassification(entries, [], 0);
+}
+
+function _isDocumentUnsaved(doc) {
+  const name = String(f(doc, 'Name') || '').toLowerCase();
+  const facility = String(doc?._facility || '').toLowerCase();
+  const changes = typeof _changeLog !== 'undefined' && Array.isArray(_changeLog) ? _changeLog : [];
+  if (!name) return false;
+  return changes.some(entry => {
+    if (String(entry?.entityType || '').toLowerCase() !== 'document') return false;
+    if (!Array.isArray(entry?.facNames) || !entry.facNames.some(fac => String(fac || '').toLowerCase() === facility)) return false;
+    const entityName = String(entry?.entityName || '').toLowerCase();
+    const originalName = String(entry?.originalName || '').toLowerCase();
+    return entityName === name || originalName === name;
+  });
 }
 
 function groupDocsByClassification(entries, remainingDims = [], depth = 0, parentKey = '') {
@@ -116,18 +134,20 @@ function groupDocsByClassification(entries, remainingDims = [], depth = 0, paren
     const categoryNode = idx.categoryTrees?.doccat?.find(node => node.key === categoryKey);
     const categoryLabel = categoryNode?.label || classificationParts(f(categoryEntries[0]?.doc,'Category')).label || categoryKey;
     const cid='col_'+(collapseCounter++);
-    pendingGroups[cid]={
-      docEntries:categoryEntries, dims:remainingDims, depth:depth+1,
+    const facilityNames = [...new Set(categoryEntries.flatMap(entry => entry.facilityNames || []).filter(Boolean))];
+    const facility = facilityNames.length === 1 ? facilityNames[0] : '';
+    const gkey = _groupNodeKey('doccat', categoryKey, facility, depth, parentKey);
+    const isOpen = _groupNodeIsOpen(gkey);
+    if (!isOpen) pendingGroups[cid]={
+      docEntries:categoryEntries, dims:remainingDims, depth:depth+1, parentPath:gkey,
       isDocMode:true, isDocCategory:true, categoryKey,
     };
+    const bodyHtml = isOpen
+      ? groupDocsByClassification(categoryEntries, remainingDims, depth + 1, categoryKey)
+      : '';
     return `<div class="grp-block grp-d${Math.min(depth,4)}" style="margin-bottom:.3rem">
-      <div class="grp-hdr grp-cat-doccat grp-collapsed" data-cid="${cid}">
-        <i class="bi bi-chevron-down grp-chev"></i>
-        <i class="bi bi-folder2-open me-1" style="opacity:.72;font-size:.82rem"></i>
-        <span class="grp-name">${esc(categoryLabel)}</span>
-        <span class="grp-cnt">${categoryEntries.length}</span>
-      </div>
-      <div class="grp-body grp-closed" id="${cid}"></div>
+      ${buildGroupHeader({ dim:'doccat', name:categoryKey, facility, count:categoryEntries.length, icon:'bi-folder2-open', cid, gkey, isOpen, displayName:categoryLabel })}
+      <div class="grp-body${isOpen ? '' : ' grp-closed'}" id="${cid}">${bodyHtml}</div>
     </div>`;
   }).join('');
   return directHtml + nodes;
@@ -136,25 +156,19 @@ function groupDocsByClassification(entries, remainingDims = [], depth = 0, paren
 function docCard(entry) {
   const {doc,linkedType,linkedName}=entry;
   const name=f(doc,'Name')||'(Unnamed document)';
+  const isUnsaved = _isDocumentUnsaved(doc);
   const dir=f(doc,'Directory'), desc=f(doc,'Description'), cat=f(doc,'Category');
   const lpath = _docTarget(dir), href = _docHref(lpath);
   const LL={component:'Component',type:'Type',space:'Space',system:'System',facility:'Facility',floor:'Floor'};
   const di=docStore.length; docStore.push(doc);
-  return `<div class="cc">
-    <div class="d-flex align-items-start gap-2">
-      <div style="flex:1;min-width:0">
-        <div class="cc-name">${docIcon(lpath||name)} ${esc(name)}</div>
-        ${desc?`<div class="cc-desc mt-1">${esc(desc)}</div>`:''}
-        <div class="cc-meta">
-          <span><i class="bi bi-link-45deg me-1"></i>${esc(LL[linkedType]||linkedType)}: ${esc(linkedName)}</span>
-          ${cat?`<span><i class="bi bi-tag me-1"></i>${esc(cat)}</span>`:''}
-        </div>
-      </div>
-      <div class="doc-list-actions">
-        ${lpath?`<a href="${esc(href)}" target="_blank" rel="noopener" class="xbtn" title="Open link"><i class="bi bi-box-arrow-up-right me-1"></i>Link</a>`:''}
-        <button class="xbtn" data-doc="${di}" title="View document details"><i class="bi bi-info-circle"></i></button>
-        ${_docEditButton(doc)}
-      </div>
-    </div>
-  </div>`;
+  const highlightKey = _groupHighlightBuildKey('document', _docUniqueKey(doc), doc._facility || '');
+  const content = `<div class="cc-name">${docIcon(lpath||name)} ${esc(name)}</div>
+    ${desc ? `<div class="cc-desc mt-1">${esc(desc)}</div>` : ''}
+    <div class="cc-meta">
+      <span><i class="bi bi-link-45deg me-1"></i>${esc(LL[linkedType]||linkedType)}: ${esc(linkedName)}</span>
+      ${cat ? `<span><i class="bi bi-tag me-1"></i>${esc(cat)}</span>` : ''}
+    </div>`;
+  const actions = `<button class="xbtn" data-doc="${di}" title="View document details"><i class="bi bi-info-circle"></i><span>Info</span></button>
+    ${lpath ? `<a href="${esc(href)}" target="_blank" rel="noopener" class="xbtn document-link-action" title="Open link"><i class="bi bi-box-arrow-up-right"></i><span>Link</span></a>` : ''}`;
+  return buildSelectableResultCard(highlightKey, content, actions, `document-result-card${isUnsaved ? ' document-result-card-unsaved' : ''}`);
 }
