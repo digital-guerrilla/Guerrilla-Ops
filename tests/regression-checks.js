@@ -52,6 +52,9 @@ const logoThemeSource = fs.readFileSync(path.join(javascriptDir, 'logo-theme.js'
 const logoSvgSource = fs.readFileSync(path.join(root, 'dev', 'svgs', 'Guerrilla-Ops.svg'), 'utf8').trim();
 const releaseBuilderSource = fs.readFileSync(path.join(root, 'build', 'build_release.py'), 'utf8');
 const devIndexSource = fs.readFileSync(path.join(root, 'dev', 'index.html'), 'utf8');
+const modalsSource = fs.readFileSync(path.join(javascriptDir, 'modals.js'), 'utf8');
+assert(modalsSource.includes("if (entityType === 'facility' && renamedFacility) resolvedName = renamedFacility;"),
+  'non-facility rename previews must retain the edited item name instead of the facility scope');
 assert(devIndexSource.includes('<span id="go-logo-hdr" class="go-logo go-logo-hdr" aria-hidden="true"></span>'),
   'the header must provide an empty host for inline logo injection');
 assert(devIndexSource.includes('<span id="go-logo-upload" class="go-logo go-logo-upload" aria-hidden="true"></span>'),

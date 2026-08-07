@@ -1599,8 +1599,8 @@ function _projectFinishFieldEdit(editor, commit) {
         const oldEntityName = oldValue || _projectActiveEntityName() || '';
         let resolvedName = newValue;
         if (!isNewEntity && typeof _cascadeEntityRename === 'function') {
-          const renamed = _cascadeEntityRename(entityType, oldEntityName, newValue, entityFacility || '');
-          if (renamed) resolvedName = renamed;
+          const renamedFacility = _cascadeEntityRename(entityType, oldEntityName, newValue, entityFacility || '');
+          if (entityType === 'facility' && renamedFacility) resolvedName = renamedFacility;
         }
         if (entityType === 'facility') {
           if (resolvedName) _projectModalFacility = resolvedName;
