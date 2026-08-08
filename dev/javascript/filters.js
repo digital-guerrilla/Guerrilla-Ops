@@ -1,10 +1,27 @@
 // ── Filter model and cross-counts ────────────────────────────
 // Returns true if Set a and Set b share at least one element
 function _setHasAny(a, b) { for (const x of a) if (b.has(x)) return true; return false; }
-const _SUPPORTED_DOC_SHEETS = new Set(['component','type','space','floor','system','facility']);
-const _DOC_CONTEXT_DIMENSIONS = {
-  facility:'facilities', floor:'floors', space:'spaces', type:'types', system:'systems', doccat:'categories',
-};
+const _SUPPORTED_DOC_SHEETS = _cobieDocumentTargetTypes();
+const _DOC_CONTEXT_DIMENSIONS = Object.fromEntries(COBIE_FILTER_DIMENSIONS
+  .filter(filter => filter.contextProperty).map(filter => [filter.dimension, filter.contextProperty]));
+
+function _componentFilterValues(component, filter) {
+  if (!component || !filter) return [];
+  const componentKey = _rowKey(component, _cobieEntityIdentity('component', component));
+  let values = [];
+  if (filter.valueIndex) {
+    const indexed = idx[filter.valueIndex]?.[componentKey];
+    values = indexed instanceof Set ? [...indexed] : (Array.isArray(indexed) ? indexed : [indexed]);
+  } else if (filter.throughField && filter.throughIndex) {
+    const throughValue = f(component, ..._cobieFieldAliasesFor(filter.throughField));
+    values = [idx[filter.throughIndex]?.[_rowKey(component, throughValue)]];
+  } else if (filter.valueField === '_facility') {
+    values = [component._facility];
+  } else if (filter.valueField) {
+    values = _cobieReferenceValues('component', component, filter.valueField);
+  }
+  return [...new Set(values.map(value => String(value || '').trim().toLowerCase()).filter(Boolean))];
+}
 
 function _documentContextSearchMatches(context) {
   if (searchQuery) {
@@ -36,7 +53,10 @@ function _filterDocumentContexts(contexts, counts, replaceAssetCounts) {
     dimensions.forEach((dimension, index) => {
       if ((bits | (1 << index)) !== ALL) return;
       const property = _DOC_CONTEXT_DIMENSIONS[dimension];
-      context[property].forEach(value => (countSets[dimension][value] ||= new Set()).add(context.identity));
+      context[property].forEach(value => {
+        if (!countSets[dimension][value]) countSets[dimension][value] = new Set();
+        countSets[dimension][value].add(context.identity);
+      });
     });
   });
 
@@ -51,16 +71,15 @@ function _filterDocumentContexts(contexts, counts, replaceAssetCounts) {
 
 function _documentContextEntry(context) {
   const display = (dimension, key) => {
-    const values = dimension === 'facility' ? idx.facilityNames : idx[dimension + 's'];
+    const values = idx[_cobieFilterDescriptor(dimension)?.listIndex] || [];
     return values?.find(value => value.toLowerCase() === key) || key;
   };
+  const valuesByDimension = Object.fromEntries(COBIE_FILTER_DIMENSIONS
+    .filter(filter => filter.contextProperty)
+    .map(filter => [filter.dimension, [...context[filter.contextProperty]].map(key => display(filter.dimension, key))]));
   return {
     doc:context.doc, linkedType:context.linkedType, linkedName:context.linkedName,
-    facilityNames:[...context.facilities].map(key => display('facility',key)),
-    floorNames:[...context.floors].map(key => display('floor',key)),
-    spaceNames:[...context.spaces].map(key => display('space',key)),
-    typeNames:[...context.types].map(key => display('type',key)),
-    systemNames:[...context.systems].map(key => display('system',key)),
+    valuesByDimension,
   };
 }
 
@@ -68,46 +87,39 @@ function _documentContextEntry(context) {
 // Single-pass: builds filtered component list + cross-counts simultaneously.
 // Uses a 6-bit mask (one bit per dimension) so each component is visited once.
 function applyFilters() {
-  const c = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
+  const dimensions = COBIE_FILTER_DIMENSIONS.map(filter => filter.dimension);
+  const c = Object.fromEntries(dimensions.map(dimension => [dimension, {}]));
   const comps = [];
-  const ALL = 63; // bits: 0=facility 1=floor 2=space 3=type 4=system 5=doccat
+  const ALL = (1 << dimensions.length) - 1;
 
   db.components.forEach(comp => {
-    const sp  = f(comp,'Space').toLowerCase();
-    const tn  = _cobieField(comp, 'typeName').toLowerCase();
-    const fac = (comp._facility||'').toLowerCase();
     const cn  = f(comp,'Name').toLowerCase();
-    const compKey = _scopeKey(fac, cn);
-    const fl  = idx.spFloor[_scopeKey(fac, sp)] || '';
+    const compKey = _rowKey(comp, cn);
 
     if (searchQuery && !(idx.searchText?.[compKey] || '').includes(searchQuery)) return;
 
-    const cats = idx.docCatByComp?.[compKey];
-    const syss = idx.compSys[compKey] || [];
-
-    const bits =
-      ((!sel.facility.size || sel.facility.has(fac))                         ? 1  : 0) |
-      ((!sel.floor.size    || sel.floor.has(fl))                             ? 2  : 0) |
-      ((!sel.space.size    || sel.space.has(sp))                             ? 4  : 0) |
-      ((!sel.type.size     || sel.type.has(tn))                              ? 8  : 0) |
-      ((!sel.system.size   || syss.some(s => sel.system.has(s)))             ? 16 : 0) |
-      ((!sel.doccat.size   || (cats && _setHasAny(sel.doccat, cats)))        ? 32 : 0);
+    const valuesByDimension = Object.fromEntries(COBIE_FILTER_DIMENSIONS
+      .map(filter => [filter.dimension, _componentFilterValues(comp, filter)]));
+    let bits = 0;
+    dimensions.forEach((dimension, index) => {
+      if (!sel[dimension].size || valuesByDimension[dimension].some(value => sel[dimension].has(value))) {
+        bits |= 1 << index;
+      }
+    });
 
     if (bits === ALL) comps.push(comp);
 
-    // For each dimension, count this component if all OTHER dimensions pass
-    if ((bits | 1)  === ALL && fac)  c.facility[fac] = (c.facility[fac]||0)+1;
-    if ((bits | 2)  === ALL && fl)   c.floor[fl]     = (c.floor[fl]    ||0)+1;
-    if ((bits | 4)  === ALL && sp)   c.space[sp]     = (c.space[sp]    ||0)+1;
-    if ((bits | 8)  === ALL && tn)   c.type[tn]      = (c.type[tn]     ||0)+1;
-    if ((bits | 16) === ALL) syss.forEach(sk => c.system[sk] = (c.system[sk]||0)+1);
+    dimensions.forEach((dimension, index) => {
+      if ((bits | (1 << index)) !== ALL) return;
+      valuesByDimension[dimension].forEach(value => { c[dimension][value] = (c[dimension][value] || 0) + 1; });
+    });
   });
 
   const contexts = idx.documentContexts || [];
   const filteredDocumentContexts = _filterDocumentContexts(
     contexts,
     c,
-    viewMode === 'document' || sel.doccat.size > 0,
+    viewMode === 'document' || !!sel[COBIE_RUNTIME_MODEL.documents.categoryDimension]?.size,
   );
 
   if (viewMode === 'qa' && typeof setQaFilterScope === 'function') {
@@ -145,14 +157,15 @@ function _setFilterSelection(dim, keys, selected, categoryLevels = []) {
   });
   if (selected) categoryLevels.forEach(category => selectedCategoryLevels[dim]?.add(category));
   // When selecting a facility-only doc category, auto-enable Facility grouping
-  if (dim === 'doccat' && selected && normalized.some(key => idx.docCatFacilityOnly?.has(key))) {
-    if (!groupState.active.has('facility')) {
-      groupState.active.add('facility');
-      const chip = document.querySelector('#group-sortable [data-dim="facility"]');
+  if (dim === _cobieDocumentCategoryDimension() && selected && normalized.some(key => idx.docCatFacilityOnly?.has(key))) {
+    const scopeDimension = _cobieScopeFilterDimension();
+    if (!groupState.active.has(scopeDimension)) {
+      groupState.active.add(scopeDimension);
+      const chip = document.querySelector('#group-sortable [data-dim="' + scopeDimension + '"]');
       if (chip) chip.classList.add('gchip-active');
     }
   }
-  if (dim === 'doccat' && selected && viewMode === 'asset') {
+  if (dim === _cobieDocumentCategoryDimension() && selected && viewMode === 'asset') {
     setMode('document');
     return;
   }
@@ -176,7 +189,7 @@ function selectFilterCategoryRange(dim, categories, selected) {
 }
 
 function clearAll() {
-  ['facility','floor','space','type','system','doccat'].forEach(d => sel[d].clear());
+  COBIE_FILTER_DIMENSIONS.forEach(filter => sel[filter.dimension].clear());
   Object.values(selectedCategoryLevels).forEach(levels => levels.clear());
   applyFilters();
 }
@@ -223,6 +236,8 @@ function toggleCategory(dim, catName) {
     if (categoryNames.some(name => changedKeys.has(name.toLowerCase()))) selectedCategoryLevels[dim].delete(category);
   });
   keys.forEach(k => { if (allSel) sel[dim].delete(k); else sel[dim].add(k); });
-  if (!allSel) selectedCategoryLevels[dim]?.add(catName);
+  if (!allSel && selectedCategoryLevels[dim]) {
+    selectedCategoryLevels[dim].add(catName);
+  }
   applyFilters();
 }

@@ -21,22 +21,17 @@ function classificationAncestors(code) {
 }
 
 function picklistCategoryValues(entityType) {
-  const specs = {
-    facility:{ column:'Category-Facility', rows:db.facilities },
-    space:{ column:'Category-Space', rows:db.spaces },
-    type:{ column:'Category-Product', rows:db.types },
-    system:{ column:'Category-Element', rows:db.systems },
-    document:{ column:'DocumentType', rows:db.documents },
-    doccat:{ column:'DocumentType', rows:db.documents },
-  };
-  const spec = specs[entityType];
-  if (!spec) return [];
+  const normalized = _cobieEntityType(entityType);
+  const descriptor = [...COBIE_RUNTIME_MODEL.entities.values()].find(entity =>
+    entity.type === normalized || entity.categoryDimension === normalized
+  );
+  if (!descriptor?.categoryPicklist) return [];
   const values = new Map();
   (db.picklists || []).forEach(row => {
-    const value = f(row, spec.column).trim();
+    const value = f(row, descriptor.categoryPicklist).trim();
     if (value && !values.has(value.toLowerCase())) values.set(value.toLowerCase(), value);
   });
-  spec.rows.forEach(row => {
+  (db[descriptor.bucket] || []).forEach(row => {
     const value = f(row, 'Category').trim();
     if (value && !values.has(value.toLowerCase())) values.set(value.toLowerCase(), value);
   });
@@ -67,43 +62,72 @@ function _readProjectCode(wb, facRow) {
   ) || f(facRow, 'ProjectCode', 'Project Code', 'ProjectName', 'Project Name') || '';
 }
 
+function _facilityExternalIdentifier(facilityRow) {
+  return f(facilityRow,
+    'ExternalFacilityIdentifier', 'External Facility Identifier',
+    'ExternalIdentifier', 'External Identifier', 'ExtIdentifier'
+  ).trim();
+}
+
+function canonicalizeLoadedFacilities() {
+  const facilities = db.facilities || [];
+  if (!facilities.length) return;
+  const explicit = facilities.filter(row => row._hasFacilityInfo);
+  const firstExplicit = explicit[0] || facilities[0];
+  const canonicalByIdentifier = new Map();
+
+  explicit.forEach(row => {
+    const identifier = String(row._facilityIdentifier || row._sourceFacility || '').trim().toLowerCase();
+    if (!identifier || canonicalByIdentifier.has(identifier)) return;
+    canonicalByIdentifier.set(identifier, String(row._sourceFacility || row._facility || '').trim());
+  });
+  facilities.forEach(row => {
+    const identifier = row._hasFacilityInfo
+      ? String(row._facilityIdentifier || row._sourceFacility || '').trim().toLowerCase()
+      : String(firstExplicit._facilityIdentifier || firstExplicit._sourceFacility || firstExplicit._facility || '').trim().toLowerCase();
+    const canonicalName = canonicalByIdentifier.get(identifier)
+      || String(firstExplicit._sourceFacility || firstExplicit._facility || '').trim();
+    row._facilityIdentifier = identifier;
+    row._facility = canonicalName;
+  });
+
+  const facilityByWorkbook = new Map(facilities.map(row => [row._workbookKey, row]));
+  [...COBIE_RUNTIME_MODEL.entities.values()].filter(descriptor => descriptor.type !== 'facility')
+    .forEach(descriptor => (db[descriptor.bucket] || []).forEach(row => {
+      const facility = facilityByWorkbook.get(row._workbookKey);
+      if (!facility) return;
+      row._facility = facility._facility;
+      row._facilityIdentifier = facility._facilityIdentifier;
+    }));
+}
+
 function parseCOBieInto(wb, fileName, sourceBuffer, fileHandle) {
-  const facRows = readSheet(wb,'Facility');
+  const facRows = readSheet(wb,_cobieSheetName('facility'));
   const facRow  = facRows[0] || {};
   const facName = f(facRow,'Name') || fileName.replace(/\.[^.]+$/, '');
+  const facilityIdentifier = _facilityExternalIdentifier(facRow);
+  const workbookKey = `${fileName}::${db.facilities.length}`;
   const projectCode = _readProjectCode(wb, facRow);
-  const tag = rec => { rec._facility = facName; rec._fileName = fileName; rec._projectCode = projectCode; return rec; };
+  const tag = rec => { rec._facility = facName; rec._fileName = fileName; rec._workbookKey = workbookKey; rec._projectCode = projectCode; return rec; };
 
-  db.types      .push(...readSheet(wb,'Type')     .map(tag));
-  db.components .push(...readSheet(wb,'Component').map(tag));
-  db.spaces     .push(...readSheet(wb,'Space')    .map(tag));
-  db.zones      .push(...readSheet(wb,'Zone')     .map(tag));
-  readSheet(wb,'Floor').map(tag).forEach(row => {
-    const floorName = f(row, 'Name');
-    if (!floorName) {
-      db.floors.push(row);
-      return;
-    }
-    const existing = db.floors.find(floor =>
-      floor._facility === facName && f(floor, 'Name').toLowerCase() === floorName.toLowerCase()
-    );
-    if (existing) {
-      _mergeRowData(existing, row);
-    } else {
-      db.floors.push(row);
-    }
-  });
-  db.systems    .push(...readSheet(wb,'System')   .map(tag));
-  db.documents  .push(...readSheet(wb,'Document') .map(tag));
-  db.contacts   .push(...readSheet(wb,'Contact')  .map(tag));
-  db.attributes .push(...readSheet(wb,'Attribute').map(tag));
-  db.coordinates.push(...readSheet(wb,'Coordinate').map(tag));
-  (db.picklists ||= []).push(...readSheet(wb,'Picklist').map(tag));
-  db.facilities .push({ ...facRow, _facility: facName, _fileName: fileName,
+  [...COBIE_RUNTIME_MODEL.entities.values()].filter(descriptor => descriptor.type !== 'facility')
+    .forEach(descriptor => {
+      const bucket = db[descriptor.bucket] ||= [];
+      readSheet(wb, descriptor.sheet).map(tag).forEach(row => {
+        const identity = _cobieEntityIdentity(descriptor.type, row);
+        const existing = descriptor.mergeRows && identity
+          ? bucket.find(candidate => candidate._facility === facName &&
+            _cobieEntityIdentity(descriptor.type, candidate).toLowerCase() === identity.toLowerCase())
+          : null;
+        if (existing) _mergeRowData(existing, row); else bucket.push(row);
+      });
+    });
+  db.facilities .push({ ...facRow, _facility: facName, _sourceFacility: facName,
+    _facilityIdentifier: facilityIdentifier, _hasFacilityInfo:facRows.length > 0,
+    _fileName: fileName, _workbookKey:workbookKey,
     _projectCode: projectCode,
     _facRowCount: facRows.length, _workbook: wb,
     _sourceBuffer: sourceBuffer ? sourceBuffer.slice(0) : null, _fileHandle: fileHandle });
-  if (!db.facility) db.facility = facRow; // backward compat
 }
 
 function _addBoundAttribute(target, name, value) {
@@ -119,42 +143,17 @@ function _addBoundAttribute(target, name, value) {
 }
 
 function _bindAttributeData() {
-  [db.components, db.types, db.spaces, db.floors, db.systems, db.facilities, db.contacts]
-    .forEach(rows => rows.forEach(row => { delete row._attrs; }));
-
+  const descriptors = [...COBIE_RUNTIME_MODEL.entities.values()].filter(descriptor => descriptor.attributes);
+  descriptors.forEach(descriptor => (db[descriptor.bucket] || []).forEach(row => { delete row._attrs; }));
   if (!db.attributes.length) return;
-
-  const by = {
-    component: Object.create(null),
-    type: Object.create(null),
-    space: Object.create(null),
-    floor: Object.create(null),
-    facility: Object.create(null),
-    contact: Object.create(null),
-    system: Object.create(null),
-  };
-
-  const setSingle = (bucket, row, name) => {
-    const key = _rowKey(row, name);
-    if (key) bucket[key] = row;
-  };
-
-  db.components.forEach(row => setSingle(by.component, row, f(row,'Name')));
-  db.types.forEach(row => setSingle(by.type, row, f(row,'Name')));
-  db.spaces.forEach(row => setSingle(by.space, row, f(row,'Name')));
-  db.floors.forEach(row => setSingle(by.floor, row, f(row,'Name')));
-  db.contacts.forEach(row => {
-    setSingle(by.contact, row, f(row,'Name'));
-    setSingle(by.contact, row, f(row,'Email'));
-  });
-  db.facilities.forEach(row => {
-    setSingle(by.facility, row, f(row,'Name'));
-    setSingle(by.facility, row, row._facility);
-  });
-  db.systems.forEach(row => {
-    const key = _rowKey(row, f(row,'Name'));
-    if (!key) return;
-    (by.system[key] = by.system[key] || []).push(row);
+  const rowsByType = new Map(descriptors.map(descriptor => [descriptor.type, Object.create(null)]));
+  descriptors.forEach(descriptor => {
+    const lookup = rowsByType.get(descriptor.type);
+    (db[descriptor.bucket] || []).forEach(row => {
+      const identity = _cobieEntityIdentity(descriptor.type, row);
+      if (!identity) return;
+      (lookup[_rowKey(row, identity)] ||= []).push(row);
+    });
   });
 
   db.attributes.forEach(attr => {
@@ -165,234 +164,279 @@ function _bindAttributeData() {
     const unit = f(attr,'Unit','UnitName','Unit Name');
     const attrValue = rawValue && unit ? (rawValue + ' ' + unit) : (rawValue || unit);
     if (!sheetName || !rowName || !attrName || !attrValue) return;
-
     const key = _rowKey(attr, rowName);
-    if (sheetName === 'component') {
-      _addBoundAttribute(by.component[key], attrName, attrValue);
-    } else if (sheetName === 'type') {
-      _addBoundAttribute(by.type[key], attrName, attrValue);
-    } else if (sheetName === 'space') {
-      _addBoundAttribute(by.space[key], attrName, attrValue);
-    } else if (sheetName === 'floor') {
-      _addBoundAttribute(by.floor[key], attrName, attrValue);
-    } else if (sheetName === 'facility') {
-      _addBoundAttribute(by.facility[key], attrName, attrValue);
-    } else if (sheetName === 'contact') {
-      _addBoundAttribute(by.contact[key], attrName, attrValue);
-    } else if (sheetName === 'system') {
-      (by.system[key] || []).forEach(systemRow => _addBoundAttribute(systemRow, attrName, attrValue));
-    }
+    (rowsByType.get(sheetName)?.[key] || []).forEach(row => _addBoundAttribute(row, attrName, attrValue));
   });
 }
 
 // ── Derived indexes and document contexts ────────────────────
 function buildIdx() {
   _bindAttributeData();
-
-  // Documents
-  idx.docs = {};
-  db.documents.forEach(d => {
-    const s = _cobieField(d, 'sheetName').toLowerCase();
-    const r = _cobieField(d, 'rowName').toLowerCase();
-    const key = _scopeKey(d._facility, s + '::' + r);
-    if (s && r) (idx.docs[key] = idx.docs[key] || []).push(d);
-  });
-
-  // Space to floor
-  idx.spFloor = {};
-  db.spaces.forEach(s => {
-    const sp = f(s,'Name').toLowerCase();
-    const fl = _cobieField(s, 'floorName').toLowerCase();
-    if (sp) idx.spFloor[_rowKey(s, sp)] = fl;
-  });
-
-  // By type / by space
-  idx.byType  = {};
-  idx.bySpace = {};
-  db.components.forEach(c => {
-    const tn = _cobieField(c, 'typeName').toLowerCase();
-    const typeKey = _rowKey(c, tn);
-    (idx.byType[typeKey] = idx.byType[typeKey] || []).push(c);
-    const sp = f(c,'Space').toLowerCase();
-    if (sp) {
-      const spaceKey = _rowKey(c, sp);
-      (idx.bySpace[spaceKey] = idx.bySpace[spaceKey] || []).push(c);
-    }
-  });
-
-  // Systems (handles multiple-row-per-component pattern)
-  const byName = {};
-  db.components.forEach(c => { byName[_rowKey(c, f(c,'Name'))] = c; });
-
-  const sysSets = {};
-  db.systems.forEach(s => {
-    const systemName = f(s,'Name').toLowerCase();
-    if (!systemName) return;
-    const key = _rowKey(s, systemName);
-    if (!sysSets[key]) sysSets[key] = new Set();
-    const raw = f(s,'ComponentNames','Component Names');
-    if (raw) raw.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean)
-                .forEach(cn => sysSets[key].add(cn));
-  });
-
-  idx.bySys = {};
-  Object.entries(sysSets).forEach(([k,set]) => {
-    const facility = k.split('::')[0];
-    idx.bySys[k] = [...set].map(n => byName[_scopeKey(facility, n)]).filter(Boolean);
-  });
-
-  // Reverse: component to systems
-  idx.compSys = {};
-  Object.entries(idx.bySys).forEach(([sk,comps]) => {
-    comps.forEach(c => {
-      const cn = _rowKey(c, f(c,'Name'));
-      const systemName = sk.slice(sk.indexOf('::') + 2);
-      (idx.compSys[cn] = idx.compSys[cn] || []).push(systemName);
-    });
-  });
-
-  // Sorted unique lists (deduplicated across multiple files)
-  idx.floors = [...new Set(
-    db.floors.length
-      ? db.floors.map(x => f(x,'Name'))
-      : db.spaces.map(x => _cobieField(x, 'floorName'))
-  )].filter(Boolean).sort();
-
-  idx.spaces  = [...new Set(db.spaces .map(s=>f(s,'Name')).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  idx.types   = [...new Set(db.types  .map(t=>f(t,'Name')).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  idx.systems = [...new Set(db.systems.map(s=>f(s,'Name')))].filter(Boolean).sort();
-  idx.facilityNames = [...new Set(db.facilities.map(fac => fac._facility||'').filter(Boolean))].sort();
-
-  // Description lookup indices
-  idx.desc = { facility:{}, floor:{}, space:{}, type:{}, system:{}, doccat:{} };
-  db.facilities.forEach(x => { const n=(x._facility||'').toLowerCase(); if(n) idx.desc.facility[n] = f(x,'Description'); });
-  db.floors .forEach(x => { const n=f(x,'Name').toLowerCase(); if(n) idx.desc.floor[n]  = f(x,'Description'); });
-  db.spaces .forEach(x => { const n=f(x,'Name').toLowerCase(); if(n) idx.desc.space[n]  = f(x,'Description'); });
-  db.types  .forEach(x => { const n=f(x,'Name').toLowerCase(); if(n) idx.desc.type[n]   = f(x,'Description'); });
-  const _seenSys = new Set();
-  db.systems.forEach(x => {
-    const n=f(x,'Name').toLowerCase();
-    if(n && !_seenSys.has(n)) { _seenSys.add(n); idx.desc.system[n] = f(x,'Description'); }
-  });
-
-  // Category groups for Space, Type, System filter panels
-  // Classification hierarchy from the Picklist master columns.
+  idx.desc = {};
   idx.catGroups = {};
   idx.categoryTrees = {};
-  const categorySpecs = {
-    facility:{ column:'Category-Facility', rows:db.facilities, names:row => row._facility || f(row,'Name') },
-    space:{ column:'Category-Space', rows:db.spaces, names:row => f(row,'Name') },
-    type:{ column:'Category-Product', rows:db.types, names:row => f(row,'Name') },
-    system:{ column:'Category-Element', rows:db.systems, names:row => f(row,'Name') },
-    doccat:{ column:'DocumentType', rows:db.documents, names:row => f(row,'Category') },
-  };
-  Object.entries(categorySpecs).forEach(([dim, spec]) => {
-    const labels = new Map();
-    (db.picklists || []).forEach(row => {
-      const value = f(row, spec.column);
-      const { code, label } = classificationParts(value);
-      if (code && !labels.has(code.toLowerCase())) labels.set(code.toLowerCase(), label);
-    });
+  updateIdxForEntities([...COBIE_RUNTIME_MODEL.entities.keys()]);
 
-    const direct = new Map();
-    spec.rows.forEach(row => {
-      const name = spec.names(row);
-      const category = dim === 'doccat' ? name : f(row,'Category');
-      if (!name) return;
-      const { code, label } = classificationParts(category || '(Uncategorised)');
-      const key = (code || '(Uncategorised)').toLowerCase();
-      if (!labels.has(key)) labels.set(key, label || code || '(Uncategorised)');
-      const values = direct.get(key) || new Set();
-      values.add(name);
-      direct.set(key, values);
-    });
+}
 
-    [...labels.keys()].forEach(key => {
-      if (key.startsWith('(')) return;
-      classificationAncestors(key).forEach(parent => {
-        const parentKey = parent.toLowerCase();
-        if (!labels.has(parentKey)) labels.set(parentKey, parent);
+function _rebuildCategoryIndex(dim) {
+  const descriptor = [...COBIE_RUNTIME_MODEL.entities.values()]
+    .find(entity => entity.categoryDimension === dim && entity.categoryPicklist);
+  if (!descriptor) return;
+  const labels = new Map();
+  (db.picklists || []).forEach(row => {
+    const { code, label } = classificationParts(f(row, descriptor.categoryPicklist));
+    if (code && !labels.has(code.toLowerCase())) labels.set(code.toLowerCase(), label);
+  });
+  const direct = new Map();
+  (db[descriptor.bucket] || []).forEach(row => {
+    const isDocumentCategory = dim === _cobieDocumentCategoryDimension();
+    const name = isDocumentCategory ? f(row,'Category') : _cobieEntityIdentity(descriptor.type, row);
+    const category = isDocumentCategory ? name : f(row,'Category');
+    if (!name) return;
+    const { code, label } = classificationParts(category || '(Uncategorised)');
+    const key = (code || '(Uncategorised)').toLowerCase();
+    if (!labels.has(key)) labels.set(key, label || code || '(Uncategorised)');
+    const values = direct.get(key) || new Set();
+    values.add(name);
+    direct.set(key, values);
+  });
+  [...labels.keys()].forEach(key => {
+    if (key.startsWith('(')) return;
+    classificationAncestors(key).forEach(parent => {
+      const parentKey = parent.toLowerCase();
+      if (!labels.has(parentKey)) labels.set(parentKey, parent);
+    });
+  });
+  const groups = {};
+  const nodes = [...labels.entries()].map(([key, label]) => {
+    const names = new Set();
+    direct.forEach((values, categoryKey) => {
+      if (categoryKey === key || categoryKey.startsWith(key + '_')) values.forEach(name => names.add(name));
+    });
+    groups[key] = [...names].sort((a,b) => a.localeCompare(b));
+    return {
+      key,
+      label,
+      depth:key.startsWith('(') ? 0 : Math.max(0, key.split('_').length - 2),
+      direct:[...(direct.get(key) || [])].sort((a,b) => a.localeCompare(b)),
+    };
+  }).filter(node => groups[node.key].length > 0)
+    .sort((a,b) => {
+      const uncategorised = Number(a.key.startsWith('(')) - Number(b.key.startsWith('('));
+      return uncategorised || a.key.localeCompare(b.key, undefined, { numeric:true });
+    });
+  (idx.catGroups ||= {})[dim] = groups;
+  (idx.categoryTrees ||= {})[dim] = nodes;
+}
+
+function _runtimeReferenceValues(row, reference) {
+  const raw = f(row, ..._cobieFieldAliasesFor(reference.field));
+  if (!raw) return [];
+  return (reference.delimiter ? raw.split(reference.delimiter) : [raw])
+    .map(value => value.trim()).filter(Boolean);
+}
+
+function _rebuildConfiguredRelationshipIndexes(references = COBIE_RUNTIME_MODEL.indexReferences) {
+  references.forEach(reference => {
+    if (reference.forwardIndex) idx[reference.forwardIndex] = {};
+    if (reference.reverseIndex) idx[reference.reverseIndex] = {};
+  });
+  references.forEach(reference => {
+    const sourceDescriptor = _cobieEntityDescriptor(reference.source);
+    const targetDescriptor = _cobieEntityDescriptor(reference.target);
+    const sourceRows = db[sourceDescriptor?.bucket] || [];
+    const targetRows = db[targetDescriptor?.bucket] || [];
+    const targetsByIdentity = Object.create(null);
+    targetRows.forEach(row => {
+      const identity = _cobieEntityIdentity(reference.target, row);
+      if (identity) targetsByIdentity[_rowKey(row, identity)] = row;
+    });
+    sourceRows.forEach(sourceRow => {
+      const sourceIdentity = _cobieEntityIdentity(reference.source, sourceRow);
+      const values = _runtimeReferenceValues(sourceRow, reference);
+      if (reference.mode === 'scalar') {
+        if (sourceIdentity) idx[reference.forwardIndex][_rowKey(sourceRow, sourceIdentity)] = (values[0] || '').toLowerCase();
+        return;
+      }
+      if (reference.mode === 'targetSources') {
+        values.forEach(value => { (idx[reference.forwardIndex][_rowKey(sourceRow, value)] ||= []).push(sourceRow); });
+        return;
+      }
+      const sourceKey = _rowKey(sourceRow, sourceIdentity);
+      const targets = values.map(value => targetsByIdentity[_rowKey(sourceRow, value)]).filter(Boolean);
+      if (reference.forwardIndex) {
+        const existing = idx[reference.forwardIndex][sourceKey] || [];
+        idx[reference.forwardIndex][sourceKey] = [...new Set([...existing, ...targets])];
+      }
+      if (reference.reverseIndex) targets.forEach(targetRow => {
+        const targetKey = _rowKey(targetRow, _cobieEntityIdentity(reference.target, targetRow));
+        const valuesForTarget = idx[reference.reverseIndex][targetKey] ||= [];
+        const normalized = sourceIdentity.toLowerCase();
+        if (!valuesForTarget.includes(normalized)) valuesForTarget.push(normalized);
       });
     });
+  });
+}
 
-    const groups = {};
-    const nodes = [...labels.entries()].map(([key, label]) => {
-      const names = new Set();
-      direct.forEach((values, categoryKey) => {
-        if (categoryKey === key || categoryKey.startsWith(key + '_')) values.forEach(name => names.add(name));
+function _runtimeSearchRowText(row, fields, includeAttributes) {
+  const values = fields.map(field => f(row, ..._cobieFieldAliasesFor(field)));
+  if (includeAttributes) {
+    values.push(Object.entries(row?._attrs || {}).map(([key,value]) => `${key} ${value}`).join(' '));
+  }
+  return values.filter(Boolean).join(' ');
+}
+
+function _rebuildConfiguredSearchIndexes(searches = COBIE_RUNTIME_MODEL.searches) {
+  searches.forEach(search => {
+    const sourceDescriptor = _cobieEntityDescriptor(search.source);
+    const rows = db[sourceDescriptor?.bucket] || [];
+    const joins = search.joins.map(join => {
+      const targetDescriptor = _cobieEntityDescriptor(join.target);
+      const byIdentity = Object.create(null);
+      (db[targetDescriptor?.bucket] || []).forEach(row => {
+        const identity = _cobieEntityIdentity(join.target, row);
+        if (identity) byIdentity[_rowKey(row, identity)] = row;
       });
-      groups[key] = [...names].sort((a,b) => a.localeCompare(b));
-      return {
-        key,
-        label,
-        depth:key.startsWith('(') ? 0 : Math.max(0, key.split('_').length - 2),
-        direct:[...(direct.get(key) || [])].sort((a,b) => a.localeCompare(b)),
-      };
-    }).filter(node => groups[node.key].length > 0)
-      .sort((a,b) => {
-        const uncategorised = Number(a.key.startsWith('(')) - Number(b.key.startsWith('('));
-        return uncategorised || a.key.localeCompare(b.key, undefined, { numeric:true });
+      return { ...join, byIdentity };
+    });
+    idx[search.index] = {};
+    rows.forEach(row => {
+      const parts = [_runtimeSearchRowText(row, search.fields, search.includeAttributes)];
+      joins.forEach(join => {
+        const targetName = f(row, ..._cobieFieldAliasesFor(join.field));
+        const targetRow = join.byIdentity[_rowKey(row, targetName)];
+        if (targetRow) parts.push(_runtimeSearchRowText(targetRow, join.fields, join.includeAttributes));
       });
-    idx.catGroups[dim] = groups;
-    idx.categoryTrees[dim] = nodes;
+      idx[search.index][_rowKey(row, _cobieEntityIdentity(search.source, row))] = parts.filter(Boolean).join(' ').toLowerCase();
+    });
   });
+}
 
-  // Search text cache — one lowercase string per component covering all relevant fields
-  const tByN = {}, sByN = {};
-  db.types .forEach(t => { tByN[_rowKey(t, f(t,'Name'))] = t; });
-  db.spaces.forEach(s => { sByN[_rowKey(s, f(s,'Name'))] = s; });
-  idx.searchText = {};
-  db.components.forEach(c => {
-    const tn = _cobieField(c, 'typeName').toLowerCase();
-    const sp = f(c,'Space').toLowerCase();
-    const t2 = tByN[_rowKey(c, tn)], s2 = sByN[_rowKey(c, sp)];
-    const cAttr = Object.entries(c._attrs || {}).map(([k,val]) => k + ' ' + val).join(' ');
-    const tAttr = t2 ? Object.entries(t2._attrs || {}).map(([k,val]) => k + ' ' + val).join(' ') : '';
-    const sAttr = s2 ? Object.entries(s2._attrs || {}).map(([k,val]) => k + ' ' + val).join(' ') : '';
-    idx.searchText[_rowKey(c, f(c,'Name'))] = [
-      f(c,'Name'), _cobieField(c, 'typeName'), f(c,'Space'),
-      f(c,'Description'), f(c,'SerialNumber','Serial Number'),
-      f(c,'TagNumber','Tag Number'), f(c,'BarCode','Bar Code'),
-      f(c,'AssetIdentifier','Asset Identifier'),
-      t2 ? [f(t2,'Category'),f(t2,'Manufacturer'),f(t2,'ModelNumber','Model Number'),f(t2,'Description')].join(' ') : '',
-      s2 ? [f(s2,'Description'),f(s2,'Category'),f(s2,'FloorName','Floor Name')].join(' ') : '',
-      cAttr, tAttr, sAttr,
-    ].filter(Boolean).join(' ').toLowerCase();
+function _rebuildDocumentIndexes() {
+  idx.docs = {};
+  const categories = {};
+  const facilityCategories = new Set();
+  const entityCategories = new Set();
+  db.documents.forEach(documentRow => {
+    const sheetName = _cobieField(documentRow, 'sheetName').toLowerCase();
+    const rowName = _cobieField(documentRow, 'rowName').toLowerCase();
+    if (sheetName && rowName) (idx.docs[_scopeKey(documentRow._facility, sheetName + '::' + rowName)] ||= []).push(documentRow);
+    const category = f(documentRow,'Category');
+    if (!category) return;
+    categories[category.toLowerCase()] = category;
+    const linkedDescriptor = _cobieEntityDescriptor(sheetName);
+    if (linkedDescriptor?.scopeIdentity) facilityCategories.add(category.toLowerCase());
+    else if (linkedDescriptor?.documentTarget) entityCategories.add(category.toLowerCase());
   });
-
-  // Document category index
-  const _dcDisp = {};
-  db.documents.forEach(d => {
-    const c = f(d,'Category'); if (!c) return;
-    _dcDisp[c.toLowerCase()] = c;
-  });
-  // Track which categories appear on facility docs vs other supported entity docs
-  const _catsOnFac  = new Set();
-  const _catsOnComp = new Set();
-  db.documents.forEach(d => {
-    const sn  = _cobieField(d, 'sheetName').toLowerCase();
-    const cv  = f(d,'Category'); if (!cv) return;
-    const cvl = cv.toLowerCase();
-    if (sn === 'facility') {
-      _catsOnFac.add(cvl);
-    } else if (['component','type','space','floor','system'].includes(sn)) {
-      _catsOnComp.add(cvl);
-    }
-  });
-  // Categories that ONLY exist on facility docs
-  idx.docCatFacilityOnly = new Set([..._catsOnFac].filter(c => !_catsOnComp.has(c)));
+  idx.docCatFacilityOnly = new Set([...facilityCategories].filter(category => !entityCategories.has(category)));
   idx.documentContexts = _buildDocumentContexts();
   idx.docCatByComp = {};
-  idx.documentContexts.forEach(context => {
-    context.components.forEach(componentKey => {
-      const cats = idx.docCatByComp[componentKey] ||= new Set();
-      context.categories.forEach(category => cats.add(category));
-    });
+  idx.documentContexts.forEach(context => context.components.forEach(componentKey => {
+    const values = idx.docCatByComp[componentKey] ||= new Set();
+    context.categories.forEach(category => values.add(category));
+  }));
+  idx.docCategories = Object.values(categories).sort((left,right) => {
+    const leftUncategorised = left.startsWith('('), rightUncategorised = right.startsWith('(');
+    return leftUncategorised !== rightUncategorised ? (leftUncategorised ? 1 : -1) : left.localeCompare(right);
   });
-  idx.docCategories = Object.keys(_dcDisp).map(k => _dcDisp[k]).sort((a,b) => {
-    const pa=a.startsWith('('), pb=b.startsWith('(');
-    return pa!==pb ? (pa?1:-1) : a.localeCompare(b);
+  _rebuildCategoryIndex('doccat');
+}
+
+function updateIdxForEntities(entityTypes) {
+  const requested = new Set((Array.isArray(entityTypes) ? entityTypes : [entityTypes])
+    .map(_cobieEntityType).filter(Boolean));
+  const domains = _cobieDependentEntityTypes([...requested]);
+  const documentTargets = _cobieDocumentTargetTypes();
+  if ([...domains].some(type => documentTargets.has(type))) domains.add('document');
+  [...COBIE_RUNTIME_MODEL.entities.values()].forEach(descriptor => {
+    if (!domains.has(descriptor.type)) return;
+    let rows = db[descriptor.bucket] || [];
+    let usingFallback = false;
+    if (!rows.length && descriptor.listFallbackSheet) {
+      rows = db[_cobieEntityBucket(descriptor.listFallbackSheet)] || [];
+      usingFallback = true;
+    }
+    if (descriptor.listIndex) {
+      const values = rows.map(row => usingFallback && descriptor.listFallbackField
+        ? f(row, ..._cobieFieldAliasesFor(descriptor.listFallbackField))
+        : _cobieEntityIdentity(descriptor.type, row));
+      idx[descriptor.listIndex] = [...new Set(values.filter(Boolean))].sort((a,b) => a.localeCompare(b));
+    }
+    if (descriptor.descriptionIndex) {
+      (idx.desc ||= {})[descriptor.descriptionIndex] = {};
+      (db[descriptor.bucket] || []).forEach(row => {
+        const identity = _cobieEntityIdentity(descriptor.type, row).toLowerCase();
+        if (identity && idx.desc[descriptor.descriptionIndex][identity] === undefined) {
+          idx.desc[descriptor.descriptionIndex][identity] = f(row,'Description');
+        }
+      });
+    }
+    if (descriptor.categoryPicklist) _rebuildCategoryIndex(descriptor.categoryDimension);
   });
+  const relationshipIndexes = COBIE_RUNTIME_MODEL.indexReferences.filter(reference =>
+    domains.has(reference.source) || domains.has(reference.target));
+  if (relationshipIndexes.length) _rebuildConfiguredRelationshipIndexes(relationshipIndexes);
+  const searchIndexes = COBIE_RUNTIME_MODEL.searches.filter(search =>
+    domains.has(search.source) || search.joins.some(join => domains.has(join.target)));
+  if (searchIndexes.length) _rebuildConfiguredSearchIndexes(searchIndexes);
+  if (domains.has('document')) _rebuildDocumentIndexes();
+}
+
+function _indexChangeTouchesFields(change, fields) {
+  const changed = new Set((change.aliases || []).map(_cobieNormKey).filter(Boolean));
+  return fields.some(field => changed.has(_cobieNormKey(field)) ||
+    _cobieFieldAliasesFor(field).some(alias => changed.has(_cobieNormKey(alias))));
+}
+
+function _indexChangeAffectsDerivedData(change) {
+  if (!change || change.index === false) return false;
+  const entityType = _cobieEntityType(change.entityType);
+  const descriptor = _cobieEntityDescriptor(entityType);
+  const aliases = Array.isArray(change.aliases) ? change.aliases : [];
+  if (!descriptor || (!aliases.length && !change.attributes)) return true;
+
+  if (change.attributes) {
+    return COBIE_RUNTIME_MODEL.searches.some(search =>
+      (search.source === entityType && search.includeAttributes) ||
+      search.joins.some(join => join.target === entityType && join.includeAttributes)
+    );
+  }
+
+  const descriptorFields = [descriptor.identityField];
+  if (descriptor.descriptionIndex) descriptorFields.push('Description');
+  if (descriptor.categoryPicklist) descriptorFields.push('Category');
+  if (_indexChangeTouchesFields(change, descriptorFields)) return true;
+
+  if (COBIE_FILTER_DIMENSIONS.some(filter => filter.source === entityType &&
+    _indexChangeTouchesFields(change, [filter.valueField, filter.throughField].filter(Boolean)))) return true;
+
+  if (COBIE_RUNTIME_MODEL.indexReferences.some(reference =>
+    (reference.source === entityType && _indexChangeTouchesFields(change, [reference.field])) ||
+    (reference.target === entityType && _indexChangeTouchesFields(change, [descriptor.identityField]))
+  )) return true;
+
+  if (COBIE_RUNTIME_MODEL.searches.some(search => {
+    if (search.source === entityType && _indexChangeTouchesFields(change,
+      [descriptor.identityField, ...search.fields, ...search.joins.map(join => join.field)])) return true;
+    return search.joins.some(join => join.target === entityType &&
+      _indexChangeTouchesFields(change, [_cobieEntityDescriptor(join.target)?.identityField, ...join.fields]));
+  })) return true;
+
+  if (entityType === COBIE_RUNTIME_MODEL.documents.sheet) return true;
+  return COBIE_RUNTIME_MODEL.documents.contexts.some(rule =>
+    (rule.source === entityType && _indexChangeTouchesFields(change,
+      [rule.field || descriptor.identityField].filter(Boolean))) ||
+    (rule.target === entityType && _indexChangeTouchesFields(change, [rule.targetField].filter(Boolean)))
+  );
+}
+
+function updateIdxForChanges(changes, affectedTypes = []) {
+  const requested = new Set((affectedTypes || []).map(_cobieEntityType).filter(Boolean));
+  (changes || []).forEach(change => {
+    if (_indexChangeAffectsDerivedData(change)) requested.add(_cobieEntityType(change.entityType));
+  });
+  if (requested.size) updateIdxForEntities([...requested]);
 }
 
 function docsFor(sheet, name, facility) {
@@ -403,21 +447,34 @@ function docsFor(sheet, name, facility) {
 
 function _buildDocumentContexts() {
   const contexts = new Map();
-  const componentsByKey = {};
-  db.components.forEach(component => { componentsByKey[_rowKey(component, f(component,'Name'))] = component; });
+  const contextDimensions = [...new Set(COBIE_RUNTIME_MODEL.documents.contexts.map(rule => rule.dimension).filter(Boolean))];
+  const rowsByType = new Map();
+  [...COBIE_RUNTIME_MODEL.entities.values()].forEach(descriptor => {
+    const lookup = Object.create(null);
+    (db[descriptor.bucket] || []).forEach(row => {
+      const identity = _cobieEntityIdentity(descriptor.type, row);
+      if (identity) lookup[_rowKey(row, identity)] = row;
+    });
+    rowsByType.set(descriptor.type, lookup);
+  });
 
-  const addComponentContext = (context, component) => {
-    if (!component) return;
-    const facility = (component._facility || '').toLowerCase();
-    const componentName = f(component,'Name').toLowerCase();
-    const typeName = _cobieField(component, 'typeName').toLowerCase();
-    const spaceName = f(component,'Space').toLowerCase();
-    const floorName = idx.spFloor[_scopeKey(facility, spaceName)] || '';
-    context.components.add(_rowKey(component, componentName));
-    if (typeName) context.types.add(typeName);
-    if (spaceName) context.spaces.add(spaceName);
-    if (floorName) context.floors.add(floorName);
-    (idx.compSys[_rowKey(component, componentName)] || []).forEach(system => context.systems.add(system));
+  const addRuleValues = (context, rule, sourceRow) => {
+    const values = [];
+    if (rule.sourceIndex) {
+      values.push(...(idx[rule.sourceIndex]?.[_rowKey(sourceRow, _cobieEntityIdentity(rule.source, sourceRow))] || []));
+    } else if (rule.target && rule.targetField) {
+      const targetName = f(sourceRow, ..._cobieFieldAliasesFor(rule.field));
+      const targetRow = rowsByType.get(rule.target)?.[_rowKey(sourceRow, targetName)];
+      if (targetRow) values.push(f(targetRow, ..._cobieFieldAliasesFor(rule.targetField)));
+    } else if (rule.field) {
+      values.push(f(sourceRow, ..._cobieFieldAliasesFor(rule.field)));
+    } else {
+      const identity = _cobieEntityIdentity(rule.source, sourceRow);
+      const searchRoot = COBIE_RUNTIME_MODEL.searches.some(search => search.source === rule.source);
+      values.push(searchRoot ? _rowKey(sourceRow, identity) : identity);
+    }
+    values.map(value => String(value || '').toLowerCase()).filter(Boolean)
+      .forEach(value => context[rule.dimension]?.add(value));
   };
 
   db.documents.forEach(doc => {
@@ -431,27 +488,16 @@ function _buildDocumentContexts() {
     if (!context) {
       context = {
         key:contextKey, identity:_docUniqueKey(doc), doc, linkedType, linkedName,
-        categories:new Set(), facilities:new Set(), floors:new Set(), spaces:new Set(),
-        types:new Set(), systems:new Set(), components:new Set(),
+        categories:new Set(),
       };
+      contextDimensions.forEach(dimension => { context[dimension] = new Set(); });
       contexts.set(contextKey, context);
     }
     if (category) context.categories.add(category);
-    if (facility) context.facilities.add(facility);
-    const linkedKey = linkedName.toLowerCase();
-    if (linkedType === 'component') {
-      addComponentContext(context, componentsByKey[_scopeKey(facility, linkedKey)]);
-    } else if (linkedType === 'type' && linkedKey) {
-      context.types.add(linkedKey);
-    } else if (linkedType === 'space' && linkedKey) {
-      context.spaces.add(linkedKey);
-      const floor = idx.spFloor[_scopeKey(facility, linkedKey)] || '';
-      if (floor) context.floors.add(floor);
-    } else if (linkedType === 'floor' && linkedKey) {
-      context.floors.add(linkedKey);
-    } else if (linkedType === 'system' && linkedKey) {
-      context.systems.add(linkedKey);
-    }
+    if (facility) context.facilities?.add(facility);
+    const sourceRow = rowsByType.get(linkedType)?.[_scopeKey(facility, linkedName)];
+    if (sourceRow) COBIE_RUNTIME_MODEL.documents.contexts.filter(rule => rule.source === linkedType)
+      .forEach(rule => addRuleValues(context, rule, sourceRow));
   });
   return [...contexts.values()];
 }

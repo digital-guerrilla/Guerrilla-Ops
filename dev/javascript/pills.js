@@ -1,18 +1,10 @@
 // ── Active filter pills and expansion controls ───────────────
-const DIM_CFG = {
-  facility: { label:'Facility',     cls:'pill-facility' },
-  floor:    { label:'Floor',        cls:'pill-floor'    },
-  space:    { label:'Space',        cls:'pill-space'    },
-  type:     { label:'Type',         cls:'pill-type'     },
-  system:   { label:'System',       cls:'pill-system'   },
-  doccat:   { label:'Doc Category', cls:'pill-doccat'   },
-};
-const NAME_LISTS = {
-  facility: () => idx.facilityNames || [],
-  floor:    () => idx.floors,  space:  () => idx.spaces,
-  type:     () => idx.types,   system: () => idx.systems,
-  doccat:   () => idx.docCategories || [],
-};
+const DIM_CFG = Object.fromEntries(COBIE_FILTER_DIMENSIONS.map(filter => [filter.dimension, {
+  label:filter.label,
+  cls:`pill-${filter.colorToken}`,
+}]));
+const NAME_LISTS = Object.fromEntries(COBIE_FILTER_DIMENSIONS
+  .map(filter => [filter.dimension, () => idx[filter.listIndex] || []]));
 
 function withDesc(name, dim) {
   if (!name) return name;

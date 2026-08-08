@@ -4,7 +4,7 @@ const groupHighlightStore = new Set();
 const groupExpandedState = new Set();
 let collapseCounter = 0;
 let allExpanded = false;
-const DEFAULT_GROUP_ORDER = Object.freeze(['facility', 'type', 'system', 'space', 'floor', 'doccat']);
+const DEFAULT_GROUP_ORDER = Object.freeze(COBIE_FILTER_DIMENSIONS.map(filter => filter.dimension));
 const groupState = {
   order:  [...DEFAULT_GROUP_ORDER],
   active: new Set(),
@@ -53,7 +53,7 @@ function groupNested(comps, dims, depth = 0, parentPath = '') {
   const [dim, ...rest] = dims;
   const map = buildGroupMap(comps, dim);
   const lvl = depth;
-  const ico = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building'}[dim] || 'bi-folder';
+  const ico = _cobieFilterDescriptor(dim)?.icon || 'bi-folder';
   return [...map.entries()].map(([name, cs]) => {
     const cid  = 'col_' + (collapseCounter++);
     const facilities = [...new Set(cs.map(c => c._facility).filter(Boolean))];
@@ -94,51 +94,24 @@ function renderLeaf(comps) {
 // ── Group map and subtitles ───────────────────────────────────
 function buildGroupMap(comps, dim) {
   const map = new Map();
-  if (dim === 'facility') {
-    comps.forEach(c => {
-      const k = c._facility || '(Unknown)';
-      if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
+  const filter = _cobieFilterDescriptor(dim);
+  const names = idx[filter?.listIndex] || [];
+  const namesByKey = new Map(names.map(name => [name.toLowerCase(), name]));
+  comps.forEach(component => {
+    const values = _componentFilterValues(component, filter);
+    const sourceValue = filter?.valueField === '_facility'
+      ? String(component._facility || '').trim()
+      : filter?.valueField
+        ? f(component, ..._cobieFieldAliasesFor(filter.valueField))
+        : '';
+    const keys = values.length
+      ? values.map(value => namesByKey.get(value) || (sourceValue.toLowerCase() === value ? sourceValue : value))
+      : [`(${filter?.emptyLabel || 'Unassigned'})`];
+    keys.forEach(key => {
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(component);
     });
-  } else if (dim === 'system') {
-    comps.forEach(c => {
-      const syss = idx.compSys[_rowKey(c, f(c,'Name'))] || [];
-      const keys = syss.length
-        ? syss.map(sk => idx.systems.find(n => n.toLowerCase() === sk) || sk)
-        : ['(No System)'];
-      keys.forEach(k => { if (!map.has(k)) map.set(k,[]); map.get(k).push(c); });
-    });
-  } else if (dim === 'type') {
-    comps.forEach(c => {
-      const k = _cobieField(c, 'typeName') || '(Unassigned)';
-      if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
-    });
-  } else if (dim === 'space') {
-    comps.forEach(c => {
-      const k = f(c,'Space') || '(No Space)';
-      if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
-    });
-  } else if (dim === 'floor') {
-    comps.forEach(c => {
-      const sp = f(c,'Space').toLowerCase();
-      const fl = idx.spFloor[_rowKey(c, sp)] || '';
-      const k  = idx.floors.find(n => n.toLowerCase() === fl) || fl || '(No Floor)';
-      if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
-    });
-  } else if (dim === 'doccat') {
-    comps.forEach(c => {
-      const cats = idx.docCatByComp?.[_rowKey(c, f(c,'Name'))];
-      if (cats && cats.size) {
-        cats.forEach(cat => {
-          const disp = idx.docCategories?.find(n => n.toLowerCase()===cat) || cat;
-          if (!map.has(disp)) map.set(disp,[]);
-          map.get(disp).push(c);
-        });
-      } else {
-        const k = '(No Documents)';
-        if (!map.has(k)) map.set(k,[]); map.get(k).push(c);
-      }
-    });
-  }
+  });
   const pb = s => s.startsWith('(');
   return new Map([...map.entries()].sort(([a],[b]) => pb(a)!==pb(b)?(pb(a)?1:-1):a.localeCompare(b)));
 }
@@ -173,9 +146,8 @@ function getGroupSubtitle(dim, name, facility) {
 }
 
 function _groupHighlightKeyParts(key) {
-  const text = String(key || '');
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(String(key || ''));
     if (Array.isArray(parsed) && parsed.length >= 3) {
       return {
         dim: String(parsed[0] || '').trim().toLowerCase(),
@@ -183,16 +155,8 @@ function _groupHighlightKeyParts(key) {
         facility: String(parsed[2] || '').trim().toLowerCase(),
       };
     }
-  } catch (_) {
-    // Keep backward compatibility with previously-stored delimiter keys.
-  }
-
-  const parts = text.split('::');
-  return {
-    dim: (parts[0] || '').trim().toLowerCase(),
-    name: (parts[1] || '').trim().toLowerCase(),
-    facility: (parts[2] || '').trim().toLowerCase(),
-  };
+  } catch (_) {}
+  return { dim:'', name:'', facility:'' };
 }
 
 function _groupHighlightMatchComponent(comp, dim, name, facility) {
@@ -200,23 +164,8 @@ function _groupHighlightMatchComponent(comp, dim, name, facility) {
   const compFacility = String(comp._facility || '').toLowerCase();
   if (facility && compFacility !== facility) return false;
 
-  if (dim === 'facility') return compFacility === name;
-  if (dim === 'type') return _cobieField(comp, 'typeName').toLowerCase() === name;
-  if (dim === 'space') return f(comp, 'Space').toLowerCase() === name;
-  if (dim === 'floor') {
-    const floor = idx.spFloor[_scopeKey(comp._facility, f(comp, 'Space'))] || '';
-    return floor === name;
-  }
-  if (dim === 'system') {
-    const systems = idx.compSys[_scopeKey(comp._facility, f(comp, 'Name'))] || [];
-    return systems.includes(name);
-  }
   if (dim === 'component') return f(comp, 'Name').toLowerCase() === name;
-  if (dim === 'doccat') {
-    const cats = idx.docCatByComp?.[_scopeKey(comp._facility, f(comp, 'Name'))];
-    return !!(cats && cats.has(name));
-  }
-  return false;
+  return _componentFilterValues(comp, _cobieFilterDescriptor(dim)).includes(name);
 }
 
 function getGroupHighlightContext() {
@@ -247,8 +196,8 @@ function getGroupHighlightContext() {
       components.push(comp);
     }
 
-    const sp = f(comp, 'Space').toLowerCase();
-    if (sp) spaces.add(sp);
+    _cobieReferenceValues('component', comp, 'Space')
+      .forEach(space => spaces.add(space.toLowerCase()));
   });
 
   return { activeKeys, spaces, components, componentKeys };
@@ -289,7 +238,7 @@ function toggleResultHighlight(key) {
 function card(c) {
   const name = f(c,'Name');
   const tn   = _cobieField(c, 'typeName');
-  const sp   = f(c,'Space');
+  const spaces = _cobieReferenceValues('component', c, 'Space');
   const desc = f(c,'Description');
   const sn   = f(c,'SerialNumber','Serial Number');
   const tag  = f(c,'TagNumber','Tag Number');
@@ -303,7 +252,7 @@ function card(c) {
   const content = `<div class="cc-name">${esc(name)}${desc ? `<span class="cc-desc"> : ${esc(desc)}</span>` : ''}</div>
     <div class="cc-meta">
       ${tn ? `<span><i class="bi bi-tag me-1"></i>${esc(withDesc(tn,'type'))}</span>` : ''}
-      ${sp ? `<span><i class="bi bi-geo-alt me-1"></i>${esc(withDesc(sp,'space'))}</span>` : ''}
+      ${spaces.length ? `<span><i class="bi bi-geo-alt me-1"></i>${esc(spaces.map(space => withDesc(space,'space')).join(', '))}</span>` : ''}
     </div>
     ${badges ? `<div class="mt-2">${badges}</div>` : ''}`;
   const activeClass = groupHighlightStore.has(compHighlightKey) ? ' is-active' : '';

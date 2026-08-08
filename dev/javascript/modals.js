@@ -1,8 +1,8 @@
 // ── Entity information modal ──────────────────────────────────
 let _typeModalViewContext = null;
 let _typeModalReturnContext = null;
-let _projectAssociationsChanged = false;
 let _projectOpeningChildModal = false;
+let _projectMutationRenderPending = false;
 const _associationOptionsCache = new Map();
 let _associationOptionsCacheCounter = 0;
 const _ASSOCIATION_OPTION_LIMIT = 120;
@@ -33,89 +33,123 @@ function _replaceSelectedKey(dim, oldName, newName) {
   if (sel[dim].delete(oldKey)) sel[dim].add(newKey);
 }
 
+function _cascadeReferenceRename(relationship, oldName, newName, facility) {
+  const descriptor = _cobieEntityDescriptor(relationship.source);
+  const aliases = _cobieFieldAliasesFor(relationship.field);
+  const runtimeReference = COBIE_RUNTIME_MODEL.indexReferences.find(reference =>
+    reference.source === relationship.source && _cobieNormKey(reference.field) === _cobieNormKey(relationship.field)
+  );
+  const delimiter = runtimeReference?.delimiter || relationship.delimiter;
+  (db[descriptor?.bucket] || []).forEach(row => {
+    if (facility && row._facility !== facility) return;
+    const value = f(row, ...aliases);
+    if (!value) return;
+    if (!delimiter) {
+      _setReference(row, aliases, oldName, newName);
+      return;
+    }
+    const values = value.split(delimiter).map(item => item.trim()).filter(Boolean);
+    if (!values.some(item => item.toLowerCase() === oldName.toLowerCase())) return;
+    _projectSetFieldValue(row, aliases,
+      values.map(item => item.toLowerCase() === oldName.toLowerCase() ? newName : item).join(delimiter));
+  });
+}
+
 function _cascadeEntityRename(entityType, oldName, newName, facility) {
   if (!newName || oldName === newName) return facility;
   _renameDocumentRows(entityType, oldName, newName, facility);
+  db.attributes.forEach(attribute => {
+    if (facility && attribute._facility !== facility) return;
+    if (_cobieField(attribute, 'sheetName').toLowerCase() !== entityType.toLowerCase()) return;
+    _setReference(attribute, _ALIASES_ROW_NAME, oldName, newName);
+  });
+  COBIE_SCHEMA_RELATIONSHIPS.filter(relationship => relationship.target === _cobieEntityType(entityType))
+    .forEach(relationship => _cascadeReferenceRename(relationship, oldName, newName, facility));
+  _replaceSelectedKey(_cobieEntityType(entityType), oldName, newName);
 
-  if (entityType === 'component') {
-    db.systems.forEach(system => {
-      if (facility && system._facility !== facility) return;
-      const key = v(system.ComponentNames) ? 'ComponentNames'
-        : Object.prototype.hasOwnProperty.call(system, 'Component Names') ? 'Component Names' : 'ComponentNames';
-      const names = String(system[key] || '').split(',').map(name => name.trim()).filter(Boolean);
-      system[key] = names.map(name => name.toLowerCase() === oldName.toLowerCase() ? newName : name).join(',');
-    });
-  } else if (entityType === 'type') {
-    db.components.forEach(component => {
-      if (!facility || component._facility === facility) _setReference(component, _ALIASES_TYPE_NAME, oldName, newName);
-    });
-    _replaceSelectedKey('type', oldName, newName);
-  } else if (entityType === 'space') {
-    db.components.forEach(component => {
-      if (!facility || component._facility === facility) _setReference(component, ['Space'], oldName, newName);
-    });
-    _replaceSelectedKey('space', oldName, newName);
-  } else if (entityType === 'floor') {
-    db.spaces.forEach(space => {
-      if (!facility || space._facility === facility) _setReference(space, _ALIASES_FLOOR_NAME, oldName, newName);
-    });
-    _replaceSelectedKey('floor', oldName, newName);
-  } else if (entityType === 'system') {
-    _replaceSelectedKey('system', oldName, newName);
-  } else if (entityType === 'facility') {
+  const descriptor = _cobieEntityDescriptor(entityType);
+  if (descriptor?.scopeIdentity) {
     const oldFacility = facility || oldName;
-    ['components', 'types', 'spaces', 'floors', 'zones', 'systems', 'documents', 'contacts', 'facilities'].forEach(key => {
-      db[key].forEach(row => { if (row._facility === oldFacility) row._facility = newName; });
+    [...COBIE_RUNTIME_MODEL.entities.values()].forEach(entity => {
+      (db[entity.bucket] || []).forEach(row => { if (row._facility === oldFacility) row._facility = newName; });
     });
-    if (db.facility) db.facility.Name = newName;
-    _replaceSelectedKey('facility', oldFacility, newName);
+    _replaceSelectedKey(descriptor.type, oldFacility, newName);
     return newName;
   }
   return facility;
 }
 
-function _updateSysComponents(sysName, newComps, facility) {
-  const rows = db.systems.filter(system =>
-    f(system, 'Name') === sysName && (!facility || system._facility === facility)
-  );
-  if (rows.length) {
-    rows.forEach((row, index) => {
-      const key = row.ComponentNames !== undefined ? 'ComponentNames' : 'Component Names';
-      row[key] = index === 0 ? newComps.join(',') : '';
-    });
-  } else if (newComps.length) {
-    db.systems.push({
-      Name:sysName,
-      ComponentNames:newComps.join(','),
-      _facility:facility || db.facilities[0]?._facility || '',
-    });
+function _projectApplyMutation(context = {}) {
+  const changes = (context.changes || [context]).filter(change => change?.entityType && change?.row);
+  const qaChanges = [];
+  const affectedTypes = new Set(context.affectedTypes || []);
+  if (changes.some(change => change.scopeRename)) {
+    COBIE_RUNTIME_MODEL.entities.forEach(entity => affectedTypes.add(entity.type));
+  }
+  if ((changes.length || affectedTypes.size) && typeof updateIdxForChanges === 'function') {
+    updateIdxForChanges(changes, [...affectedTypes]);
+  }
+
+  changes.forEach(change => {
+    const entityType = _cobieEntityType(change.entityType);
+    const entityName = String(change.entityName || _cobieEntityIdentity(entityType, change.row) || '').trim();
+    const facility = String(change.facility || change.row._facility || '').trim();
+    const aliases = Array.isArray(change.aliases) ? change.aliases : [];
+    if (change.qa !== false && aliases.length) {
+      qaChanges.push({
+        entityType,
+        entityName,
+        facility,
+        fields:aliases,
+        previousEntityName:change.previousName || '',
+      });
+    }
+    if (change.track !== false && entityName) {
+      _projectSyncEntityChangeState(entityType, change.row, entityName, facility);
+    }
+  });
+
+  if (qaChanges.length && typeof qaRevalidateFieldChanges === 'function') {
+    qaRevalidateFieldChanges(qaChanges);
+    const active = _projectActiveEntityContext();
+    if (active?.row) _projectRefreshFieldIssueBadges(active.entityType, active.entityName, active.facility);
+  }
+
+  if (context.refreshAssociations) {
+    const active = _projectActiveEntityContext();
+    if (active?.row) _associationRefreshControlsFromModel(active.entityType, active.row);
+  }
+  if (typeof _renderSummary === 'function') _renderSummary();
+  if (context.render !== false && typeof applyFilters === 'function') {
+    const modalOpen = document.getElementById('type-modal')?.classList.contains('show');
+    if (context.deferRender || modalOpen) _projectMutationRenderPending = true;
+    else applyFilters();
   }
 }
 
-function _updateCompSystems(componentName, newSystems, facility) {
-  const componentKey = componentName.toLowerCase();
-  idx.systems.forEach(systemName => {
-    const rows = db.systems.filter(system =>
-      f(system, 'Name') === systemName && (!facility || system._facility === facility)
-    );
-    const shouldInclude = newSystems.has(systemName);
-    rows.forEach(system => {
-      const key = system.ComponentNames !== undefined ? 'ComponentNames' : 'Component Names';
-      const names = String(system[key] || '').split(',').map(name => name.trim()).filter(Boolean);
-      const index = names.findIndex(name => name.toLowerCase() === componentKey);
-      if (shouldInclude && index < 0) names.push(componentName);
-      if (!shouldInclude && index >= 0) names.splice(index, 1);
-      system[key] = names.join(',');
-    });
-    if (shouldInclude && !rows.length) {
-      const component = db.components.find(row => f(row, 'Name') === componentName);
-      db.systems.push({
-        Name:systemName,
-        ComponentNames:componentName,
-        _facility:facility || component?._facility || '',
-      });
-    }
-  });
+function _projectFlushMutationRender() {
+  if (!_projectMutationRenderPending) return;
+  _projectMutationRenderPending = false;
+  if (typeof applyFilters === 'function') applyFilters();
+}
+
+function _projectAssociationMutationChanges(entityType, row, association, changedInputs, facility) {
+  if (entityType === 'document') {
+    return [{ entityType, row, entityName:f(row, 'Name'), facility, aliases:[..._ALIASES_SHEET_NAME, ..._ALIASES_ROW_NAME] }];
+  }
+  const relationship = MODEL_MODAL_RELATIONSHIPS.find(item =>
+    item.owner === entityType && item.key === association?.key
+  );
+  if (!relationship) return [{ entityType, row, facility, qa:false }];
+  const aliases = _cobieFieldAliasesFor(relationship.field);
+  if (relationship.source === entityType) {
+    return [{ entityType, row, facility, aliases }];
+  }
+  const bucket = db[_cobieEntityBucket(relationship.source)] || [];
+  return changedInputs.map(input => {
+    const sourceRow = _cobieFindEntity(relationship.source, input.value, input.dataset.targetFacility || facility);
+    return sourceRow ? { entityType:relationship.source, row:sourceRow, facility:sourceRow._facility || facility, aliases } : null;
+  }).filter(Boolean);
 }
 
 function _setTypeModalCloseReturns(shouldReturn) {
@@ -195,30 +229,6 @@ function buildDocumentCategoryBody(categoryKey, facility) {
     <div class="doc-list">${docs.map(doc => _docListItem(doc, true)).join('')}</div>`;
 }
 
-const _INFO_ENTITY_SHEET = Object.freeze({
-  type: 'Type',
-  system: 'System',
-  space: 'Space',
-  zone: 'Zone',
-  floor: 'Floor',
-  facility: 'Facility',
-  component: 'Component',
-  contact: 'Contact',
-  document: 'Document',
-});
-
-const _INFO_ENTITY_DB = Object.freeze({
-  type: 'types',
-  system: 'systems',
-  space: 'spaces',
-  zone: 'zones',
-  floor: 'floors',
-  facility: 'facilities',
-  component: 'components',
-  contact: 'contacts',
-  document: 'documents',
-});
-
 function _infoCardTintClass(token) {
   const t = String(token || '').toLowerCase();
   return t ? `project-card-${t}` : '';
@@ -229,7 +239,7 @@ function _projectAddActionButton(className, title) {
 }
 
 function _infoDocumentsCard(entityType, entityName, facility) {
-  const sheet = _INFO_ENTITY_SHEET[entityType] || '';
+  const sheet = _cobieSheetName(entityType);
   const docs = (sheet && entityName) ? docsFor(sheet, entityName, facility) : [];
   const entityLabel = {
     facility: 'project',
@@ -266,7 +276,7 @@ function _infoDocumentsCard(entityType, entityName, facility) {
 }
 
 function _associationTargetRows(targetType, facility) {
-  const bucket = _INFO_ENTITY_DB[targetType];
+  const bucket = _cobieEntityBucket(targetType);
   const rows = bucket ? db[bucket] : [];
   if (!Array.isArray(rows)) return [];
   const scoped = targetType === 'facility'
@@ -282,13 +292,7 @@ function _associationTargetRows(targetType, facility) {
 }
 
 function _associationTargetName(targetType, row) {
-  return _projectEntityIdentity(targetType, row);
-}
-
-function _projectEntityIdentity(entityType, row, fallback = '') {
-  if (entityType === 'facility') return String(row?._facility || f(row, 'Name') || fallback).trim();
-  if (entityType === 'contact') return String(f(row, 'Email') || fallback).trim();
-  return String(f(row, 'Name') || fallback).trim();
+  return _cobieEntityIdentity(targetType, row);
 }
 
 function _associationCategory(targetType, row, facility) {
@@ -355,6 +359,19 @@ function _documentAssociationRows(documentRow) {
   );
 }
 
+function _modalAssociationRelationship(entityType, association) {
+  return MODEL_MODAL_RELATIONSHIPS.find(relationship =>
+    relationship.owner === _cobieEntityType(entityType) && relationship.key === association?.key
+  ) || null;
+}
+
+function _modalAssociationValues(row, relationship) {
+  const raw = f(row, ..._cobieFieldAliasesFor(relationship.field));
+  if (!raw) return [];
+  return (relationship.delimiter ? raw.split(relationship.delimiter) : [raw])
+    .map(value => value.trim()).filter(Boolean);
+}
+
 function _associationSelectedNames(entityType, row, association, facility) {
   const selected = new Set();
   if (!row || !association) return selected;
@@ -362,48 +379,34 @@ function _associationSelectedNames(entityType, row, association, facility) {
   const staged = _newEntityDraft?.row === row ? _newEntityDraft.associations?.[key] : null;
   if (staged instanceof Set) return new Set(staged);
 
-  if (entityType === 'component' && key === 'type') {
-    const value = _cobieField(row, 'typeName');
-    if (value) selected.add(value.toLowerCase());
-  } else if (entityType === 'component' && key === 'space') {
-    const value = f(row, 'Space');
-    if (value) selected.add(value.toLowerCase());
-  } else if (entityType === 'component' && key === 'systems') {
-    (idx.compSys?.[_rowKey(row, f(row, 'Name'))] || []).forEach(name => selected.add(name.toLowerCase()));
-  } else if (entityType === 'space' && key === 'floor') {
-    const value = _cobieField(row, 'floorName');
-    if (value) selected.add(value.toLowerCase());
-  } else if (entityType === 'type' && key === 'components') {
-    db.components.forEach(component => {
-      if ((!facility || component._facility === facility) && _cobieField(component, 'typeName').toLowerCase() === f(row, 'Name').toLowerCase()) {
-        selected.add(f(component, 'Name').toLowerCase());
-      }
-    });
-  } else if (entityType === 'space' && key === 'components') {
-    db.components.forEach(component => {
-      if ((!facility || component._facility === facility) && f(component, 'Space').toLowerCase() === f(row, 'Name').toLowerCase()) {
-        selected.add(f(component, 'Name').toLowerCase());
-      }
-    });
-  } else if (entityType === 'floor' && key === 'spaces') {
-    db.spaces.forEach(space => {
-      if ((!facility || space._facility === facility) && _cobieField(space, 'floorName').toLowerCase() === f(row, 'Name').toLowerCase()) {
-        selected.add(f(space, 'Name').toLowerCase());
-      }
-    });
-  } else if (entityType === 'system' && key === 'components') {
-    const systemName = f(row, 'Name').toLowerCase();
-    db.systems.forEach(system => {
-      if ((!facility || system._facility === facility) && f(system, 'Name').toLowerCase() === systemName) {
-        f(system, 'ComponentNames', 'Component Names').split(',').map(name => name.trim().toLowerCase()).filter(Boolean).forEach(name => selected.add(name));
-      }
-    });
-  } else if (entityType === 'document') {
-    const targetSheet = _INFO_ENTITY_SHEET[association.targetType]?.toLowerCase();
+  if (entityType === 'document') {
+    const targetSheet = _cobieSheetName(association.targetType).toLowerCase();
     _documentAssociationRows(row).forEach(documentLink => {
-      if (_cobieField(documentLink, 'sheetName').toLowerCase() === targetSheet) {
-        selected.add(_cobieField(documentLink, 'rowName').toLowerCase());
+      const rowName = _cobieField(documentLink, 'rowName').trim().toLowerCase();
+      if (rowName && _cobieField(documentLink, 'sheetName').toLowerCase() === targetSheet) {
+        selected.add(rowName);
       }
+    });
+    return selected;
+  }
+  const relationship = _modalAssociationRelationship(entityType, association);
+  if (!relationship) return selected;
+  if (relationship.owner === relationship.source) {
+    const ownerIdentity = _cobieEntityIdentity(relationship.owner, row).toLowerCase();
+    const sourceRows = db[_cobieEntityBucket(relationship.source)] || [];
+    sourceRows.filter(sourceRow =>
+      (!facility || sourceRow._facility === facility) &&
+      _cobieEntityIdentity(relationship.source, sourceRow).toLowerCase() === ownerIdentity
+    ).forEach(sourceRow => _modalAssociationValues(sourceRow, relationship)
+      .forEach(value => selected.add(value.toLowerCase())));
+  } else {
+    const ownerIdentity = _cobieEntityIdentity(relationship.owner, row).toLowerCase();
+    (db[_cobieEntityBucket(relationship.source)] || []).forEach(sourceRow => {
+      if (facility && sourceRow._facility !== facility) return;
+      if (!_modalAssociationValues(sourceRow, relationship)
+        .some(value => value.toLowerCase() === ownerIdentity)) return;
+      const identity = _cobieEntityIdentity(relationship.source, sourceRow);
+      if (identity) selected.add(identity.toLowerCase());
     });
   }
   return selected;
@@ -580,7 +583,7 @@ function _associationRefreshDocumentSummary(entityType, row) {
 }
 
 function _setDocumentAssociation(documentRow, targetType, targetName, targetFacility, selected) {
-  const sheetName = _INFO_ENTITY_SHEET[targetType] || '';
+  const sheetName = _cobieSheetName(targetType);
   if (!documentRow || !sheetName || !targetName) return;
   const links = _documentAssociationRows(documentRow);
   const associationGroup = String(documentRow._associationGroup || `document-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -615,65 +618,43 @@ function _setEntityAssociation(entityType, row, association, targetName, targetF
   const key = String(association.key || '');
   const facility = String(row._facility || _projectActiveFacilityName() || '');
   const isDraft = _newEntityDraft?.row === row && !_newEntityDraft.saving;
-  const directDraftField = (entityType === 'component' && (key === 'type' || key === 'space'))
-    || (entityType === 'space' && key === 'floor');
-  if (isDraft && !directDraftField) {
+  const relationship = entityType === 'document' ? null : _modalAssociationRelationship(entityType, association);
+  if (isDraft) {
     const staged = _newEntityDraft.associations || (_newEntityDraft.associations = Object.create(null));
     const values = staged[key] || _associationSelectedNames(entityType, row, association, facility);
     if (association.cardinality === 'one') values.clear();
     if (selected) values.add(targetName.toLowerCase()); else values.delete(targetName.toLowerCase());
     staged[key] = values;
+    if (!relationship || relationship.owner !== relationship.source) return;
+  }
+  if (entityType === 'document') {
+    _setDocumentAssociation(row, association.targetType, targetName, targetFacility, selected);
     return;
   }
-  if (entityType === 'component' && key === 'type') {
-    _projectSetFieldValue(row, _ALIASES_TYPE_NAME, selected ? targetName : '');
-    if (typeof qaRevalidateFieldChange === 'function') {
-      qaRevalidateFieldChange(entityType, f(row, 'Name'), facility, _ALIASES_TYPE_NAME);
-      _projectRefreshFieldIssueBadges(entityType, f(row, 'Name'), facility);
-    }
-  } else if (entityType === 'component' && key === 'space') {
-    _projectSetFieldValue(row, ['Space'], selected ? targetName : '');
-    if (typeof qaRevalidateFieldChange === 'function') {
-      qaRevalidateFieldChange(entityType, f(row, 'Name'), facility, ['Space']);
-      _projectRefreshFieldIssueBadges(entityType, f(row, 'Name'), facility);
-    }
-  } else if (entityType === 'component' && key === 'systems') {
-    const systems = new Set(idx.compSys?.[_rowKey(row, f(row, 'Name'))] || []);
-    if (selected) systems.add(targetName); else systems.delete(targetName);
-    _updateCompSystems(f(row, 'Name'), systems, facility);
-  } else if (entityType === 'space' && key === 'floor') {
-    _projectSetFieldValue(row, _ALIASES_FLOOR_NAME, selected ? targetName : '');
-    if (typeof qaRevalidateFieldChange === 'function') {
-      qaRevalidateFieldChange(entityType, f(row, 'Name'), facility, _ALIASES_FLOOR_NAME);
-      _projectRefreshFieldIssueBadges(entityType, f(row, 'Name'), facility);
-    }
-  } else if ((entityType === 'type' || entityType === 'space') && key === 'components') {
-    const component = _findEntity(db.components, targetName, targetFacility || facility);
-    if (component) {
-      const aliases = entityType === 'type' ? _ALIASES_TYPE_NAME : ['Space'];
-      _projectSetFieldValue(component, aliases, selected ? f(row, 'Name') : '');
-      if (typeof qaRevalidateFieldChange === 'function') {
-        qaRevalidateFieldChange('component', f(component, 'Name'), component._facility || facility, aliases);
-      }
-    }
-  } else if (entityType === 'floor' && key === 'spaces') {
-    const space = _findEntity(db.spaces, targetName, targetFacility || facility);
-    if (space) {
-      _projectSetFieldValue(space, _ALIASES_FLOOR_NAME, selected ? f(row, 'Name') : '');
-      if (typeof qaRevalidateFieldChange === 'function') {
-        qaRevalidateFieldChange('space', f(space, 'Name'), space._facility || facility, _ALIASES_FLOOR_NAME);
-      }
-    }
-  } else if (entityType === 'system' && key === 'components') {
-    const current = _associationSelectedNames(entityType, row, association, facility);
-    if (selected) current.add(targetName.toLowerCase()); else current.delete(targetName.toLowerCase());
-    const names = db.components
-      .filter(component => (!facility || component._facility === facility) && current.has(f(component, 'Name').toLowerCase()))
-      .map(component => f(component, 'Name'));
-    _updateSysComponents(f(row, 'Name'), names, facility);
-  } else if (entityType === 'document') {
-    _setDocumentAssociation(row, association.targetType, targetName, targetFacility, selected);
+  if (!relationship) return;
+  const sourceDescriptor = _cobieEntityDescriptor(relationship.source);
+  const aliases = _cobieFieldAliasesFor(relationship.field);
+  const ownerIdentity = _cobieEntityIdentity(relationship.owner, row);
+  const sourceIdentity = relationship.owner === relationship.source ? ownerIdentity : targetName;
+  const sourceRows = (db[sourceDescriptor?.bucket] || []).filter(sourceRow =>
+    (!facility || sourceRow._facility === (targetFacility || facility)) &&
+    _cobieEntityIdentity(relationship.source, sourceRow).toLowerCase() === sourceIdentity.toLowerCase()
+  );
+  const writableRows = sourceRows.length ? sourceRows : (relationship.owner === relationship.source ? [row] : []);
+  if (!writableRows.length) return;
+  if (!relationship.delimiter) {
+    const referencedName = relationship.owner === relationship.source ? targetName : ownerIdentity;
+    _projectSetFieldValue(writableRows[0], aliases, selected ? referencedName : '');
+    return;
   }
+  const referencedName = relationship.owner === relationship.source ? targetName : ownerIdentity;
+  const values = new Map();
+  writableRows.forEach(sourceRow => _modalAssociationValues(sourceRow, relationship)
+    .forEach(value => values.set(value.toLowerCase(), value)));
+  if (selected) values.set(referencedName.toLowerCase(), referencedName);
+  else values.delete(referencedName.toLowerCase());
+  _projectSetFieldValue(writableRows[0], aliases, [...values.values()].join(relationship.delimiter));
+  writableRows.slice(1).forEach(sourceRow => _projectSetFieldValue(sourceRow, aliases, ''));
 }
 
 function _associationRefreshControl(control) {
@@ -714,9 +695,20 @@ function _associationRefreshControlsFromModel(entityType, row) {
     const association = associations.find(item => item.key === control.dataset.associationKey);
     const state = _associationOptionsCache.get(control.dataset.optionsCache || '');
     if (!association || !state) return;
+    const optionsHost = control.querySelector('.project-association-options');
+    const scrollTop = optionsHost?.scrollTop || 0;
+    const focused = document.activeElement;
+    const activeInput = focused?.matches?.('.project-association-option input') && focused.closest?.('.project-association') === control
+      ? focused.value : '';
     const selected = _associationSelectedNames(type, row, association, facility);
     state.options.forEach(option => { option.selected = selected.has(option.name.toLowerCase()); });
     _associationRenderOptions(control, control.querySelector('.project-association-search')?.value || '');
+    const refreshedHost = control.querySelector('.project-association-options');
+    if (refreshedHost) refreshedHost.scrollTop = scrollTop;
+    if (activeInput) {
+      [...control.querySelectorAll('.project-association-option input')]
+        .find(input => input.value === activeInput)?.focus();
+    }
     _associationRefreshControl(control);
   });
   _associationRefreshDocumentSummary(type, row);
@@ -739,29 +731,25 @@ function _commitAssociationControl(control, changedInputs) {
     if (option) option.selected = input.checked;
   });
   const activeRow = entityType === 'document' ? (_projectActiveEntityContext()?.row || row) : row;
-  buildIdx();
-  _projectSyncEntityChangeState(
-    entityType,
-    activeRow,
-    f(activeRow, 'Name') || context.entityName || '',
-    activeRow._facility || context.facility || '',
-  );
+  if (_newEntityDraft?.row === activeRow && !_newEntityDraft.saving) {
+    _associationRefreshControlsFromModel(entityType, activeRow);
+    _associationRefreshModelFields(entityType, activeRow);
+    _associationRefreshDocumentSummary(entityType, activeRow);
+    return;
+  }
+  const facility = activeRow._facility || context.facility || '';
+  const changes = _projectAssociationMutationChanges(entityType, activeRow, association, changedInputs, facility);
+  if (!changes.some(change => change.row === activeRow)) {
+    changes.push({ entityType, row:activeRow, entityName:f(activeRow, 'Name') || context.entityName || '', facility, qa:false });
+  }
+  _projectApplyMutation({ changes, refreshAssociations:true });
   _associationRefreshModelFields(entityType, activeRow);
-  _projectAssociationsChanged = true;
-  if (typeof _renderSummary === 'function') _renderSummary();
   _associationRefreshControl(control);
   _associationRefreshDocumentSummary(entityType, activeRow);
 }
 
 function _findInfoEntityRow(entityType, entityName, facility = '') {
-  const bucket = _INFO_ENTITY_DB[entityType];
-  const rows = bucket ? db[bucket] : null;
-  if (!Array.isArray(rows)) return null;
-  if (entityType === 'contact') {
-    const key = String(entityName || '').trim().toLowerCase();
-    return rows.find(row => f(row, 'Email').toLowerCase() === key && (!facility || row._facility === facility)) || null;
-  }
-  return _findEntity(rows, entityName, facility);
+  return _cobieFindEntity(entityType, entityName, facility);
 }
 
 function _infoEntityActionBar(type, row, rowName, rowFacility) {
@@ -798,7 +786,7 @@ function buildEntityInfoBody(entityType, entityName, facility = '', entityRow = 
   }
   _associationOptionsCache.clear();
 
-  const rowName = _projectEntityIdentity(type, row, entityName);
+  const rowName = _cobieEntityIdentity(type, row, entityName);
   const rowFacility = String(row._facility || facility || '');
   const originalRow = _projectOriginalEntityRow(type, rowName, rowFacility) || row;
   const originalAttrValues = _projectOriginalAttributeMapForEntity(type, rowName, rowFacility);
@@ -892,28 +880,9 @@ let _projectModalContext = null;
 let _newEntityDraft = null;
 const _projectCreatedEntityRows = new WeakSet();
 const _projectDocCollapsedCategories = new Set();
-let _projectIndexRefreshFrame = 0;
 
 function _projectIsNewEntityRow(row) {
   return !!row && (_newEntityDraft?.row === row || _projectCreatedEntityRows.has(row));
-}
-
-function _projectScheduleIndexRefresh() {
-  if (_projectIndexRefreshFrame) return;
-  if (typeof requestAnimationFrame !== 'function') {
-    buildIdx();
-    return;
-  }
-  _projectIndexRefreshFrame = requestAnimationFrame(() => {
-    _projectIndexRefreshFrame = 0;
-    buildIdx();
-  });
-}
-
-function _projectCancelIndexRefresh() {
-  if (!_projectIndexRefreshFrame) return;
-  cancelAnimationFrame(_projectIndexRefreshFrame);
-  _projectIndexRefreshFrame = 0;
 }
 
 function _restoreNewEntityInfoContext(returnContext, savedType = '', savedRow = null) {
@@ -923,7 +892,7 @@ function _restoreNewEntityInfoContext(returnContext, savedType = '', savedRow = 
   } else if (savedType === 'document' && savedRow) {
     openDoc(savedRow);
   } else if (savedType && savedRow) {
-    openGroupInfo(savedType, _projectEntityIdentity(savedType, savedRow), savedRow._facility || '');
+    openGroupInfo(savedType, _cobieEntityIdentity(savedType, savedRow), savedRow._facility || '');
   } else {
     bootstrap.Modal.getInstance(document.getElementById('type-modal'))?.hide();
   }
@@ -932,7 +901,7 @@ function _restoreNewEntityInfoContext(returnContext, savedType = '', savedRow = 
 function openNewEntityInfoModal(entityType, prefillName = '', facility = '', returnInfoContext = null, documentContext = null, associationReturn = null, fieldReturn = null) {
   const type = String(entityType || 'space').toLowerCase();
   const config = MODEL_MODAL_CONFIG?.[type];
-  const bucket = _INFO_ENTITY_DB[type];
+  const bucket = _cobieEntityBucket(type);
   if (!config || !bucket || !Array.isArray(db[bucket])) return;
 
   const draft = {
@@ -989,13 +958,13 @@ function _saveNewEntityInfo() {
     else _projectFinishAttributeEdit(editor, role, true);
   }
 
-  const identityField = state.type === 'contact' ? 'Email' : 'Name';
+  const identityField = _cobieEntityDescriptor(state.type)?.identityField || 'Name';
   const entityName = f(state.row, identityField).trim();
   if (!entityName) {
     alert(`${identityField} is required.`);
     return;
   }
-  const rows = db[_INFO_ENTITY_DB[state.type]];
+  const rows = db[_cobieEntityBucket(state.type)];
   const duplicate = rows.some(row => {
     if (f(row, identityField).toLowerCase() !== entityName.toLowerCase()) return false;
     if (String(row._facility || '').toLowerCase() !== String(state.row._facility || '').toLowerCase()) return false;
@@ -1011,6 +980,14 @@ function _saveNewEntityInfo() {
   rows.push(state.row);
   _projectCreatedEntityRows.add(state.row);
   state.saving = true;
+  const mutationChanges = [{
+    entityType:state.type,
+    row:state.row,
+    entityName,
+    facility:state.row._facility || '',
+    qa:false,
+    track:false,
+  }];
   Object.entries(state.associations || {}).forEach(([key, values]) => {
     const association = MODEL_MODAL_CONFIG?.[state.type]?.cards?.associations?.associations?.find(item => item.key === key);
     if (!association) return;
@@ -1031,26 +1008,33 @@ function _saveNewEntityInfo() {
       state.row._facility || '',
       true,
     );
-    _logChange(associationReturn.entityType, f(associationReturn.row, 'Name'), associationReturn.row._facility || '');
+    const relationship = MODEL_MODAL_RELATIONSHIPS.find(item =>
+      item.owner === associationReturn.entityType && item.key === associationReturn.association.key
+    );
+    mutationChanges.push({
+      entityType:associationReturn.entityType,
+      row:associationReturn.row,
+      facility:associationReturn.row._facility || '',
+      aliases:relationship ? _cobieFieldAliasesFor(relationship.field) : [],
+    });
   }
   const fieldReturn = state.fieldReturn;
   if (fieldReturn?.row && Array.isArray(fieldReturn.aliases)) {
     const contactValue = f(state.row, 'Email').trim() || entityName;
     _projectSetFieldValue(fieldReturn.row, fieldReturn.aliases, contactValue);
-    _projectSyncEntityChangeState(
-      fieldReturn.entityType,
-      fieldReturn.row,
-      f(fieldReturn.row, 'Name'),
-      fieldReturn.row._facility || '',
-    );
+    mutationChanges.push({
+      entityType:fieldReturn.entityType,
+      row:fieldReturn.row,
+      facility:fieldReturn.row._facility || '',
+      aliases:fieldReturn.aliases,
+    });
   }
   _logChange(state.type, entityName, state.row._facility || '');
-  if (typeof qaRevalidateAfterEntityCreate === 'function') qaRevalidateAfterEntityCreate();
   if (['type', 'space', 'system'].includes(state.type)) {
     _justCreated.add(`${state.type}::${entityName.toLowerCase()}`);
   }
-  _projectCancelIndexRefresh();
-  refreshDisplay();
+  _projectApplyMutation({ changes:mutationChanges });
+  if (typeof qaRevalidateAfterEntityCreate === 'function') qaRevalidateAfterEntityCreate(state.type, state.row);
   _restoreNewEntityInfoContext(state.returnContext, state.type, state.row);
 }
 
@@ -1061,6 +1045,11 @@ function _projectFieldValue(row, aliases) {
 function _projectSetFieldValue(row, aliases, value) {
   const existing = aliases.find(alias => Object.prototype.hasOwnProperty.call(row, alias));
   row[existing || aliases[0]] = value;
+}
+
+function _projectSetEntityFieldValue(entityType, row, aliases, value) {
+  const rows = entityType === 'document' ? _documentAssociationRows(row) : [row];
+  rows.forEach(entityRow => _projectSetFieldValue(entityRow, aliases, value));
 }
 
 function _projectUnitInfo(fac) {
@@ -1187,6 +1176,23 @@ function _projectLookupOptions(type) {
     });
   }
 
+  const entity = _cobieEntityDescriptor(type);
+  if (entity) {
+    const facility = _projectActiveFacilityName();
+    return _associationTargetRows(type, facility).map(row => {
+      const value = _cobieEntityIdentity(type, row);
+      const category = f(row, 'Category');
+      const description = f(row, 'Description');
+      const context = [category, description].filter(Boolean).join(' · ');
+      return {
+        value,
+        label:context ? `${value} — ${context}` : value,
+        depth:0,
+        search:[value, category, description].join(' ').toLowerCase(),
+      };
+    }).sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric:true }));
+  }
+
   const predefined = {
     'linear-unit':['mm', 'cm', 'm', 'km', 'in', 'ft'],
     'area-unit':['m2', 'ft2', 'ha'],
@@ -1260,7 +1266,7 @@ function _projectBaselineEntityName(entityType, currentName, facility = '') {
   const fac = String(facility || '').trim();
   if (!type || !current) return current;
 
-  const sourceKey = _INFO_ENTITY_DB[type];
+  const sourceKey = _cobieEntityBucket(type);
   const baselineRows = _originalDbState?.[sourceKey] || [];
   const existsDirect = baselineRows.some(row => {
     const rowName = f(row, 'Name');
@@ -1279,7 +1285,7 @@ function _projectBaselineEntityName(entityType, currentName, facility = '') {
 
 function _projectOriginalEntityRow(entityType, currentName, facility = '') {
   const type = String(entityType || '').toLowerCase();
-  const sourceKey = _INFO_ENTITY_DB[type];
+  const sourceKey = _cobieEntityBucket(type);
   const baselineRows = _originalDbState?.[sourceKey] || [];
   const baselineName = _projectBaselineEntityName(type, currentName, facility);
   return baselineRows.find(row =>
@@ -1340,7 +1346,7 @@ function _projectAssociationNamesFromState(entityType, entityRow, association, f
         .map(value => value.trim().toLowerCase()).filter(Boolean).forEach(value => values.add(value));
     });
   } else if (type === 'document') {
-    const sheetName = String(_INFO_ENTITY_SHEET[association.targetType] || '').toLowerCase();
+    const sheetName = _cobieSheetName(association.targetType).toLowerCase();
     const documentName = f(entityRow, 'Name').toLowerCase();
     const directory = f(entityRow, 'Directory').toLowerCase();
     const file = f(entityRow, 'File').toLowerCase();
@@ -1874,7 +1880,7 @@ function _projectEnsureAttributeRowForEntity(entityType, entityName, facilityNam
   const current = _projectAttributeRecordForEntity(entityType, entityName, facilityName, attrName);
   if (current) return current;
   const row = {
-    SheetName:(_INFO_ENTITY_SHEET[entityType] || entityType || 'Facility'),
+    SheetName:_cobieSheetName(entityType) || 'Facility',
     RowName:entityName,
     Name:attrName,
     CreatedBy:'',
@@ -1984,23 +1990,37 @@ function _projectCreateFloatingLookup(input, options, onPick, initialQuery = '',
   };
 
   let currentQuery = initialQuery;
+  let activeIndex = -1;
+  const choices = () => [...menu.querySelectorAll('.project-lookup-option')];
+  const activate = index => {
+    const items = choices();
+    if (!items.length) {
+      activeIndex = -1;
+      return;
+    }
+    activeIndex = Math.max(0, Math.min(index, items.length - 1));
+    items.forEach((item, itemIndex) => item.classList.toggle('project-lookup-option-active', itemIndex === activeIndex));
+    items[activeIndex].scrollIntoView?.({ block:'nearest' });
+  };
+  const choose = option => {
+    if (!option) return false;
+    if (option.classList.contains('project-lookup-create') && onCreate) onCreate(currentQuery.trim());
+    else onPick(option.dataset.value || '');
+    return true;
+  };
   const render = q => {
     currentQuery = String(q || '');
     menu.innerHTML = _projectLookupMenuMarkup(options, currentQuery, Boolean(onCreate));
+    activeIndex = -1;
+    if (choices().length) activate(0);
     position();
   };
 
   const onMouseDown = event => {
-    const create = event.target.closest('.project-lookup-create');
-    if (create && onCreate) {
-      event.preventDefault();
-      onCreate(currentQuery.trim());
-      return;
-    }
     const option = event.target.closest('.project-lookup-option');
     if (!option) return;
     event.preventDefault();
-    onPick(option.dataset.value || '');
+    choose(option);
   };
 
   let positionFrame = 0;
@@ -2019,6 +2039,20 @@ function _projectCreateFloatingLookup(input, options, onPick, initialQuery = '',
 
   return {
     render,
+    handleKeydown:event => {
+      const items = choices();
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && items.length) {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        activate(activeIndex < 0 ? (step > 0 ? 0 : items.length - 1) : activeIndex + step);
+        return true;
+      }
+      if (event.key === 'Enter' && activeIndex >= 0 && items[activeIndex]) {
+        event.preventDefault();
+        return choose(items[activeIndex]);
+      }
+      return false;
+    },
     destroy: () => {
       menu.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('resize', onViewportChange);
@@ -2030,6 +2064,8 @@ function _projectCreateFloatingLookup(input, options, onPick, initialQuery = '',
 }
 
 function _projectFinishFieldEdit(editor, commit) {
+  if (!editor || editor.dataset.finishing === 'true') return;
+  editor.dataset.finishing = 'true';
   const row = editor.closest('.project-field-row');
   if (!row) return;
   const valueCell = row.querySelector('[data-role="field-value"]');
@@ -2049,15 +2085,17 @@ function _projectFinishFieldEdit(editor, commit) {
   const isNewEntity = _projectIsNewEntityRow(entity);
 
   let displayValue = oldValue;
+  let qaPreviousName = '';
   if (commit && newValue !== oldValue && aliases.length) {
-    let qaPreviousName = '';
     if (fieldLabel === 'Name') {
       if (!newValue) {
         alert('Name is required.');
-      } else if (typeof _editNameConflict === 'function' && _editNameConflict(entityType, oldValue || _projectActiveEntityName() || '', newValue, entityFacility || '')) {
+      } else if ((db[_cobieEntityBucket(entityType)] || []).some(candidate => candidate !== entity &&
+        _cobieEntityIdentity(entityType, candidate).toLowerCase() === newValue.toLowerCase() &&
+        (!entityFacility || candidate._facility === entityFacility))) {
         alert(`"${newValue}" already exists.`);
       } else {
-        _projectSetFieldValue(entity, aliases, newValue);
+        _projectSetEntityFieldValue(entityType, entity, aliases, newValue);
         const oldEntityName = oldValue || _projectActiveEntityName() || '';
         qaPreviousName = oldEntityName;
         let resolvedName = newValue;
@@ -2078,26 +2116,12 @@ function _projectFinishFieldEdit(editor, commit) {
         if (!isNewEntity) _logChange(entityType, resolvedName, entityFacility || '', oldEntityName || '');
       }
     } else {
-      _projectSetFieldValue(entity, aliases, newValue);
+      _projectSetEntityFieldValue(entityType, entity, aliases, newValue);
       displayValue = newValue;
       if (!isNewEntity) row.classList.add('project-dirty');
       if (!isNewEntity) _logChange(entityType, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
     }
 
-    if (!isNewEntity && typeof qaRevalidateFieldChange === 'function') {
-      qaRevalidateFieldChange(
-        entityType,
-        _projectActiveEntityName() || f(entity, 'Name') || '',
-        entityFacility || '',
-        aliases,
-        qaPreviousName,
-      );
-      _projectRefreshFieldIssueBadges(
-        entityType,
-        _projectActiveEntityName() || f(entity, 'Name') || '',
-        entityFacility || '',
-      );
-    }
   }
 
   _projectSetValueCellMarkup(valueCell, displayValue);
@@ -2105,10 +2129,19 @@ function _projectFinishFieldEdit(editor, commit) {
     if (isNewEntity) _projectClearRowDirty(row);
     else if (displayValue !== (row.dataset.originalValue || '')) _projectMarkRowDirty(row, 'field');
     else _projectClearRowDirty(row);
-    _projectScheduleIndexRefresh();
-    _associationRefreshControlsFromModel(entityType, entity);
     if (!isNewEntity) {
-      _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
+      _projectApplyMutation({
+        changes:[{
+          entityType,
+          row:entity,
+          entityName:_projectActiveEntityName() || f(entity, 'Name') || '',
+          facility:entityFacility || '',
+          aliases,
+          previousName:qaPreviousName,
+          scopeRename:!!qaPreviousName && _cobieEntityDescriptor(entityType)?.scopeIdentity,
+        }],
+        refreshAssociations:true,
+      });
     }
   }
   if (typeof editor._cleanupLookup === 'function') editor._cleanupLookup();
@@ -2117,6 +2150,8 @@ function _projectFinishFieldEdit(editor, commit) {
 }
 
 function _projectFinishAttributeEdit(editor, role, commit) {
+  if (!editor || editor.dataset.finishing === 'true') return;
+  editor.dataset.finishing = 'true';
   const row = editor.closest('.project-attr-row');
   if (!row) return;
   const entity = _projectActiveEntityRow();
@@ -2139,12 +2174,14 @@ function _projectFinishAttributeEdit(editor, role, commit) {
   const newRaw = commit
     ? String(input?.value || '').trim()
     : (role === 'attr-name' ? oldName : (role === 'attr-unit' ? oldUnit : oldValue));
+  let changed = false;
 
   if (role === 'attr-name') {
     const finalName = newRaw || oldName;
     row.dataset.attrName = finalName;
     _projectSetValueCellMarkup(nameCell, finalName);
     if (commit && finalName && finalName !== oldName) {
+      changed = true;
       if (entity._attrs && oldName) delete entity._attrs[oldName];
       (entity._attrs ||= {})[finalName] = _projectAttributeDisplayValue(oldValue, oldUnit);
       const attrRow = _projectEnsureAttributeRowForEntity(entityType, entityName, entityFacility || '', oldName || finalName);
@@ -2158,12 +2195,12 @@ function _projectFinishAttributeEdit(editor, role, commit) {
       if (typeof _clearChangeEntries === 'function' && oldName && oldName !== finalName) {
         _clearChangeEntries('attribute', oldName, entityFacility || '', oldName);
       }
-      if (!isNewEntity) _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
     }
   } else if (role === 'attr-value') {
     const finalValue = newRaw;
     _projectSetValueCellMarkup(valueCell, finalValue);
     if (commit && finalValue !== oldValue) {
+      changed = true;
       const attrName = row.dataset.attrName || oldName || 'New Attribute';
       (entity._attrs ||= {})[attrName] = _projectAttributeDisplayValue(finalValue, oldUnit);
       const attrRow = _projectEnsureAttributeRowForEntity(entityType, entityName, entityFacility || '', attrName);
@@ -2176,12 +2213,12 @@ function _projectFinishAttributeEdit(editor, role, commit) {
       if (typeof _clearChangeEntries === 'function' && finalValue === originalValue && oldUnit === originalUnit) {
         _clearChangeEntries('attribute', attrName, entityFacility || '', attrName);
       }
-      if (!isNewEntity) _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
     }
   } else if (role === 'attr-unit') {
     const finalUnit = newRaw;
     _projectSetValueCellMarkup(unitCell, finalUnit);
     if (commit && finalUnit !== oldUnit) {
+      changed = true;
       const attrName = row.dataset.attrName || oldName || 'New Attribute';
       const currentValue = valueCell.dataset.rawValue || '';
       (entity._attrs ||= {})[attrName] = _projectAttributeDisplayValue(currentValue, finalUnit);
@@ -2195,8 +2232,13 @@ function _projectFinishAttributeEdit(editor, role, commit) {
       if (typeof _clearChangeEntries === 'function' && currentValue === originalValue && finalUnit === originalUnit) {
         _clearChangeEntries('attribute', attrName, entityFacility || '', attrName);
       }
-      if (!isNewEntity) _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
     }
+  }
+
+  if (changed && !isNewEntity) {
+    _projectApplyMutation({
+      changes:[{ entityType, row:entity, entityName, facility:entityFacility, qa:false, attributes:true }],
+    });
   }
 
   if (typeof editor._cleanupLookup === 'function') editor._cleanupLookup();
@@ -2255,6 +2297,7 @@ function _projectStartInlineEdit(target) {
   }
 
   input.addEventListener('keydown', event => {
+    if (floatingLookup?.handleKeydown(event)) return;
     if (event.key === 'Enter') {
       event.preventDefault();
       if (role === 'field-value') _projectFinishFieldEdit(editor, true);
@@ -2262,17 +2305,16 @@ function _projectStartInlineEdit(target) {
     }
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       if (role === 'field-value') _projectFinishFieldEdit(editor, false);
       else _projectFinishAttributeEdit(editor, role, false);
     }
   });
 
   input.addEventListener('blur', () => {
-    setTimeout(() => {
-      if (!document.body.contains(editor)) return;
-      if (role === 'field-value') _projectFinishFieldEdit(editor, true);
-      else _projectFinishAttributeEdit(editor, role, true);
-    }, 120);
+    if (!document.body.contains(editor)) return;
+    if (role === 'field-value') _projectFinishFieldEdit(editor, true);
+    else _projectFinishAttributeEdit(editor, role, true);
   });
 
   input.focus();
@@ -2373,7 +2415,7 @@ if (_projectModalEl) {
         return cached?.selected !== option.checked;
       });
     }
-    if (state) state.anchorName = input.value;
+    if (state && input.type === 'checkbox') state.anchorName = input.value;
     associationShiftInput = null;
     if (changedInputs.length) _commitAssociationControl(control, changedInputs);
   });
@@ -2382,6 +2424,38 @@ if (_projectModalEl) {
     const optionsHost = event.target.closest?.('.project-association-options');
     if (optionsHost) _associationLoadMore(optionsHost);
   }, true);
+
+  _projectModalEl.addEventListener('keydown', event => {
+    if (!_projectModalEl.classList.contains('project-modal')) return;
+    const search = event.target.closest('.project-association-search');
+    const optionInput = event.target.closest('.project-association-option input');
+    const control = (search || optionInput)?.closest('.project-association');
+    if (!control) return;
+    const optionInputs = [...control.querySelectorAll('.project-association-option input')];
+    if (search && event.key === 'ArrowDown' && optionInputs.length) {
+      event.preventDefault();
+      optionInputs[0].focus();
+      return;
+    }
+    if (optionInput && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      const currentIndex = optionInputs.indexOf(optionInput);
+      const nextIndex = Math.max(0, Math.min(currentIndex + (event.key === 'ArrowDown' ? 1 : -1), optionInputs.length - 1));
+      optionInputs[nextIndex]?.focus();
+      return;
+    }
+    if (optionInput && event.key === 'Enter') {
+      event.preventDefault();
+      optionInput.click();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      control.open = false;
+      control.querySelector('summary')?.focus();
+    }
+  });
 
   _projectModalEl.addEventListener('click', event => {
     if (!_projectModalEl.classList.contains('project-modal')) return;
@@ -2421,7 +2495,9 @@ if (_projectModalEl) {
       const entityFacility = _projectActiveFacilityName() || '';
       if (row.classList.contains('project-attr-row') || row.dataset.dirtyKind === 'attribute') {
         _projectDeleteAttributeRow(row, { log:false });
-        _projectSyncEntityChangeState(entityType, entity, entityName, entityFacility);
+        _projectApplyMutation({
+          changes:[{ entityType, row:entity, entityName, facility:entityFacility, qa:false, attributes:true }],
+        });
         return;
       }
       const aliases = (row.dataset.aliases || '').split('|').filter(Boolean);
@@ -2430,7 +2506,7 @@ if (_projectModalEl) {
       const previousEntityName = entityName;
       let resolvedEntityName = entityName;
       let resolvedFacility = entityFacility;
-      if (aliases.length) _projectSetFieldValue(entity, aliases, original);
+      if (aliases.length) _projectSetEntityFieldValue(entityType, entity, aliases, original);
       if (fieldLabel === 'Name' && original && original !== previousEntityName) {
         const renamedFacility = _cascadeEntityRename(entityType, previousEntityName, original, entityFacility);
         resolvedEntityName = original;
@@ -2449,19 +2525,18 @@ if (_projectModalEl) {
       }
       _projectSetValueCellMarkup(row.querySelector('[data-role="field-value"]'), original);
       _projectClearRowDirty(row);
-      _projectScheduleIndexRefresh();
-      _associationRefreshControlsFromModel(entityType, entity);
-      _projectSyncEntityChangeState(entityType, entity, resolvedEntityName, resolvedFacility);
-      if (typeof qaRevalidateFieldChange === 'function') {
-        qaRevalidateFieldChange(
+      _projectApplyMutation({
+        changes:[{
           entityType,
-          resolvedEntityName,
-          resolvedFacility,
+          row:entity,
+          entityName:resolvedEntityName,
+          facility:resolvedFacility,
           aliases,
-          fieldLabel === 'Name' ? previousEntityName : '',
-        );
-        _projectRefreshFieldIssueBadges(entityType, resolvedEntityName, resolvedFacility);
-      }
+          previousName:fieldLabel === 'Name' ? previousEntityName : '',
+          scopeRename:fieldLabel === 'Name' && _cobieEntityDescriptor(entityType)?.scopeIdentity,
+        }],
+        refreshAssociations:true,
+      });
       return;
     }
     const clearAssociations = event.target.closest('.project-association-clear');
@@ -2512,7 +2587,7 @@ if (_projectModalEl) {
       const entityType = String(context?.entityType || 'facility').toLowerCase();
       const facility = String(context?.facility || _projectActiveFacilityName() || '').trim();
       const rowName = String(context?.entityName || _projectActiveEntityName() || '').trim();
-      const sheetName = _INFO_ENTITY_SHEET[entityType] || 'Facility';
+      const sheetName = _cobieSheetName(entityType) || 'Facility';
       const returnInfoContext = {
         kind: 'group',
         entityType,
@@ -2588,10 +2663,7 @@ if (_projectModalEl) {
     _projectModalEl.classList.remove('project-modal');
     _projectModalFacility = '';
     _projectModalContext = null;
-    if (_projectAssociationsChanged) {
-      _projectAssociationsChanged = false;
-      if (typeof applyFilters === 'function') applyFilters();
-    }
+    _projectFlushMutationRender();
     if (shouldRestore && returnContext) restoreTypeModalView(returnContext);
   });
 }

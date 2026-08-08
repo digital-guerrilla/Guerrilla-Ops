@@ -41,7 +41,7 @@ function _componentPlacementFacility() {
 }
 
 function _componentPlacementActiveSpace() {
-  return f(_projectModalContext?.row, 'Space').trim();
+  return _cobieReferenceValues('component', _projectModalContext?.row, 'Space')[0] || '';
 }
 
 function _componentPlacementActiveName() {
@@ -652,14 +652,14 @@ function _renameComponentCoordinateRows(facility, oldName, newName) {
 
 function _writeComponentCoordinates(facility, componentName, placement) {
   const cleanName = String(componentName || '').trim();
-  if (!cleanName || !placement?.spaceName) return false;
+  if (!cleanName || !placement?.spaceName) return [];
   const rows = _componentPlacementRows(cleanName, facility, placement);
-  if (!rows.length) return false;
+  if (!rows.length) return [];
   _removeComponentCoordinateRows(facility, cleanName);
   rows.forEach(row => db.coordinates.push(row));
   if (typeof _viewer3dInvalidateCoordIndex === 'function') _viewer3dInvalidateCoordIndex();
   _logChange('coordinate', cleanName, facility || '');
-  return true;
+  return rows;
 }
 
 function _componentPlacementDraftFromCoordinates() {
@@ -780,9 +780,14 @@ function initComponentPlacementModal() {
       const componentName = f(component, 'Name');
       if (component && componentName) {
         _projectSetFieldValue(component, ['Space'], current.spaceName);
-        _writeComponentCoordinates(facility, componentName, current);
-        buildIdx();
-        _projectSyncEntityChangeState('component', component, componentName, facility);
+        const coordinateRows = _writeComponentCoordinates(facility, componentName, current);
+        _projectApplyMutation({
+          changes:[
+            { entityType:'component', row:component, entityName:componentName, facility, aliases:['Space'] },
+            ...coordinateRows.map(row => ({ entityType:'coordinate', row, facility, aliases:Object.keys(row) })),
+          ],
+          deferRender:true,
+        });
         _projectAssociationsChanged = true;
         _componentPlacementRefreshInfo = true;
       }

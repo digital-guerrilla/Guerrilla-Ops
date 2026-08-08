@@ -1,11 +1,10 @@
 // ── Filter panel rendering ────────────────────────────────────
 function renderPanels(counts) {
-  renderPanelCat('fpl-facility','fb-facility','facility', counts.facility);
-  renderPanel('fpl-floor',  'fb-floor',  idx.floors,  'floor',  counts.floor);
-  renderPanelCat('fpl-space',  'fb-space',  'space',  counts.space);
-  renderPanelCat('fpl-type',   'fb-type',   'type',   counts.type);
-  renderPanelCat('fpl-system', 'fb-system', 'system', counts.system);
-  renderPanelCat('fpl-doccat', 'fb-doccat', 'doccat', counts.doccat);
+  COBIE_FILTER_DIMENSIONS.forEach(filter => {
+    const args = [`fpl-${filter.dimension}`, `fb-${filter.dimension}`, filter.dimension, counts[filter.dimension] || {}];
+    if (filter.category) renderPanelCat(...args);
+    else renderPanel(args[0], args[1], idx[filter.listIndex] || [], args[2], args[3]);
+  });
 }
 
 function renderPanel(listId, badgeId, names, dim, counts) {
@@ -66,7 +65,7 @@ function renderPanelCat(listId, badgeId, dim, counts) {
       <span class="fp-cat-cnt">${selInCat>0?selInCat+'/':''}${visCount}</span>
     </div>`;
 
-    if (dim === 'doccat') return;
+    if (dim === _cobieDocumentCategoryDimension()) return;
     node.direct.forEach(name => {
       const k    = name.toLowerCase();
       const act  = sel[dim].has(k);
@@ -128,7 +127,7 @@ function _filterPanelItems(body, q) {
 
 function _filterTreeParentNodes(dim) {
   const nodes = idx.categoryTrees?.[dim] || [];
-  return nodes.filter(node => (dim !== 'doccat' && node.direct.length > 0)
+  return nodes.filter(node => (dim !== _cobieDocumentCategoryDimension() && node.direct.length > 0)
     || nodes.some(child => child.depth > node.depth && child.key.startsWith(node.key + '_')));
 }
 

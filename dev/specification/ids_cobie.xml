@@ -36,50 +36,52 @@
 
   <sheets>
 
-    <sheet name="Contact" presenceRule="Contact.AtLeastOneRowPresent" stage="Design">
+    <sheet name="Contact" bucket="contacts" identityField="Email">
+      <runtime modal="true" attributes="true"/>
+      <ui label="Contact" pluralLabel="Contacts" icon="bi-person-fill" colorToken="contact" modalTitle="Contact Information"/>
+      <validation presenceRule="Contact.AtLeastOneRowPresent" stage="Design"/>
       <columns>
-        <column name="Email" checks="NotNull|Format" groupTitle="Identification"/>
-        <column name="CreatedBy" checks="NotNull" groupTitle="Audit"/>
+        <column name="Email" checks="NotNull|Format|Unique" groupTitle="Identification"><unique ruleId="Contact.Email.Unique" severity="error"/></column>
+        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit"><reference ruleId="Contact.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="CreatedOn" checks="NotNull" groupTitle="Audit"/>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalIdentifier" aliases="ExtIdentifier" checks="NotEmpty" groupTitle="External References"/>
         <column name="Category" checks="NotNull" groupTitle="Identification"/>
-        <column name="Company" checks="NotNull" groupTitle="Identification"/>
+        <column name="Company" checks="NotNull" groupTitle="Identification"><ui label="Company / Organisation"/></column>
         <column name="Phone" checks="NotNull" groupTitle="Communication"/>
         <column name="Department" checks="NotEmpty" groupTitle="Identification"/>
-        <column name="OrganizationCode" checks="NotEmpty" groupTitle="Identification"/>
+        <column name="OrganizationCode" checks="NotEmpty" groupTitle="Identification"><ui label="Organisation Code"/></column>
         <column name="GivenName" checks="NotEmpty" groupTitle="Identification"/>
         <column name="FamilyName" checks="NotEmpty" groupTitle="Identification"/>
         <column name="Street" checks="NotEmpty" groupTitle="Address"/>
         <column name="PostalBox" checks="NotEmpty" groupTitle="Address"/>
-        <column name="Town" checks="NotEmpty" groupTitle="Address"/>
-        <column name="StateRegion" checks="NotEmpty" groupTitle="Address"/>
+        <column name="Town" checks="NotEmpty" groupTitle="Address"><ui label="Town / City"/></column>
+        <column name="StateRegion" checks="NotEmpty" groupTitle="Address"><ui label="State / Region"/></column>
         <column name="PostalCode" checks="NotEmpty" groupTitle="Address"/>
         <column name="Country" checks="NotEmpty" groupTitle="Address"/>
       </columns>
-      <uniqueRules>
-        <unique ruleId="Contact.Email.Unique" keys="Email" severity="error"/>
-      </uniqueRules>
-      <references>
-        <reference ruleId="Contact.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>
-      </references>
     </sheet>
 
-    <sheet name="Facility" singleRowRule="Facility.OneAndOnlyOneFacilityFound" stage="Design">
+    <sheet name="Facility" bucket="facilities" identityField="Name">
+      <runtime scopeIdentity="true" modal="true" attributes="true" listIndex="facilityNames" descriptionIndex="facility" categoryPicklist="Category-Facility"/>
+      <ui label="Facility" pluralLabel="Facilities" icon="bi-building" colorToken="facility" modalTitle="Project Information"/>
+      <filter dimension="facility" order="1" category="true" contextProperty="facilities" valueField="_facility" emptyLabel="Unknown"/>
+      <documents target="true" dimension="facilities"/>
+      <validation singleRowRule="Facility.OneAndOnlyOneFacilityFound" stage="Design"/>
       <columns>
-        <column name="Name" checks="NotNull" groupTitle="Identification"/>
-        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"/>
+        <column name="Name" checks="NotNull|Unique" groupTitle="Identification"><unique ruleId="Facility.Name.Unique" severity="error"/></column>
+        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Identification"><reference ruleId="Facility.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>
         <column name="Category" checks="NotNull" groupTitle="Identification"/>
         <column name="Description" checks="NotEmpty" groupTitle="Identification"/>
-        <column name="ProjectName" checks="NotNull" groupTitle="Project &amp; Site"/>
-        <column name="SiteName" checks="NotNull" groupTitle="Project &amp; Site"/>
-        <column name="LinearUnits" checks="NotNull" groupTitle="Units &amp; Measurement"/>
-        <column name="AreaUnits" checks="NotNull" groupTitle="Units &amp; Measurement"/>
-        <column name="VolumeUnits" checks="NotNull" groupTitle="Units &amp; Measurement"/>
-        <column name="Currency" aliases="CurrencyUnit|Currency Unit" checks="NotNull" groupTitle="Units &amp; Measurement"/>
-        <column name="AreaMeasurement" checks="NotNull" groupTitle="Units &amp; Measurement"/>
+        <column name="ProjectName" checks="NotNull" groupTitle="Context"/>
+        <column name="SiteName" checks="NotNull" groupTitle="Context"/>
+        <column name="LinearUnits" checks="NotNull" groupTitle="Units"/>
+        <column name="AreaUnits" checks="NotNull" groupTitle="Units"/>
+        <column name="VolumeUnits" checks="NotNull" groupTitle="Units"/>
+        <column name="Currency" aliases="CurrencyUnit|Currency Unit" checks="NotNull" groupTitle="Units"/>
+        <column name="AreaMeasurement" checks="NotNull" groupTitle="Units"/>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalProjectObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalProjectIdentifier" checks="NotEmpty" groupTitle="External References"/>
@@ -88,18 +90,17 @@
         <column name="ExternalFacilityObject" aliases="ExternalObject|ExtObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalFacilityIdentifier" aliases="ExternalIdentifier|ExtIdentifier" checks="NotEmpty" groupTitle="External References"/>
       </columns>
-      <uniqueRules>
-        <unique ruleId="Facility.Name.Unique" keys="Name" severity="error"/>
-      </uniqueRules>
-      <references>
-        <reference ruleId="Facility.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>
-      </references>
     </sheet>
 
-    <sheet name="Floor" presenceRule="Floor.AtLeastOneRowPresent" stage="Design">
+    <sheet name="Floor" bucket="floors" identityField="Name">
+      <runtime mergeRows="true" modal="true" attributes="true" listIndex="floors" listFallbackSheet="Space" listFallbackField="FloorName" descriptionIndex="floor"/>
+      <ui label="Floor" pluralLabel="Floors" icon="bi-layers-fill" colorToken="floor" modalTitle="Floor Information"/>
+      <filter dimension="floor" order="5" contextProperty="floors" throughField="Space" throughIndex="spFloor" emptyLabel="No Floor"/>
+      <documents target="true" dimension="floors"/>
+      <validation presenceRule="Floor.AtLeastOneRowPresent" stage="Design"/>
       <columns>
-        <column name="Name" checks="NotNull" groupTitle="Identification"/>
-        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"/>
+        <column name="Name" checks="NotNull|Unique" groupTitle="Identification"><unique ruleId="Floor.Name.Unique" severity="error"/></column>
+        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Identification"><reference ruleId="Floor.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>
@@ -108,89 +109,86 @@
         <column name="Elevation" checks="ValidNumberOrNA" groupTitle="Geometry"/>
         <column name="Height" checks="ZeroOrGreaterOrNA" groupTitle="Geometry"/>
       </columns>
-      <uniqueRules>
-        <unique ruleId="Floor.Name.Unique" keys="Name" severity="error"/>
-      </uniqueRules>
-      <references>
-        <reference ruleId="Floor.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>
-      </references>
     </sheet>
 
-    <sheet name="Space" presenceRule="Space.AtLeastOneRowPresent" stage="Design">
+    <sheet name="Space" bucket="spaces" identityField="Name">
+      <runtime modal="true" attributes="true" listIndex="spaces" descriptionIndex="space" categoryPicklist="Category-Space"/>
+      <ui label="Space" pluralLabel="Spaces" icon="bi-grid-fill" colorToken="space" modalTitle="Space Information"/>
+      <filter dimension="space" order="4" category="true" contextProperty="spaces" valueField="Space" emptyLabel="No Space"/>
+      <documents target="true" dimension="spaces"/>
+      <validation presenceRule="Space.AtLeastOneRowPresent" stage="Design"/>
       <columns>
-        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"/>
+        <column name="Name" checks="NotNull|Unique" groupTitle="Identification"><unique ruleId="Space.PrimaryKey.Unique.Error" severity="error"/></column>
+        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Identification"><reference ruleId="Space.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References"/>
         <column name="Category" checks="NotNull" groupTitle="Identification"/>
-        <column name="Name" checks="NotNull" groupTitle="Identification"/>
-        <column name="FloorName" aliases="Floor Name|Floor" checks="NotNull" groupTitle="Identification"/>
+        <column name="FloorName" aliases="Floor Name|Floor" checks="NotNull|CrossReference" groupTitle="Identification">
+          <ui label="Floor"/>
+          <reference ruleId="Space.FloorName.CrossReference" targetSheet="Floor" targetColumn="Name" required="true" forwardIndex="spFloor" indexMode="scalar" documentContext="true">
+            <association ownerSheet="Floor" key="spaces" label="Spaces" cardinality="many"/>
+            <association ownerSheet="Space" key="floor" label="Floor" cardinality="one"/>
+          </reference>
+        </column>
         <column name="Description" checks="NotNull" groupTitle="Identification"/>
         <column name="RoomTag" aliases="Room Tag" checks="NotEmpty" groupTitle="Measurements"/>
         <column name="UsableHeight" checks="ZeroOrGreaterOrNA" groupTitle="Measurements"/>
         <column name="GrossArea" checks="ZeroOrGreaterOrNA" groupTitle="Measurements"/>
         <column name="NetArea" checks="ZeroOrGreaterOrNA" groupTitle="Measurements"/>
       </columns>
-      <uniqueRules>
-        <unique ruleId="Space.PrimaryKey.Unique.Warning" keys="Name" severity="warning"/>
-        <unique ruleId="Space.PrimaryKey.Unique.Error" keys="Name" severity="error"/>
-      </uniqueRules>
-      <references>
-        <reference ruleId="Space.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>
-        <reference ruleId="Space.FloorName.CrossReference" column="FloorName" targetSheet="Floor" targetColumn="Name" required="true"/>
-      </references>
     </sheet>
 
-    <sheet name="Zone">
+    <sheet name="Zone" bucket="zones" identityField="Name">
+      <runtime modal="true"/>
+      <ui label="Zone" pluralLabel="Zones" icon="bi-bounding-box-circles" colorToken="space" modalTitle="Zone Information"/>
       <columns>
-        <column name="CreatedBy" checks="NotNull" groupTitle="Audit"/>
+        <column name="Name" checks="NotNull|Unique" groupTitle="Identification"><unique ruleId="Zone.PrimaryKey.Unique" keys="Name|SpaceNames" severity="error"/></column>
+        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit"><reference ruleId="Zone.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit"/>
         <column name="Category" checks="NotNull" groupTitle="Identification"/>
         <column name="Description" checks="NotEmpty" groupTitle="Identification"/>
+        <column name="SpaceNames" checks="NotNull|CrossReference" groupTitle="Identification"><reference ruleId="Zone.SpaceNames.CrossReference" targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter=";"/></column>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References"/>
-        <column name="Name" checks="NotNull" groupTitle="Identification"/>
-        <column name="SpaceNames" checks="NotNull" groupTitle="Identification"/>
       </columns>
-      <uniqueRules>
-        <unique ruleId="Zone.PrimaryKey.Unique" keys="Name|SpaceNames" severity="error"/>
-      </uniqueRules>
-      <references>
-        <reference ruleId="Zone.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>
-        <reference ruleId="Zone.SpaceNames.CrossReference" column="SpaceNames" targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter=";"/>
-      </references>
     </sheet>
 
-    <sheet name="Type" presenceRule="Type.AtLeastOneRowPresent" stage="Design|Construction">
+    <sheet name="Type" bucket="types" identityField="Name">
+      <runtime modal="true" attributes="true" listIndex="types" descriptionIndex="type" categoryPicklist="Category-Product"/>
+      <ui label="Type" pluralLabel="Types" icon="bi-tag-fill" colorToken="type" modalTitle="Type Information"/>
+      <filter dimension="type" order="2" category="true" contextProperty="types" valueField="TypeName" emptyLabel="Unassigned" defaultActive="true"/>
+      <documents target="true" dimension="types"/>
+      <validation presenceRule="Type.AtLeastOneRowPresent" stage="Design|Construction"/>
       <columns>
-        <column name="Name" checks="NotNull" groupTitle="Identification" stage="Design"/>
+        <column name="Name" checks="NotNull|Unique" groupTitle="Identification" stage="Design"><unique ruleId="Type.Name.Unique" severity="error"/></column>
         <column name="Description" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"/>
+        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit" stage="Design"><reference ruleId="Type.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>
         <column name="Category" checks="NotNull" groupTitle="Identification" stage="Design"/>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="AssetType" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="Manufacturer" checks="NotNull" groupTitle="Manufacturer" stage="Construction"/>
+        <column name="Manufacturer" checks="NotNull|CrossReference" groupTitle="Manufacturer" stage="Construction"><reference ruleId="Type.Manufacturer.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="ModelNumber" checks="NotNull" groupTitle="Manufacturer" stage="Construction"/>
-        <column name="WarrantyGuarantorParts" checks="NotNull" groupTitle="Warranty" stage="Construction"/>
-        <column name="WarrantyDurationParts" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>
-        <column name="WarrantyGuarantorLabor" checks="NotNull" groupTitle="Warranty" stage="Construction"/>
-        <column name="WarrantyDurationLabor" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>
+        <column name="WarrantyGuarantorParts" checks="NotNull|CrossReference" groupTitle="Warranty" stage="Construction"><ui label="Parts Guarantor"/><reference ruleId="Type.WarrantyGuarantorParts.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="WarrantyDurationParts" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"><ui label="Parts Duration"/></column>
+        <column name="WarrantyGuarantorLabor" checks="NotNull|CrossReference" groupTitle="Warranty" stage="Construction"><ui label="Labour Guarantor"/><reference ruleId="Type.WarrantyGuarantorLabor.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="WarrantyDurationLabor" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"><ui label="Labour Duration"/></column>
         <column name="WarrantyDurationUnit" aliases="DurationUnit" checks="NotNull" groupTitle="Warranty" stage="Construction"/>
         <column name="ReplacementCost" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>
         <column name="ExpectedLife" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>
         <column name="DurationUnit" checks="NotNull" groupTitle="Warranty" stage="Construction"/>
         <column name="WarrantyDescription" checks="NotEmpty" groupTitle="Warranty" stage="Construction"/>
-        <column name="NominalLength" checks="ZeroOrGreaterOrNA" groupTitle="Dimensions &amp; Form" stage="Design"/>
-        <column name="NominalWidth" checks="ZeroOrGreaterOrNA" groupTitle="Dimensions &amp; Form" stage="Design"/>
-        <column name="NominalHeight" checks="ZeroOrGreater" groupTitle="Dimensions &amp; Form" stage="Design"/>
+        <column name="NominalLength" checks="ZeroOrGreaterOrNA" groupTitle="Dimensions" stage="Design"/>
+        <column name="NominalWidth" checks="ZeroOrGreaterOrNA" groupTitle="Dimensions" stage="Design"/>
+        <column name="NominalHeight" checks="ZeroOrGreaterOrNA" groupTitle="Dimensions" stage="Design"/>
         <column name="ModelReference" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>
-        <column name="Shape" checks="NotEmpty" groupTitle="Dimensions &amp; Form" stage="Construction"/>
-        <column name="Size" checks="NotEmpty" groupTitle="Dimensions &amp; Form" stage="Construction"/>
+        <column name="Shape" checks="NotEmpty" groupTitle="Dimensions" stage="Construction"/>
+        <column name="Size" checks="NotEmpty" groupTitle="Dimensions" stage="Construction"/>
         <column name="Color" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>
         <column name="Finish" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>
         <column name="Grade" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>
@@ -201,68 +199,139 @@
         <column name="CodePerformance" checks="NotEmpty" groupTitle="Performance" stage="Construction"/>
         <column name="SustainabilityPerformance" checks="NotEmpty" groupTitle="Performance" stage="Construction"/>
       </columns>
-      <uniqueRules>
-        <unique ruleId="Type.Name.Unique" keys="Name" severity="error"/>
-      </uniqueRules>
-      <references>
-        <reference ruleId="Type.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true" stage="Design"/>
-        <reference ruleId="Type.Manufacturer.CrossReference" column="Manufacturer" targetSheet="Contact" targetColumn="Email" required="true" stage="Construction"/>
-        <reference ruleId="Type.WarrantyGuarantorParts.CrossReference" column="WarrantyGuarantorParts" targetSheet="Contact" targetColumn="Email" required="true" stage="Construction"/>
-        <reference ruleId="Type.WarrantyGuarantorLabor.CrossReference" column="WarrantyGuarantorLabor" targetSheet="Contact" targetColumn="Email" required="true" stage="Construction"/>
-      </references>
-        <relationRules>
-      <relation ruleId="Type.Type.Component.AComponentForEachType" type="atLeastOneTargetPerRow" targetSheet="Component" targetColumn="TypeName" severity="error" stage="Design"/>
+      <relationRules>
+        <relation ruleId="Type.Type.Component.AComponentForEachType" type="atLeastOneTargetPerRow" targetSheet="Component" targetColumn="TypeName" severity="error" stage="Design"/>
       </relationRules>
     </sheet>
 
-    <sheet name="Component" presenceRule="Component.AtLeastOneRowPresent" stage="Design|Construction">
+    <sheet name="Component" bucket="components" identityField="Name">
+      <runtime modal="true" attributes="true" searchIndex="searchText"/>
+      <ui label="Component" pluralLabel="Components" icon="bi-tools" colorToken="component" modalTitle="Component Information"/>
+      <documents target="true" dimension="components"/>
+      <validation presenceRule="Component.AtLeastOneRowPresent" stage="Design|Construction"/>
       <columns>
-        <column name="Name" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"/>
+        <column name="Name" checks="NotNull|Unique" groupTitle="Identification" stage="Design" search="true"><unique ruleId="Component.PrimaryKey.Unique.Error" severity="error"/></column>
+        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit" stage="Design"><reference ruleId="Component.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References" stage="Design"/>
-        <column name="TypeName" aliases="Type Name" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="Space" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="Description" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="SerialNumber" checks="NotNull" groupTitle="Asset" stage="Construction"/>
+        <column name="TypeName" aliases="Type Name" checks="NotNull|CrossReference" groupTitle="Identification" stage="Design" search="true">
+          <ui label="Type"/>
+          <reference ruleId="Component.TypeName.CrossReference" targetSheet="Type" targetColumn="Name" required="true" forwardIndex="byType" indexMode="targetSources" searchFields="Category|Manufacturer|ModelNumber|Description" searchAttributes="true">
+            <association ownerSheet="Type" key="components" label="Components" cardinality="many"/>
+            <association ownerSheet="Component" key="type" label="Type" cardinality="one"/>
+          </reference>
+        </column>
+        <column name="Space" checks="NotNull|CrossReference" groupTitle="Identification" stage="Design" search="true">
+          <reference ruleId="Component.Space.CrossReference" targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter="," forwardIndex="bySpace" indexMode="targetSources" searchFields="Description|Category|FloorName" searchAttributes="true">
+            <association ownerSheet="Space" key="components" label="Components" cardinality="many"/>
+            <association ownerSheet="Component" key="space" label="Spaces" cardinality="many"/>
+          </reference>
+        </column>
+        <column name="Description" checks="NotNull" groupTitle="Identification" stage="Design" search="true"/>
+        <column name="SerialNumber" checks="NotNull" groupTitle="Asset" stage="Construction" search="true"/>
         <column name="InstallationDate" checks="NotNull" groupTitle="Asset" stage="Construction"/>
         <column name="WarrantyStartDate" checks="NotNull" groupTitle="Asset" stage="Construction"/>
-        <column name="TagNumber" checks="NotEmpty" groupTitle="Asset" stage="Construction"/>
-        <column name="BarCode" checks="NotEmpty" groupTitle="Asset" stage="Construction"/>
-        <column name="AssetIdentifier" checks="NotEmpty" groupTitle="Asset" stage="Construction"/>
+        <column name="TagNumber" checks="NotEmpty" groupTitle="Asset" stage="Construction" search="true"/>
+        <column name="BarCode" checks="NotEmpty" groupTitle="Asset" stage="Construction" search="true"/>
+        <column name="AssetIdentifier" checks="NotEmpty" groupTitle="Asset" stage="Construction" search="true"/>
       </columns>
-      <uniqueRules>
-        <unique ruleId="Component.PrimaryKey.Unique.Warning" keys="Name" severity="warning" stage="Design"/>
-        <unique ruleId="Component.PrimaryKey.Unique.Error" keys="Name" severity="error" stage="Design"/>
-      </uniqueRules>
-      <references>
-        <reference ruleId="Component.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true" stage="Design"/>
-        <reference ruleId="Component.TypeName.CrossReference" column="TypeName" targetSheet="Type" targetColumn="Name" required="true" stage="Design"/>
-        <reference ruleId="Component.Space.CrossReference" column="Space" targetSheet="Space" targetColumn="Name" required="true" stage="Design"/>
-      </references>
     </sheet>
 
-    <sheet name="System" stage="Design|Construction">
+    <sheet name="System" bucket="systems" identityField="Name">
+      <runtime modal="true" attributes="true" listIndex="systems" descriptionIndex="system" categoryPicklist="Category-Element"/>
+      <ui label="System" pluralLabel="Systems" icon="bi-diagram-3-fill" colorToken="system" modalTitle="System Information"/>
+      <filter dimension="system" order="3" category="true" contextProperty="systems" valueIndex="compSys" emptyLabel="No System"/>
+      <documents target="true" dimension="systems"/>
+      <validation stage="Design|Construction"/>
       <columns>
-        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"/>
+        <column name="Name" checks="NotNull|Unique" groupTitle="Identification" stage="Design"><unique ruleId="System.PrimaryKey.Unique" keys="Name|ComponentNames" severity="error"/></column>
+        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit" stage="Design"><reference ruleId="System.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>
         <column name="Category" checks="NotNull" groupTitle="Identification" stage="Design"/>
+        <column name="ComponentNames" checks="NotNull|CrossReference" stage="Design">
+          <reference ruleId="System.ComponentNames.CrossReference" targetSheet="Component" targetColumn="Name" required="true" multiValueDelimiter=";" runtimeDelimiter="," forwardIndex="bySys" reverseIndex="compSys" indexMode="sourceTargets">
+            <association ownerSheet="System" key="components" label="Components" cardinality="many"/>
+            <association ownerSheet="Component" key="systems" label="Systems" cardinality="many"/>
+          </reference>
+        </column>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="Description" checks="NotEmpty" groupTitle="Identification" stage="Design"/>
-        <column name="Name" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="ComponentNames" checks="NotNull" stage="Design"/>
       </columns>
-      <uniqueRules>
-        <unique ruleId="System.PrimaryKey.Unique" keys="Name|ComponentNames" severity="error" stage="Design"/>
-      </uniqueRules>
-      <references>
-        <reference ruleId="System.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true" stage="Design"/>
-        <reference ruleId="System.ComponentNames.CrossReference" column="ComponentNames" targetSheet="Component" targetColumn="Name" required="true" multiValueDelimiter=";" stage="Design"/>
-      </references>
+    </sheet>
+
+    <sheet name="Document" bucket="documents" identityField="Name">
+      <runtime modal="true" categoryPicklist="DocumentType" categoryDimension="doccat"/>
+      <ui label="Document" pluralLabel="Documents" icon="bi-file-earmark-text" colorToken="doccat" modalTitle="Document Information"/>
+      <filter dimension="doccat" order="6" category="true" contextProperty="categories" valueIndex="docCatByComp" emptyLabel="No Documents"/>
+      <columns>
+        <column name="Name" groupTitle="Identification"/>
+        <column name="CreatedBy" groupTitle="Audit" lookupSource="Contact"/>
+        <column name="CreatedOn" groupTitle="Audit"/>
+        <column name="Category" groupTitle="Identification"/>
+        <column name="Description" groupTitle="Identification"/>
+        <column name="ApprovalBy" groupTitle="Audit"/>
+        <column name="Stage" groupTitle="Identification"/>
+        <column name="SheetName" aliases="Sheet Name" groupTitle="Association"/>
+        <column name="RowName" aliases="Row Name" groupTitle="Association"/>
+        <column name="Directory" groupTitle="Location"/>
+        <column name="File" groupTitle="Location"/>
+        <column name="ExternalSystem" aliases="ExtSystem" groupTitle="External References"/>
+        <column name="ExternalObject" aliases="ExtObject" groupTitle="External References"/>
+        <column name="ExternalIdentifier" aliases="ExtIdentifier" groupTitle="External References"/>
+        <column name="Reference" groupTitle="External References"/>
+      </columns>
+    </sheet>
+
+    <sheet name="Attribute" bucket="attributes" identityField="Name">
+      <ui label="Attribute" pluralLabel="Attributes" icon="bi-list-check" colorToken="attribute"/>
+      <columns>
+        <column name="Name"/>
+        <column name="CreatedBy"/>
+        <column name="CreatedOn"/>
+        <column name="Category"/>
+        <column name="SheetName" aliases="Sheet Name"/>
+        <column name="RowName" aliases="Row Name"/>
+        <column name="Value" aliases="AttributeValue|Attribute Value|NominalValue|Nominal Value"/>
+        <column name="Unit" aliases="UnitName|Unit Name"/>
+        <column name="AllowedValues"/>
+        <column name="ExternalSystem" aliases="ExtSystem"/>
+        <column name="ExternalObject" aliases="ExtObject"/>
+        <column name="ExternalIdentifier" aliases="ExtIdentifier"/>
+      </columns>
+    </sheet>
+
+    <sheet name="Coordinate" bucket="coordinates" identityField="Name">
+      <ui label="Coordinate" pluralLabel="Coordinates" icon="bi-crosshair" colorToken="coordinate"/>
+      <columns>
+        <column name="Name"/>
+        <column name="CreatedBy"/>
+        <column name="CreatedOn"/>
+        <column name="Category"/>
+        <column name="SheetName" aliases="Sheet Name"/>
+        <column name="RowName" aliases="Row Name"/>
+        <column name="CoordinateXAxis"/>
+        <column name="CoordinateYAxis"/>
+        <column name="CoordinateZAxis"/>
+        <column name="ExternalSystem" aliases="ExtSystem"/>
+        <column name="ExternalObject" aliases="ExtObject"/>
+        <column name="ExternalIdentifier" aliases="ExtIdentifier"/>
+      </columns>
+    </sheet>
+
+    <sheet name="Picklist" bucket="picklists" identityField="Name">
+      <ui label="Picklist" pluralLabel="Picklists" icon="bi-card-list" colorToken="picklist"/>
+      <columns>
+        <column name="Name"/>
+        <column name="Category-Facility"/>
+        <column name="Category-Space"/>
+        <column name="Category-Product"/>
+        <column name="Category-Element"/>
+        <column name="DocumentType"/>
+      </columns>
     </sheet>
   </sheets>
 

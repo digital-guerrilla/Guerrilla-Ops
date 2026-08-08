@@ -89,6 +89,53 @@ assert(!qaSource.includes('bi-pencil') && !qaSource.includes('data-edit-entity')
 assert(modelConfigSource.includes('const MODEL_MODAL_CONFIG = Object.freeze(_buildModelModalConfig());') &&
   !modelConfigSource.includes('const MODEL_MODAL_CONFIG = Object.freeze({'),
   'modal configuration must be generated from the COBie XML rather than a hardcoded object');
+assert(!modelConfigSource.includes('MODEL_MODAL_PRESENTATION') && !modelConfigSource.includes('MODEL_MODAL_FIELD_LABELS'),
+  'modal presentation and exceptional field labels must come from nested XML UI metadata');
+assert(!fs.readFileSync(path.join(javascriptDir, 'documents.js'), 'utf8').includes('function collectDocsForComps'),
+  'the obsolete hardcoded document relationship traversal must remain removed');
+assert(!currentJavascriptSource.includes('db.facility') &&
+  !modalsSource.includes('function _projectEntityIdentity') &&
+  !modalsSource.includes('_editNameConflict'),
+  'obsolete single-facility state and modal compatibility hooks must remain removed');
+const placementSource = fs.readFileSync(path.join(javascriptDir, 'component-placement.js'), 'utf8');
+const placementApplySource = placementSource.slice(placementSource.indexOf("const applyBtn = event.target.closest('[data-component-placement-apply]')"));
+assert(placementApplySource.includes('_projectApplyMutation({') && !placementApplySource.includes('buildIdx();'),
+  'component placement must use incremental mutation handling instead of rebuilding every index');
+assert(modalsSource.includes('let _projectMutationRenderPending = false;') &&
+  modalsSource.includes('function _projectFlushMutationRender()'),
+  'modal mutations must coalesce hidden result refreshes until the modal closes');
+const inlineLookupSource = modalsSource.slice(modalsSource.indexOf('function _projectCreateFloatingLookup'),
+  modalsSource.indexOf('function _projectFilterDocuments'));
+assert(inlineLookupSource.includes('handleKeydown:event =>') &&
+  inlineLookupSource.includes('if (floatingLookup?.handleKeydown(event)) return;'),
+  'field lookup dropdowns must select their highlighted option before committing raw Enter input');
+assert(!inlineLookupSource.includes('setTimeout(() =>') && inlineLookupSource.includes("event.key === 'ArrowDown'"),
+  'field lookup dropdowns must avoid delayed blur races and support arrow-key navigation');
+assert(inlineLookupSource.includes("editor.dataset.finishing === 'true'") &&
+  inlineLookupSource.includes('event.stopPropagation();'),
+  'lookup commits must be idempotent and Escape must not close the containing modal');
+const finishFieldSource = modalsSource.slice(modalsSource.indexOf('function _projectFinishFieldEdit'),
+  modalsSource.indexOf('function _projectFinishAttributeEdit'));
+assert(finishFieldSource.indexOf("let qaPreviousName = '';") < finishFieldSource.indexOf('if (commit && newValue !== oldValue') &&
+  finishFieldSource.includes('previousName:qaPreviousName'),
+  'entity rename state must remain in scope through index and group-header mutation handling');
+const associationEventsSource = modalsSource.slice(modalsSource.indexOf("_projectModalEl.addEventListener('change'"),
+  modalsSource.indexOf("_projectModalEl.addEventListener('click', event => {", modalsSource.indexOf("_projectModalEl.addEventListener('change'")));
+assert(associationEventsSource.includes("state && input.type === 'checkbox'") &&
+  associationEventsSource.includes("event.key === 'Escape'") && associationEventsSource.includes("event.key === 'Enter'") &&
+  associationEventsSource.includes('event.stopPropagation();'),
+  'association dropdowns must keep range anchors checkbox-only and support keyboard selection/closing');
+assert(modalsSource.includes("focused.closest?.('.project-association') === control") &&
+  modalsSource.includes('refreshedHost.scrollTop = scrollTop'),
+  'association dropdown rerenders must preserve focused options and scroll position');
+const mutationCoordinatorSource = modalsSource.slice(modalsSource.indexOf('function _projectApplyMutation'),
+  modalsSource.indexOf('function _projectAssociationMutationChanges'));
+assert(mutationCoordinatorSource.includes('qaRevalidateFieldChanges(qaChanges)') &&
+  !mutationCoordinatorSource.includes('qaRevalidateFieldChange('),
+  'multi-row mutations must update QA and its graph once per batch');
+const floorSvgSource = fs.readFileSync(path.join(javascriptDir, 'floor-svg-panel.js'), 'utf8');
+assert(!floorSvgSource.includes('refreshDisplay();') && floorSvgSource.includes("entityType:'floor'"),
+  'Floor SVG and alignment writes must use targeted mutation refreshes');
 assert(modalsSource.includes("info: { icon:'bi-info-circle-fill', color:'text-info', label:'Advisory' }") &&
   modalsSource.includes("warning: { icon:'bi-exclamation-triangle-fill', color:'text-warning', label:'Warning' }"),
   'modal QA flags must distinguish advisories from warning triangles');
@@ -111,15 +158,22 @@ assert(qaGraphSource.includes('_qaGraphDesiredWidth') && qaGraphSource.includes(
   'the QA graph must bind desktop drag resizing and click collapse behavior');
 assert(qaSchemaSource.includes('profile="NBIMS-US-V3-current-rules"'),
   'QA must use the current named NBIMS rule profile');
-assert(qaSchemaSource.includes('ruleId="System.PrimaryKey.Unique" keys="Name|ComponentNames"'),
+assert(/<column name="Name"[^>]*checks="NotNull\|Unique"[^>]*>\s*<unique ruleId="System.PrimaryKey.Unique" keys="Name\|ComponentNames"/.test(qaSchemaSource),
   'System uniqueness must use Name and ComponentNames as its compound key');
-assert(qaSchemaSource.includes('ruleId="Zone.PrimaryKey.Unique" keys="Name|SpaceNames"'),
+assert(/<column name="Name"[^>]*checks="NotNull\|Unique"[^>]*>\s*<unique ruleId="Zone.PrimaryKey.Unique" keys="Name\|SpaceNames"/.test(qaSchemaSource),
   'Zone uniqueness must use Name and SpaceNames as its compound key');
-assert(!qaSchemaSource.includes('<sheet name="Document"'),
-  'worksheets outside the current rule catalog must not affect QA scores');
+assert(!/<uniqueRules>|<references>/.test(qaSchemaSource),
+  'legacy sheet-level uniqueness and cross-reference containers must not return');
+const categorizedSchema = new DOMParser().parseFromString(qaSchemaSource, 'application/xml');
+assert([...categorizedSchema.querySelectorAll('unique, reference')]
+  .every(rule => String(rule.parentNode?.localName || rule.parentNode?.nodeName).toLowerCase() === 'column'),
+  'every unique and reference parameter node must be owned directly by a column');
+['Document', 'Attribute', 'Coordinate', 'Picklist'].forEach(sheetName => {
+  assert(qaSchemaSource.includes(`<sheet name="${sheetName}"`),
+    `${sheetName} must use the shared sheet descriptor structure even before validation rules are enabled`);
+});
 [
   'Contact.AtLeastOneRowPresent', 'Facility.OneAndOnlyOneFacilityFound',
-  'Space.PrimaryKey.Unique.Warning',
   'Zone.SpaceNames.CrossReference', 'Type.Type.Component.AComponentForEachType',
   'Component.PrimaryKey.Unique.Error', 'System.ComponentNames.CrossReference',
 ].forEach(ruleId => assert(qaSchemaSource.includes(ruleId), `missing named QA rule ${ruleId}`));
@@ -154,7 +208,7 @@ const unsupportedSchemaContext = {
   console,
   DOMParser,
   XMLHttpRequest:xmlRequestFor(qaSchemaSource
-    .replace('checks="NotNull|Format"', 'checks="UnsupportedCheck"')
+    .replace('checks="NotNull|Format|Unique"', 'checks="UnsupportedCheck|Unique"')
     .replace('type="atLeastOneTargetPerRow"', 'type="unsupportedRelation"')),
 };
 vm.createContext(unsupportedSchemaContext);
@@ -163,6 +217,60 @@ vm.runInContext(qaSource, unsupportedSchemaContext);
 const unsupportedSchemaError = vm.runInContext('_qaParseSchema().error', unsupportedSchemaContext);
 assert(unsupportedSchemaError.includes('UnsupportedCheck') && unsupportedSchemaError.includes('unsupportedRelation'),
   'QA schema parsing must reject unsupported named checks and relation types');
+
+const columnSchemaContext = {
+  console,
+  DOMParser,
+  XMLHttpRequest:xmlRequestFor(qaSchemaSource),
+  db:{
+    contacts:[], facilities:[], floors:[], spaces:[], zones:[], types:[], components:[], systems:[],
+    documents:[], attributes:[], coordinates:[], picklists:[],
+  },
+  idx:{},
+  sel:{ facility:new Set(), floor:new Set(), space:new Set(), type:new Set(), system:new Set(), doccat:new Set() },
+  searchQuery:'',
+};
+vm.createContext(columnSchemaContext);
+vm.runInContext(fs.readFileSync(path.join(javascriptDir, 'utils.js'), 'utf8'), columnSchemaContext);
+vm.runInContext(qaSource, columnSchemaContext);
+const normalizedColumnRules = JSON.parse(vm.runInContext(`JSON.stringify((() => {
+  const schema = _qaParseSchema();
+  const contact = schema.sheets.find(sheet => sheet.name === 'Contact');
+  const system = schema.sheets.find(sheet => sheet.name === 'System');
+  return {
+    error:schema.error,
+    contactChecks:contact.columns.find(column => column.name === 'Email').checks,
+    contactUnique:contact.uniqueRules,
+    contactReference:contact.references.find(reference => reference.column === 'CreatedBy'),
+    systemUnique:system.uniqueRules,
+    systemReference:system.references.find(reference => reference.column === 'ComponentNames'),
+  };
+})())`, columnSchemaContext));
+assert.strictEqual(normalizedColumnRules.error, '', 'column-level relational checks must parse without schema errors');
+assert.deepStrictEqual(normalizedColumnRules.contactChecks, ['NotNull', 'Format'],
+  'Unique must be normalized separately from scalar Contact Email checks');
+assert.deepStrictEqual(normalizedColumnRules.contactUnique[0].keys, ['Email'],
+  'Contact Email must normalize into a single-column uniqueness rule');
+assert.strictEqual(normalizedColumnRules.contactReference.targetColumn, 'Email',
+  'Contact CreatedBy must normalize its cross-reference target from the column');
+assert.deepStrictEqual(normalizedColumnRules.systemUnique[0].keys, ['Name', 'ComponentNames'],
+  'System compound uniqueness must normalize from uniqueKeys');
+assert.strictEqual(normalizedColumnRules.systemReference.targetSheet, 'Component',
+  'System component membership must normalize its cross-reference target from the column');
+vm.runInContext(`
+  db.contacts.push(
+    { Email:'duplicate@example.com', CreatedBy:'missing@example.com', _facility:'Facility A' },
+    { Email:'duplicate@example.com', CreatedBy:'missing@example.com', _facility:'Facility A' }
+  );
+  db.components.push({ Name:'AHU-01', CreatedBy:'duplicate@example.com', TypeName:'Missing Type', Space:'Missing Space', _facility:'Facility A' });
+`, columnSchemaContext);
+const columnRuleFindings = JSON.parse(vm.runInContext('JSON.stringify(runQA())', columnSchemaContext));
+assert.strictEqual(columnRuleFindings.filter(finding => finding.check === 'Contact.Email.Unique').length, 1,
+  'a duplicate Contact Email must produce one consolidated uniqueness finding');
+assert(columnRuleFindings.some(finding => finding.check === 'Contact.CreatedBy.CrossReference'),
+  'an unresolved Contact CreatedBy must be reported from its column-level cross-reference');
+assert(columnRuleFindings.some(finding => finding.check === 'Component.TypeName.CrossReference'),
+  'an unresolved Component TypeName must be reported from its column-level cross-reference');
 
 const qaContext = {
   console,
@@ -289,7 +397,10 @@ const pdfReportContract = JSON.parse(vm.runInContext(`JSON.stringify((() => {
   db.facilities = [{ Name:'Facility A', _facility:'Facility A' }];
   const html = _qaPdfReportHtml('<svg id="qa-report-brand"></svg>');
   return {
-    hasA4:html.includes('@page { size:A4 portrait'),
+    hasA4:html.includes('size:A4 portrait;'),
+    hasPrintFooter:html.includes('@bottom-left') && html.includes('@bottom-right'),
+    hasPageNumbers:html.includes('counter(page)') && html.includes('counter(pages)'),
+    hidesFlowFooter:html.includes('.report-footer { display:none; }'),
     hasFacility:html.includes('Facility A'),
     hasBrand:html.includes('qa-report-brand'),
     hasSummaries:html.includes('Overall score') && html.includes('Rules assessed') && html.includes('Advisories'),
@@ -298,7 +409,8 @@ const pdfReportContract = JSON.parse(vm.runInContext(`JSON.stringify((() => {
   };
 })())`, qaContext));
 assert.deepStrictEqual(pdfReportContract, {
-  hasA4:true, hasFacility:true, hasBrand:true, hasSummaries:true, hasDisclaimer:true, hasAllResults:true,
+  hasA4:true, hasPrintFooter:true, hasPageNumbers:true, hidesFlowFooter:true,
+  hasFacility:true, hasBrand:true, hasSummaries:true, hasDisclaimer:true, hasAllResults:true,
 }, 'the PDF export must include branding, scope, summaries, disclaimer, and every sheet/column QA result');
 qaContext.viewMode = 'asset';
 vm.runInContext(`
@@ -326,6 +438,13 @@ vm.runInContext(`
 `, qaContext);
 assert(!vm.runInContext("qaFindings.some(finding => finding.entityType === 'system' && String(finding.fields).includes('Category'))", qaContext),
   'undoing an invalid modal cell edit must remove its finding from the QA cache');
+vm.runInContext(`
+  _qaCreateFullRunCalls = 0;
+  startQaRun = () => { _qaCreateFullRunCalls++; };
+  qaRevalidateAfterEntityCreate('system', db.systems[0]);
+`, qaContext);
+assert.strictEqual(vm.runInContext('_qaCreateFullRunCalls', qaContext), 0,
+  'creating a row without a sheet-level structural rule must use incremental QA');
 vm.runInContext('runQA = _qaOriginalRun', qaContext);
 assert(qaGraphSource.includes('data-qa-sheet') && qaGraphSource.includes('_qaGraphRuleRows(selectedResults)'),
   'selecting a QA sheet score pill must filter the graph to that sheet\'s rules');
@@ -394,12 +513,15 @@ assert(qaSource.includes('_projectRefreshFieldIssueBadges(context.entityType, co
   'changing QA stage must immediately clear stale modal warning badges');
 assert(qaSource.includes('Stage: stageLabel') && qaSource.includes('<span class="meta-label">QA stage</span>'),
   'QA spreadsheet and PDF exports must identify the selected stage');
-assert(qaSource.includes('if (!qaHasRun) return;') && !/function qaRevalidateFieldChange[\s\S]*?\n}\n[\s\S]*?qaFindings = runQA\(\)/.test(qaSource),
-  'modal field changes must not start a full QA audit');
-assert(modalsSource.includes("const identityField = state.type === 'contact' ? 'Email' : 'Name';") && modalsSource.includes('alert(`${identityField} is required.`);'),
-  'new Contacts must require and deduplicate by Email rather than a nonexistent Name');
-assert(modalsSource.includes("if (typeof qaRevalidateAfterEntityCreate === 'function') qaRevalidateAfterEntityCreate();"),
-  'saving a new item must refresh an existing full QA audit');
+const incrementalQaSource = qaSource.slice(qaSource.indexOf('function _qaRevalidateFieldChangeCache'),
+  qaSource.indexOf('function _qaAdjustRuleResultsForRow'));
+assert(incrementalQaSource.includes('function qaRevalidateFieldChanges') &&
+  !incrementalQaSource.includes('runQA(') && !incrementalQaSource.includes('startQaRun('),
+  'modal field changes must batch row-level QA without starting a full audit');
+assert(modalsSource.includes("const identityField = _cobieEntityDescriptor(state.type)?.identityField || 'Name';") && modalsSource.includes('alert(`${identityField} is required.`);'),
+  'new entity identity must come from the XML sheet descriptor, including Contact Email');
+assert(modalsSource.includes("qaRevalidateAfterEntityCreate(state.type, state.row)"),
+  'saving a new item must revalidate the created row and its dependent QA findings');
 assert(modalsSource.includes('if (isNewEntity) _projectClearRowDirty(row);'),
   'unsaved draft fields must not show persisted-change styling or Undo controls');
 assert(modalsSource.includes('const _projectCreatedEntityRows = new WeakSet();') && modalsSource.includes('_projectCreatedEntityRows.add(state.row);'),
@@ -409,10 +531,17 @@ assert(modalsSource.includes('if (_projectIsNewEntityRow(entity)) {') && modalsS
 assert(modalsSource.includes("project-attr-row${isNewEntity ? '' : ' project-dirty'}") && modalsSource.includes('if (!isNewEntity) _projectMarkRowDirty(newRow'),
   'new attributes on new entities must not start with pending-change styling');
 const saveCreateBody = modalsSource.slice(modalsSource.indexOf('function _saveNewEntityInfo()'), modalsSource.indexOf('function _projectFieldValue'));
-assert(!saveCreateBody.includes('buildIdx();') && saveCreateBody.includes('refreshDisplay();'),
-  'new entity save must rebuild global indexes once through refreshDisplay');
-assert(modalsSource.includes('function _projectScheduleIndexRefresh()') && modalsSource.includes('_projectScheduleIndexRefresh();'),
-  'ordinary modal edits must coalesce expensive global index rebuilds');
+assert(!saveCreateBody.includes('buildIdx();') && !saveCreateBody.includes('refreshDisplay();') && saveCreateBody.includes('_projectApplyMutation({'),
+  'new entity save must update affected indexes through the shared mutation coordinator');
+assert(modalsSource.includes('function _projectApplyMutation(context = {})') && !modalsSource.includes('_projectScheduleIndexRefresh'),
+  'ordinary modal edits must use the context-driven coordinator without scheduling global index rebuilds');
+assert(!modalsSource.includes('_INFO_ENTITY_SHEET') && !modalsSource.includes('_INFO_ENTITY_DB'),
+  'modal entity routing must resolve schema sheet names and database buckets dynamically');
+assert(modalsSource.includes('function _modalAssociationRelationship') &&
+  !modalsSource.includes('function _updateSysComponents') && !modalsSource.includes('function _updateCompSystems'),
+  'modal associations must use XML relationship descriptors without System-specific mutation helpers');
+assert(!fs.readFileSync(path.join(javascriptDir, 'utils.js'), 'utf8').includes('dataSheets > dataSheet'),
+  'runtime entities must come from the authoritative XML sheets collection only');
 assert(modalsSource.includes("Name:type === 'contact' ? '' : String(prefillName || '').trim()"),
   'Contact email prefills must not populate a phantom Name field');
 assert.strictEqual(vm.runInContext("_qaRowIdentity('Contact', { Email:'person@example.com', Name:'' })", qaContext), 'person@example.com',
@@ -485,6 +614,37 @@ loadModule('cobie-parser.js');
 loadModule('filters.js');
 loadModule('three-d-viewer.js');
 
+const runtimeFilterContract = JSON.parse(vm.runInContext(`JSON.stringify(COBIE_FILTER_DIMENSIONS.map(filter => ({
+  dimension:filter.dimension, order:filter.order, valueField:filter.valueField,
+  valueIndex:filter.valueIndex, throughIndex:filter.throughIndex, defaultActive:filter.defaultActive,
+})))`, context));
+assert.deepStrictEqual(runtimeFilterContract.map(filter => filter.dimension),
+  ['facility', 'type', 'system', 'space', 'floor', 'doccat'],
+  'filter and group order must come from XML filter metadata');
+assert.strictEqual(runtimeFilterContract.find(filter => filter.dimension === 'floor').throughIndex, 'spFloor',
+  'Floor filtering must declare its component relationship traversal in XML');
+assert.strictEqual(runtimeFilterContract.find(filter => filter.dimension === 'type').defaultActive, true,
+  'the default active grouping dimension must come from XML');
+assert.strictEqual(vm.runInContext("COBIE_RUNTIME_MODEL.searches.find(search => search.source === 'component').includeAttributes", context), true,
+  'component search must include bound attributes from nested runtime metadata');
+const selectiveIndexCalls = JSON.parse(vm.runInContext(`JSON.stringify((() => {
+  const calls = [];
+  const original = updateIdxForEntities;
+  updateIdxForEntities = types => calls.push(types);
+  updateIdxForChanges([{ entityType:'contact', row:{}, aliases:['Phone'] }]);
+  updateIdxForChanges([{ entityType:'contact', row:{}, aliases:['Email'] }]);
+  updateIdxForChanges([{ entityType:'component', row:{}, aliases:['CreatedOn'] }]);
+  updateIdxForChanges([{ entityType:'component', row:{}, aliases:['Space'] }]);
+  updateIdxForChanges([{ entityType:'component', row:{}, aliases:[], attributes:true }]);
+  updateIdxForEntities = original;
+  return calls;
+})())`, context));
+assert.deepStrictEqual(selectiveIndexCalls, [['contact'], ['component'], ['component']],
+  'only identity, relationship, filter, search, document-context, and searchable attribute changes may rebuild derived indexes');
+assert(!fs.readFileSync(path.join(javascriptDir, 'state.js'), 'utf8').includes('facility: new Set()') &&
+  fs.readFileSync(path.join(javascriptDir, 'panels.js'), 'utf8').includes('COBIE_FILTER_DIMENSIONS.forEach'),
+  'filter state and panels must enumerate XML descriptors instead of static dimensions');
+
 assert.strictEqual(context.readSheet({ Sheets:{ Type:[
   { Name:'', Category:'', Description:'' },
   { Name:'', Category:'Pump', Description:'' },
@@ -495,6 +655,27 @@ context.parseCOBieInto(workbook('Facility A', { Name:'Level 01', Elevation:'3000
 assert.strictEqual(context.db.floors.length, 1, 'overlapping Floor rows should merge');
 assert.strictEqual(context.db.floors[0].Description, 'First');
 assert.strictEqual(context.db.floors[0].Elevation, '3000');
+
+const logicalFacilityBuckets = JSON.parse(vm.runInContext('JSON.stringify([...COBIE_RUNTIME_MODEL.entities.values()].map(descriptor => descriptor.bucket))', context));
+const savedLogicalFacilityRows = Object.fromEntries(logicalFacilityBuckets.map(bucket => [bucket, context.db[bucket]]));
+logicalFacilityBuckets.forEach(bucket => { context.db[bucket] = []; });
+context.db.facilities = [
+  { Name:'Main Facility', ExternalFacilityIdentifier:'project-guid-1', _sourceFacility:'Main Facility', _facility:'Main Facility', _facilityIdentifier:'project-guid-1', _hasFacilityInfo:true, _workbookKey:'facility.xlsx', _fileName:'facility.xlsx', _facRowCount:1 },
+  { Name:'Alternate Name', ExternalFacilityIdentifier:'project-guid-1', _sourceFacility:'Alternate Name', _facility:'Alternate Name', _facilityIdentifier:'project-guid-1', _hasFacilityInfo:true, _workbookKey:'types.xlsx', _fileName:'types.xlsx', _facRowCount:1 },
+  { _sourceFacility:'components', _facility:'components', _facilityIdentifier:'', _hasFacilityInfo:false, _workbookKey:'components.xlsx', _fileName:'components.xlsx', _facRowCount:0 },
+];
+context.db.types = [{ Name:'Pump Type', _facility:'Alternate Name', _workbookKey:'types.xlsx', _fileName:'types.xlsx' }];
+context.db.components = [{ Name:'Pump 01', TypeName:'Pump Type', _facility:'components', _workbookKey:'components.xlsx', _fileName:'components.xlsx' }];
+context.canonicalizeLoadedFacilities();
+assert.deepStrictEqual(context.db.facilities.map(row => row._facility), ['Main Facility', 'Main Facility', 'Main Facility'],
+  'matching ExternalFacilityIdentifier values and facility-less workbooks must share the first explicit facility name');
+assert.strictEqual(context.db.types[0]._facility, 'Main Facility');
+assert.strictEqual(context.db.components[0]._facility, 'Main Facility');
+assert.strictEqual(context._logicalFacilityRows().length, 1,
+  'split source workbooks must expose one logical facility while retaining physical workbook rows');
+assert.strictEqual(context.db.facilities.length, 3,
+  'logical facility grouping must retain every physical workbook for round-trip export');
+logicalFacilityBuckets.forEach(bucket => { context.db[bucket] = savedLogicalFacilityRows[bucket]; });
 
 context.parseCOBieInto({ Sheets:{
   Facility:[{ Name:'Facility B', Category:'Co_20_15_58' }],
@@ -523,6 +704,26 @@ context.parseCOBieInto({ Sheets:{
   }],
 } }, 'categories.xlsx');
 context.buildIdx();
+const genericDocumentEntry = JSON.parse(vm.runInContext(`JSON.stringify(_documentContextEntry({
+  doc:{ Name:'Manual' }, linkedType:'component', linkedName:'AHU-01',
+  facilities:new Set(['facility a']), types:new Set(['acid neutralizer']), systems:new Set(['foundations']),
+  spaces:new Set(['meeting room']), floors:new Set(['level 01']), categories:new Set(['pm_70_15_07']),
+}))`, context));
+assert.deepStrictEqual(Object.keys(genericDocumentEntry.valuesByDimension),
+  ['facility', 'type', 'system', 'space', 'floor', 'doccat'],
+  'document entries must project every XML filter context through valuesByDimension');
+assert(!Object.prototype.hasOwnProperty.call(genericDocumentEntry, 'facilityNames'),
+  'document entries must not retain statically named dimension properties');
+assert(context.idx.floors.includes('Level 01'),
+  'the Floor filter must use Floor identity values when Floor rows exist');
+const parsedFloorRows = context.db.floors;
+context.db.floors = [];
+context.db.spaces.push({ Name:'Fallback Room', FloorName:'Fallback Level', _facility:'Facility B' });
+context.updateIdxForEntities('floor');
+assert(context.idx.floors.includes('Fallback Level'),
+  'the Floor filter must fall back to Space.FloorName when no Floor rows exist');
+context.db.floors = parsedFloorRows;
+context.updateIdxForEntities('floor');
 assert.deepStrictEqual([...context.idx.catGroups.doccat['pm_70_15']], ['PM_70_15_07', 'PM_70_15_09']);
 assert.strictEqual(
   context.idx.categoryTrees.doccat.find(node => node.key === 'pm_70_15_07').label,
@@ -547,6 +748,30 @@ assert.deepStrictEqual(
   ['b','c','d'],
   'Shift selection must support reverse ranges',
 );
+
+context.db.types.push({ Name:'Live Pump', Category:'Pr_99_01', Description:'Created live', _facility:'Facility B' });
+context.db.spaces.push({ Name:'Live Room', FloorName:'Live Floor', Category:'SL_99', _facility:'Facility B' });
+context.db.floors.push({ Name:'Live Floor', _facility:'Facility B' });
+context.db.components.push({ Name:'Live Component', TypeName:'Live Pump', Space:'Live Room', _facility:'Facility B' });
+context.updateIdxForEntities('type');
+assert(context.idx.types.includes('Live Pump'), 'incremental Type creation must update lookup options immediately');
+assert(context.idx.catGroups.type['pr_99'].includes('Live Pump'), 'incremental Type creation must update category filters immediately');
+assert.strictEqual(context.idx.byType['facility b::live pump'][0].Name, 'Live Component',
+  'incremental Type changes must update assigned Component relationships');
+assert(context.idx.searchText['facility b::live component'].includes('created live'),
+  'incremental Type changes must replace dependent Component search text');
+context.db.systems.push({ Name:'Live System', ComponentNames:'Live Component', _facility:'Facility B' });
+context.updateIdxForEntities('system');
+assert(context.idx.systems.includes('Live System') && context.idx.compSys['facility b::live component'].includes('live system'),
+  'incremental System creation must update forward and reverse relationship indexes');
+context.db.documents.push({
+  Name:'Live Manual', Category:'PM_99', SheetName:'Component', RowName:'Live Component', _facility:'Facility B',
+});
+context.updateIdxForEntities('document');
+assert.strictEqual(context.idx.docs['facility b::component::live component'][0].Name, 'Live Manual',
+  'incremental Document creation must update entity document links');
+assert(context.idx.docCatByComp['facility b::live component'].has('pm_99'),
+  'incremental Document creation must update component document categories');
 context.selectedCategoryLevels = {
   facility:new Set(), space:new Set(), type:new Set(), system:new Set(), doccat:new Set(),
 };
@@ -607,6 +832,14 @@ assert(!documentCardHtml.includes('data-edit-doc'), 'document cards must not exp
 const resultsSource = fs.readFileSync(path.join(javascriptDir, 'results.js'), 'utf8');
 assert(!resultsSource.includes('data-edit-doc'), 'document trees must not expose the redundant edit action');
 loadModule('results.js');
+const canonicalTypes = context.idx.types;
+context.idx.types = [];
+const mixedCaseTypeGroups = [...context.buildGroupMap([
+  { Name:'Mixed Component', TypeName:'MixedCaseType', _facility:'Facility A' },
+], 'type').keys()];
+context.idx.types = canonicalTypes;
+assert.deepStrictEqual(mixedCaseTypeGroups, ['MixedCaseType'],
+  'Type group headers must preserve source field casing when a canonical list entry is temporarily unavailable');
 context.componentHighlightFixture = { Name:'Highlight Pump', Description:'Edited component', _facility:'Facility A' };
 const componentHighlightFixture = context.componentHighlightFixture;
 const highlightKey = context._groupHighlightBuildKey('component', componentHighlightFixture.Name, componentHighlightFixture._facility);
@@ -895,6 +1128,13 @@ loadModule('model-config.js');
 loadModule('modals.js');
 assert.strictEqual(vm.runInContext('MODEL_CONFIG_SCHEMA_STATUS.loaded', context), true,
   'modal configuration must hydrate from the shared COBie XML document');
+assert.strictEqual(vm.runInContext('MODEL_MODAL_CONFIG.facility.title', context), 'Project Information',
+  'modal titles must come from sheet UI metadata');
+assert.strictEqual(vm.runInContext("MODEL_MODAL_CONFIG.type.cards.warranty.fields.find(field => field.aliases.includes('WarrantyGuarantorParts')).label", context), 'Parts Guarantor',
+  'exceptional field labels must come from column UI metadata');
+vm.runInContext("db.contacts.push({ Email:'identity@example.com', _facility:'Facility A' })", context);
+assert.strictEqual(vm.runInContext("_findInfoEntityRow('contact', 'identity@example.com', 'Facility A').Email", context), 'identity@example.com',
+  'generic entity lookup must honor the XML identityField instead of assuming Name');
 const modalQaFlags = JSON.parse(vm.runInContext(`JSON.stringify({
   error:_projectFieldIssueBadge([{ sev:'error', detail:'Broken reference' }]),
   warning:_projectFieldIssueBadge([{ sev:'warning', detail:'Missing value' }]),
@@ -941,8 +1181,8 @@ const checkedColumnsByType = Object.fromEntries([...qaSchemaSource.matchAll(
   /<sheet name="([^"]+)"[^>]*>[\s\S]*?<columns>([\s\S]*?)<\/columns>/g,
 )].map(match => [
   match[1].toLowerCase(),
-  [...match[2].matchAll(/<column name="([^"]+)"/g)].map(column => column[1]).sort(),
-]));
+  [...match[2].matchAll(/<column name="([^"]+)"[^>]*\bchecks="[^"]+"/g)].map(column => column[1]).sort(),
+]).filter(([, columns]) => columns.length));
 const modalColumnsByType = JSON.parse(vm.runInContext(`JSON.stringify(Object.fromEntries(
   Object.entries(MODEL_MODAL_CONFIG)
     .filter(([type]) => type !== 'document')
@@ -1026,7 +1266,10 @@ assert.strictEqual(context._projectNormalizeLookupValue('contact', 'not-a-contac
 
 context.db.types = [{ Name:'Pump Type', Category:'Pr_65_53_86 : Pump products', _facility:'Facility A' }];
 context.db.floors = [{ Name:'Level 01', _facility:'Facility A' }];
-context.db.spaces = [{ Name:'Plant Room', FloorName:'', Category:'SL_90_50 : Plant rooms', _facility:'Facility A' }];
+context.db.spaces = [
+  { Name:'Plant Room', FloorName:'', Category:'SL_90_50 : Plant rooms', _facility:'Facility A' },
+  { Name:'Store', FloorName:'', Category:'SL_90_60 : Storage spaces', _facility:'Facility A' },
+];
 context.db.components = [
   { Name:'Pump 01', TypeName:'', Space:'', _facility:'Facility A' },
   { Name:'Pump 02', TypeName:'', Space:'', _facility:'Facility A' },
@@ -1036,6 +1279,29 @@ context.db.systems = [{ Name:'Heating', Category:'Ss_60_40 : Heating systems', C
 context.db.documents = [{ Name:'Manual', Directory:'manual.pdf', SheetName:'Facility', RowName:'Facility A', _facility:'Facility A' }];
 context.db.facilities = [{ Name:'Facility A', _facility:'Facility A' }];
 context.buildIdx();
+const draftDocument = { Name:'Draft Manual', SheetName:'Facility', RowName:'', _facility:'Facility A' };
+context._draftDocument = draftDocument;
+vm.runInContext('_newEntityDraft = { type:"document", row:_draftDocument, associations:Object.create(null), saving:false }', context);
+assert.strictEqual(context._associationSelectedNames('document', draftDocument,
+  { key:'facilities', targetType:'facility' }, 'Facility A').size, 0,
+  'a blank draft Document RowName must not appear as a selected Facility');
+const documentCountBeforeDraftAssociation = context.db.documents.length;
+context._setEntityAssociation('document', draftDocument,
+  { key:'floors', targetType:'floor', cardinality:'many' }, 'Level 01', 'Facility A', true);
+assert.deepStrictEqual(JSON.parse(vm.runInContext('JSON.stringify([..._newEntityDraft.associations.floors])', context)), ['level 01'],
+  'create-view Document associations must stage immediately');
+assert.strictEqual(context.db.documents.length, documentCountBeforeDraftAssociation,
+  'staging a draft Document association must not mutate persisted rows before Save');
+const draftComponent = { Name:'Draft Pump', TypeName:'', _facility:'Facility A' };
+context._draftComponent = draftComponent;
+vm.runInContext('_newEntityDraft = { type:"component", row:_draftComponent, associations:Object.create(null), saving:false }', context);
+context._setEntityAssociation('component', draftComponent,
+  { key:'type', targetType:'type', cardinality:'one' }, 'Pump Type', 'Facility A', true);
+assert.strictEqual(draftComponent.TypeName, 'Pump Type',
+  'direct draft associations must update their Applicable To field immediately');
+assert.deepStrictEqual(JSON.parse(vm.runInContext('JSON.stringify([..._newEntityDraft.associations.type])', context)), ['pump type'],
+  'direct draft associations must remain selected when controls rerender');
+vm.runInContext('_newEntityDraft = null', context);
 const component = context.db.components[0];
 const type = context.db.types[0];
 const associationFloor = context.db.floors[0];
@@ -1094,13 +1360,29 @@ assert.deepStrictEqual(lazyLoadState, { loaded:true, afterScroll:240, afterSearc
   'association lists must lazy-load the next chunk and reset pagination for a new search');
 context.db.components = originalComponents;
 
-const componentSpaceControl = context._associationControl(
-  'component', component, { key:'space', label:'Space', targetType:'space', cardinality:'one' }, 'Facility A',
-);
+const componentSpaceAssociation = JSON.parse(vm.runInContext(
+  'JSON.stringify(MODEL_MODAL_CONFIG.component.cards.associations.associations.find(item => item.key === "space"))', context,
+));
+assert.strictEqual(componentSpaceAssociation.cardinality, 'many',
+  'the XML-generated Component Spaces picker must be one-to-many');
+component.Space = 'Plant Room,Store';
+const componentSpaceControl = context._associationControl('component', component, componentSpaceAssociation, 'Facility A');
 assert(componentSpaceControl.includes('project-component-locate'), 'Component Space must expose the shared Locate action');
 assert(componentSpaceControl.includes('project-association-space'), 'Space relationships must carry their category color class');
+assert.strictEqual((componentSpaceControl.match(/type="checkbox"/g) || []).length, 2,
+  'the one-to-many Component Spaces picker must render checkboxes');
+assert.strictEqual((componentSpaceControl.match(/ checked/g) || []).length, 2,
+  'comma-delimited Component Space values must preselect every associated Space');
+context._setEntityAssociation('component', component, componentSpaceAssociation, 'Plant Room', 'Facility A', false);
+assert.strictEqual(component.Space, 'Store', 'removing one Space must preserve the other association');
+context._setEntityAssociation('component', component, componentSpaceAssociation, 'Plant Room', 'Facility A', true);
+assert.strictEqual(component.Space, 'Store,Plant Room', 'Component Spaces must be written back with a comma delimiter');
+component.Space = '';
 assert(context._projectLookupMenuMarkup([], 'new@example.test', true).includes('project-lookup-create'),
   'an unmatched Contact lookup must offer Contact creation');
+assert(context._projectLookupOptions('type').some(option => option.value === 'Pump Type') &&
+  context._projectLookupOptions('space').some(option => option.value === 'Plant Room'),
+  'XML entity field lookups must include facility-scoped canonical Type and Space rows');
 vm.runInContext('_originalDbState = JSON.parse(JSON.stringify(db))', context);
 assert(!context._commitAssociationControl.toString().includes('refreshDisplay'),
   'association selections must not rerender the full result tree on every click');
@@ -1111,7 +1393,7 @@ context._setEntityAssociation('component', component, { key:'type' }, 'Pump Type
 assert(!context._projectEntityDiffersFromBaseline('component', component, 'Pump 01', 'Facility A'),
   'restoring the original Component associations must clear its dirty state');
 context._setEntityAssociation('component', component, { key:'type' }, 'Pump Type', 'Facility A', true);
-context._setEntityAssociation('component', component, { key:'space' }, 'Plant Room', 'Facility A', true);
+context._setEntityAssociation('component', component, componentSpaceAssociation, 'Plant Room', 'Facility A', true);
 assert.strictEqual(component.TypeName, 'Pump Type');
 assert.strictEqual(component.Space, 'Plant Room');
 const associationValueCell = { dataset:{}, innerHTML:'', querySelector:() => null };

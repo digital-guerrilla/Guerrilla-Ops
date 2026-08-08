@@ -417,9 +417,10 @@ function _filteredDotPositionsForFloor(floorEntry, alignmentOverride = null) {
     : (_lastFilteredComps || []);
   componentRows.forEach(comp => {
     if ((comp._facility || '') !== facility) return;
-    const spaceLower = f(comp, 'Space').toLowerCase();
-    if (spaceLower && !spacesOnFloor.has(spaceLower)) return;
-    if (!spaceLower && !hasComponentHighlight) return;
+    const componentSpaces = _cobieReferenceValues('component', comp, 'Space')
+      .map(space => space.toLowerCase());
+    if (componentSpaces.length && !componentSpaces.some(space => spacesOnFloor.has(space))) return;
+    if (!componentSpaces.length && !hasComponentHighlight) return;
 
     const compCoord = (coordIndex && typeof _viewer3dCoordFor === 'function')
       ? _viewer3dCoordFor(coordIndex, 'component', comp._facility, f(comp, 'Name'))
@@ -751,7 +752,12 @@ function _handleSvgUpload(file, floorKey) {
       if (typeof _viewer3dRebuildRoomGeometryCache === 'function') {
         _viewer3dRebuildRoomGeometryCache(floorKey);
       }
-      refreshDisplay();
+      _projectApplyMutation({
+        changes:[{
+          entityType:'floor', row:floorRow, entityName:f(floorRow, 'Name'),
+          facility:floorRow._facility || '', qa:false, attributes:true,
+        }],
+      });
     }
   };
   reader.onerror = () => {
@@ -1608,9 +1614,17 @@ function _saveFloorPlanAlignment() {
   );
 
   _floorPlanAlignmentDraft = draft;
-  _floorAlignmentSave(floorEntry, draft);
-  refreshFloorSvgPanel([], _lastFloorCounts || {});
-  refreshDisplay();
+  const floorRow = _floorAlignmentSave(floorEntry, draft);
+  if (floorRow) {
+    _projectApplyMutation({
+      changes:[{
+        entityType:'floor', row:floorRow, entityName:f(floorRow, 'Name'),
+        facility:floorRow._facility || '', qa:false, attributes:true,
+      }],
+    });
+  } else {
+    refreshFloorSvgPanel([], _lastFloorCounts || {});
+  }
   bootstrap.Modal.getInstance(document.getElementById('floor-align-modal'))?.hide();
 }
 

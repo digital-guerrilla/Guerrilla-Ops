@@ -9,9 +9,7 @@ const QA_CHECKS = {
 };
 
 const QA_CHECK_ICON_BY_SHEET = {
-  contact:'bi-person-fill', facility:'bi-building', floor:'bi-layers-fill', space:'bi-grid-fill',
-  type:'bi-tag-fill', component:'bi-tools', system:'bi-diagram-3-fill', document:'bi-file-earmark-text',
-  attribute:'bi-list-check', coordinate:'bi-crosshair', multiple:'bi-list-check', schema:'bi-filetype-xml',
+  multiple:'bi-list-check', schema:'bi-filetype-xml',
 };
 
 const QA_CHECK_ICON_BY_ISSUE_TYPE = {
@@ -65,6 +63,10 @@ function _qaNormKey(s) {
   return _qaNorm(s).replace(/[^a-z0-9]/g, '');
 }
 
+function _qaDirectChild(node, name) {
+  return [...(node?.children || [])].find(child => _qaNormKey(child.localName || child.nodeName) === _qaNormKey(name)) || null;
+}
+
 function _qaCell(row, columnName) {
   if (!row || typeof row !== 'object') return '';
   const key = _qaNormKey(columnName);
@@ -109,31 +111,20 @@ function _qaColumnCell(row, column) {
 }
 
 function _qaRowIdentity(sheetName, row) {
-  return _qaNorm(sheetName) === 'contact' ? _qaCell(row, 'Email') : _qaCell(row, 'Name');
+  const sheets = _qaParseSchema().sheets || [];
+  const descriptor = sheets.find(sheet => _qaNorm(sheet.name) === _qaNorm(sheetName));
+  const referencedIdentity = sheets.flatMap(sheet => sheet.references || [])
+    .find(reference => _qaNorm(reference.targetSheet) === _qaNorm(sheetName))?.targetColumn;
+  const identityField = descriptor?.identityField ||
+    descriptor?.uniqueRules?.find(rule => rule.keys.length === 1)?.keys[0] || referencedIdentity || 'Name';
+  return _qaCell(row, identityField);
 }
 
 function _qaRowsForSheet(sheetName, inScope) {
-  const map = {
-    contact: db.contacts || [],
-    facility: db.facilities || [],
-    floor: db.floors || [],
-    space: db.spaces || [],
-    zone: db.zones || [],
-    type: db.types || [],
-    component: db.components || [],
-    system: db.systems || [],
-    assembly: [],
-    connection: [],
-    spare: [],
-    resource: [],
-    job: [],
-    impact: [],
-    document: db.documents || [],
-    attribute: db.attributes || [],
-    coordinate: db.coordinates || [],
-    issue: [],
-  };
-  return (map[_qaNorm(sheetName)] || []).filter(inScope);
+  const descriptor = (_qaParseSchema().sheets || []).find(sheet => _qaNorm(sheet.name) === _qaNorm(sheetName));
+  const type = _qaNorm(descriptor?.name || sheetName);
+  const bucket = descriptor?.bucket || (type === 'facility' ? 'facilities' : type === 'category' ? 'categories' : `${type}s`);
+  return (db[bucket] || []).filter(inScope);
 }
 
 function setQaFilterScope(components, documentContexts) {
@@ -262,8 +253,10 @@ function _qaIssueLabel(issueType) {
 }
 
 function _qaResolveIcon({ icon = '', issueType = '', sheet = '' } = {}) {
+  const entityIcon = typeof _cobieEntityUi === 'function' ? _cobieEntityUi(sheet).icon : '';
   return icon
     || QA_CHECK_ICON_BY_ISSUE_TYPE[_qaIssueType(issueType)]
+    || entityIcon
     || QA_CHECK_ICON_BY_SHEET[_qaNorm(sheet)]
     || QA_CHECK_ICON_BY_SHEET.multiple;
 }
@@ -369,28 +362,31 @@ function _qaParseSchema() {
   });
 
   xml.querySelectorAll('sheets > sheet').forEach(sheetNode => {
-    const sheetStages = _qaStages(_qaAttr(sheetNode, 'stage'));
+    const validation = _qaDirectChild(sheetNode, 'validation') || sheetNode;
+    const sheetStages = _qaStages(_qaAttr(validation, 'stage'));
     const inheritedStage = sheetStages.length === 1 ? _qaStage(sheetStages[0], 'design') : '';
     const sheet = {
       name: _qaAttr(sheetNode, 'name'),
+      bucket:_qaAttr(sheetNode, 'bucket'),
+      identityField:_qaAttr(sheetNode, 'identityField'),
       stages:sheetStages,
       stage:inheritedStage || _qaStage(sheetStages[0], 'design'),
-      required: _qaNorm(_qaAttr(sheetNode, 'required')) === 'true',
-      requiredSeverity: _qaSeverity(_qaAttr(sheetNode, 'requiredSeverity') || _qaAttr(sheetNode, 'severity'), 'error'),
-      requiredIssueType: _qaIssueType(_qaAttr(sheetNode, 'requiredIssueType'), 'scope'),
-      requiredIcon: _qaAttr(sheetNode, 'requiredIcon'),
-      formatSeverity: _qaSeverity(_qaAttr(sheetNode, 'formatSeverity'), 'error'),
-      formatIssueType: _qaIssueType(_qaAttr(sheetNode, 'formatIssueType'), 'format'),
-      formatIcon: _qaAttr(sheetNode, 'formatIcon'),
-      uniqueSeverity: _qaSeverity(_qaAttr(sheetNode, 'uniqueSeverity'), 'error'),
-      uniqueIssueType: _qaIssueType(_qaAttr(sheetNode, 'uniqueIssueType'), 'uniqueness'),
-      uniqueIcon: _qaAttr(sheetNode, 'uniqueIcon'),
-      referenceSeverity: _qaSeverity(_qaAttr(sheetNode, 'referenceSeverity'), 'error'),
-      referenceIssueType: _qaIssueType(_qaAttr(sheetNode, 'referenceIssueType'), 'reference'),
-      referenceIcon: _qaAttr(sheetNode, 'referenceIcon'),
-      primaryKey: _qaAttr(sheetNode, 'primaryKey'),
-      presenceRule: _qaAttr(sheetNode, 'presenceRule'),
-      singleRowRule: _qaAttr(sheetNode, 'singleRowRule'),
+      required: _qaNorm(_qaAttr(validation, 'required')) === 'true',
+      requiredSeverity: _qaSeverity(_qaAttr(validation, 'requiredSeverity') || _qaAttr(validation, 'severity'), 'error'),
+      requiredIssueType: _qaIssueType(_qaAttr(validation, 'requiredIssueType'), 'scope'),
+      requiredIcon: _qaAttr(validation, 'requiredIcon'),
+      formatSeverity: _qaSeverity(_qaAttr(validation, 'formatSeverity'), 'error'),
+      formatIssueType: _qaIssueType(_qaAttr(validation, 'formatIssueType'), 'format'),
+      formatIcon: _qaAttr(validation, 'formatIcon'),
+      uniqueSeverity: _qaSeverity(_qaAttr(validation, 'uniqueSeverity'), 'error'),
+      uniqueIssueType: _qaIssueType(_qaAttr(validation, 'uniqueIssueType'), 'uniqueness'),
+      uniqueIcon: _qaAttr(validation, 'uniqueIcon'),
+      referenceSeverity: _qaSeverity(_qaAttr(validation, 'referenceSeverity'), 'error'),
+      referenceIssueType: _qaIssueType(_qaAttr(validation, 'referenceIssueType'), 'reference'),
+      referenceIcon: _qaAttr(validation, 'referenceIcon'),
+      primaryKey: _qaAttr(validation, 'primaryKey'),
+      presenceRule: _qaAttr(validation, 'presenceRule'),
+      singleRowRule: _qaAttr(validation, 'singleRowRule'),
       columns: [],
       references: [],
       uniqueRules: [],
@@ -398,7 +394,9 @@ function _qaParseSchema() {
     };
 
     sheetNode.querySelectorAll(':scope > columns > column').forEach(col => {
-      sheet.columns.push({
+      const allChecks = _qaAttr(col, 'checks').split('|').map(value => value.trim()).filter(Boolean);
+      const stage = _qaStage(_qaAttr(col, 'stage'), inheritedStage || 'design');
+      const column = {
         name: _qaAttr(col, 'name'),
         required: _qaNorm(_qaAttr(col, 'required')) === 'true',
         unique: _qaNorm(_qaAttr(col, 'unique')) === 'true',
@@ -408,33 +406,34 @@ function _qaParseSchema() {
         formatRef: _qaAttr(col, 'formatRef'),
         allowAlternateFormatRef: _qaAttr(col, 'allowAlternateFormatRef'),
         aliases: _qaAttr(col, 'aliases').split('|').map(value => value.trim()).filter(Boolean),
-        checks: _qaAttr(col, 'checks').split('|').map(value => value.trim()).filter(Boolean),
-        stage:_qaStage(_qaAttr(col, 'stage'), inheritedStage || 'design'),
-      });
-    });
-
-    sheetNode.querySelectorAll(':scope > references > reference').forEach(ref => {
-      sheet.references.push({
-        column: _qaAttr(ref, 'column'),
-        targetSheet: _qaAttr(ref, 'targetSheet'),
-        targetColumn: _qaAttr(ref, 'targetColumn'),
-        required: _qaNorm(_qaAttr(ref, 'required')) === 'true',
-        severity: _qaSeverity(_qaAttr(ref, 'severity'), ''),
-        issueType: _qaIssueType(_qaAttr(ref, 'issueType'), ''),
-        icon: _qaAttr(ref, 'icon'),
-        multiValueDelimiter: _qaAttr(ref, 'multiValueDelimiter') || ';',
-        ruleId: _qaAttr(ref, 'ruleId'),
-        stage:_qaStage(_qaAttr(ref, 'stage'), inheritedStage || 'design'),
-      });
-    });
-
-    sheetNode.querySelectorAll(':scope > uniqueRules > unique').forEach(rule => {
-      sheet.uniqueRules.push({
-        ruleId: _qaAttr(rule, 'ruleId'),
-        keys: _qaAttr(rule, 'keys').split('|').map(value => value.trim()).filter(Boolean),
-        severity: _qaSeverity(_qaAttr(rule, 'severity'), 'error'),
-        stage:_qaStage(_qaAttr(rule, 'stage'), inheritedStage || 'design'),
-      });
+        checks:allChecks.filter(check => check !== 'Unique' && check !== 'CrossReference'),
+        stage,
+      };
+      sheet.columns.push(column);
+      if (allChecks.includes('Unique')) {
+        const unique = _qaDirectChild(col, 'unique');
+        sheet.uniqueRules.push({
+          ruleId:_qaAttr(unique, 'ruleId') || `${sheet.name}.${column.name}.Unique`,
+          keys:(_qaAttr(unique, 'keys') || column.name).split('|').map(value => value.trim()).filter(Boolean),
+          severity:_qaSeverity(_qaAttr(unique, 'severity') || _qaAttr(col, 'severity'), 'error'),
+          stage,
+        });
+      }
+      if (allChecks.includes('CrossReference')) {
+        const reference = _qaDirectChild(col, 'reference');
+        sheet.references.push({
+          column:column.name,
+          targetSheet:_qaAttr(reference, 'targetSheet'),
+          targetColumn:_qaAttr(reference, 'targetColumn'),
+          required:_qaNorm(_qaAttr(reference, 'required')) === 'true',
+          severity:_qaSeverity(_qaAttr(reference, 'severity') || _qaAttr(col, 'severity'), ''),
+          issueType:_qaIssueType(_qaAttr(reference, 'issueType') || _qaAttr(col, 'issueType'), ''),
+          icon:_qaAttr(reference, 'icon') || _qaAttr(col, 'icon'),
+          multiValueDelimiter:_qaAttr(reference, 'multiValueDelimiter') || ';',
+          ruleId:_qaAttr(reference, 'ruleId') || `${sheet.name}.${column.name}.CrossReference`,
+          stage,
+        });
+      }
     });
 
     sheetNode.querySelectorAll(':scope > relationRules > relation').forEach(rule => {
@@ -486,6 +485,15 @@ function _qaNamedCheckResult(checkName, value, schema) {
   const number = isNumber ? Number(text.replace(/,/g, '')) : NaN;
   const handler = QA_NAMED_CHECK_HANDLERS[checkName];
   return handler ? handler({ text, normalized, isNA, isNumber, number, schema }) : false;
+}
+
+function _qaLogicalFacilityRows() {
+  const representatives = new Map();
+  (db.facilities || []).forEach(row => {
+    const key = String(row._facilityIdentifier || row._facility || '').trim().toLowerCase();
+    if (key && !representatives.has(key)) representatives.set(key, row);
+  });
+  return [...representatives.values()];
 }
 
 function* _qaRunSteps(selectedStage = qaSelectedStage) {
@@ -566,12 +574,11 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
   }
 
   const targetSetCache = new Map();
-  const getTargetSet = (sheetName, columnName, facL, fileName = '') => {
-    const k = `${_qaNorm(sheetName)}|${_qaNorm(columnName)}|${facL}|${_qaNorm(fileName)}`;
+  const getTargetSet = (sheetName, columnName, facL) => {
+    const k = `${_qaNorm(sheetName)}|${_qaNorm(columnName)}|${facL}`;
     if (targetSetCache.has(k)) return targetSetCache.get(k);
     const set = new Set();
     _qaRowsForSheet(sheetName, row => {
-      if (fileName && row._fileName) return row._fileName === fileName;
       return (row._facility || '').toLowerCase() === facL;
     }).forEach(row => {
       const v = _qaCell(row, columnName);
@@ -580,15 +587,13 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
     targetSetCache.set(k, set);
     return set;
   };
-  const workbookScopes = (db.facilities || []).filter(inScope).map(facility => ({
-    fileName: String(facility._fileName || ''),
+  const workbookScopes = _qaLogicalFacilityRows().filter(inScope).map(facility => ({
     facility: String(facility._facility || ''),
-    label: String(facility._fileName || facility._facility || 'Loaded workbook'),
+    label: String(facility._facility || facility._fileName || 'Loaded facility'),
     facilityRow: facility,
   }));
   const rowsInWorkbook = (rows, scope) => rows.filter(row => {
-    if (!scope.fileName && !scope.facility) return true;
-    if (scope.fileName && row._fileName) return row._fileName === scope.fileName;
+    if (!scope.facility) return true;
     return _qaNorm(row._facility) === _qaNorm(scope.facility);
   });
 
@@ -623,7 +628,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
     if (sheetRule.singleRowRule) {
       const scopes = workbookScopes.length ? workbookScopes : rows.map(row => ({ facilityRow:row, label:row._fileName || row._facility || 'Current workbook' }));
       scopes.forEach(scope => {
-        const count = Number(scope.facilityRow?._facRowCount) || rowsInWorkbook(sheetRows, scope).length;
+        const sourceFacilities = (db.facilities || []).filter(row => _qaNorm(row._facility) === _qaNorm(scope.facility));
+        const count = Math.max(0, ...sourceFacilities.map(row => Number(row._facRowCount) || 0));
         const passed = count === 1;
         recordRule(sheetRule.singleRowRule, passed, sheetRule.name, 'Sheet');
         if (passed) return;
@@ -852,7 +858,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           return;
         }
 
-        const targetSet = getTargetSet(ref.targetSheet, ref.targetColumn, facL, row._fileName || '');
+        const targetSet = getTargetSet(ref.targetSheet, ref.targetColumn, facL);
         vals.forEach(v => {
           const resolved = targetSet.has(v.toLowerCase());
           const checkId = ref.ruleId || 'reference-missing';
@@ -925,10 +931,62 @@ function qaIsRunning() {
   return !!(_qaRunToken && !_qaRunToken.done && !_qaRunToken.cancelled);
 }
 
-function qaRevalidateAfterEntityCreate() {
+function qaRevalidateAfterEntityCreate(entityType, row) {
   if (!qaHasRun || qaIsRunning()) return;
-  const list = document.getElementById('comp-list');
-  if (list) startQaRun(list);
+  const schema = _qaParseSchema();
+  const sheetRule = _qaSheetRuleForEntity(schema, entityType, 'operation');
+  if (!sheetRule || !row) return;
+  const sheetRows = _qaRowsForSheet(sheetRule.name, () => true);
+  if (sheetRule.singleRowRule || (sheetRule.presenceRule && sheetRows.length === 1)) {
+    const list = document.getElementById('comp-list');
+    if (list) startQaRun(list);
+    return;
+  }
+
+  const changes = new Map();
+  const addChange = (sheet, candidate, fields) => {
+    if (!candidate) return;
+    const name = _qaRowIdentity(sheet, candidate);
+    const facility = candidate._facility || '';
+    const key = `${_qaNorm(sheet)}|${_qaNorm(facility)}|${_qaNorm(name)}`;
+    const existing = changes.get(key) || { entityType:_qaNorm(sheet), entityName:name, facility, fields:new Set() };
+    fields.filter(Boolean).forEach(field => existing.fields.add(field));
+    changes.set(key, existing);
+  };
+
+  addChange(sheetRule.name, row, (sheetRule.columns || []).map(column => column.name));
+  (sheetRule.uniqueRules || []).forEach(rule => {
+    const keys = rule.keys || [];
+    const values = keys.map(key => _qaNorm(_qaCell(row, key)));
+    if (!keys.length || values.every(value => !value)) return;
+    sheetRows.forEach(candidate => {
+      const candidateValues = keys.map(key => _qaNorm(_qaCell(candidate, key)));
+      if (candidateValues.every((value, index) => value === values[index])) addChange(sheetRule.name, candidate, keys);
+    });
+  });
+
+  (schema.sheets || []).forEach(sourceSheet => {
+    (sourceSheet.references || []).forEach(reference => {
+      if (_qaNorm(reference.targetSheet) !== _qaNorm(sheetRule.name)) return;
+      const targetValue = _qaNorm(_qaCell(row, reference.targetColumn));
+      if (!targetValue) return;
+      _qaRowsForSheet(sourceSheet.name, sourceRow => !row._facility || !sourceRow._facility ||
+        _qaNorm(sourceRow._facility) === _qaNorm(row._facility)).forEach(sourceRow => {
+        const values = _qaCellSplit(sourceRow, reference.column, reference.multiValueDelimiter).map(_qaNorm);
+        if (values.includes(targetValue)) addChange(sourceSheet.name, sourceRow, [reference.column]);
+      });
+    });
+    (sourceSheet.relationRules || []).forEach(rule => {
+      if (_qaNorm(rule.targetSheet) !== _qaNorm(sheetRule.name)) return;
+      const targetValue = _qaNorm(_qaCell(row, rule.targetColumn));
+      if (!targetValue) return;
+      _qaRowsForSheet(sourceSheet.name, sourceRow =>
+        _qaNorm(_qaCell(sourceRow, 'Name')) === targetValue
+      ).forEach(sourceRow => addChange(sourceSheet.name, sourceRow, ['Name']));
+    });
+  });
+
+  qaRevalidateFieldChanges([...changes.values()].map(change => ({ ...change, fields:[...change.fields] })));
 }
 
 function resetQaAudit() {
@@ -1302,9 +1360,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
   return findings;
 }
 
-function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], previousEntityName = '') {
-  if (!qaHasRun) return;
-
+function _qaRevalidateFieldChangeCache(entityType, entityName, facility, fields = [], previousEntityName = '') {
   const schema = _qaParseSchema();
   const sheetRule = _qaSheetRuleForEntity(schema, entityType, 'operation');
   const fieldKeys = new Set(fields.map(_qaNormKey).filter(Boolean));
@@ -1332,6 +1388,17 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
   const next = _qaValidateEntityFields(entityType, entityName, facility, fields, 'operation');
   if (next.length) qaAllFindings.push(...next);
   _qaAdjustRuleResultsForRow(entityType, removed, next, qaAllRuleResults);
+}
+
+function qaRevalidateFieldChanges(changes) {
+  if (!qaHasRun || qaIsRunning()) return;
+  (changes || []).forEach(change => _qaRevalidateFieldChangeCache(
+    change.entityType,
+    change.entityName,
+    change.facility,
+    change.fields || [],
+    change.previousEntityName || '',
+  ));
   _qaApplyStageFilter();
 
   if (viewMode === 'qa') {
@@ -1339,6 +1406,10 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
     if (list) renderQAMode(list, false);
   }
   if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
+}
+
+function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], previousEntityName = '') {
+  qaRevalidateFieldChanges([{ entityType, entityName, facility, fields, previousEntityName }]);
 }
 
 function _qaAdjustRuleResultsForRow(entityType, previousFindings, nextFindings, ruleResults = qaRuleResults) {
@@ -1671,7 +1742,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
   const selectedFacilities = sel?.facility?.size
     ? [...sel.facility].map(key => idx.facilityNames.find(name => name.toLowerCase() === key) || key)
     : [];
-  const workbookFiles = [...new Set((db.facilities || [])
+  const workbookFiles = [...new Set(_qaLogicalFacilityRows()
     .filter(row => !selectedFacilityKeys || selectedFacilityKeys.has(_qaNorm(row._facility)))
     .map(row => String(row._fileName || '').trim())
     .filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -1734,7 +1805,27 @@ function _qaPdfReportHtml(logoMarkup = '') {
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Guerrilla Ops QA Report ${generated.toISOString().slice(0, 10)}</title>
   <style>
-    @page { size:A4 portrait; margin:14mm 12mm 19mm; }
+    @page {
+      size:A4 portrait;
+      margin:14mm 12mm 19mm;
+      @bottom-left {
+        content:"Generated by Guerrilla Ops and provided without guarantee of accuracy. Verify results against source information and applicable requirements.";
+        color:#697887;
+        font-family:"Segoe UI",Arial,sans-serif;
+        font-size:6.5pt;
+        text-align:left;
+        white-space:nowrap;
+      }
+      @bottom-right {
+        content:"Page " counter(page) " of " counter(pages);
+        color:#697887;
+        font-family:"Segoe UI",Arial,sans-serif;
+        font-size:7pt;
+        font-variant-numeric:tabular-nums;
+        text-align:right;
+        white-space:nowrap;
+      }
+    }
     * { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { margin:0; padding-bottom:16mm; color:#17202a; background:#fff; font-family:"Segoe UI",Arial,sans-serif; font-size:9pt; line-height:1.35; }
     .report-header { display:flex; align-items:center; gap:12px; padding-bottom:10px; border-bottom:3px solid #16324f; }
@@ -1766,8 +1857,8 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .status { display:inline-block; padding:2px 5px; border-radius:3px; font-size:7pt; font-weight:800; text-transform:uppercase; }
     .status-pass { color:#17653a; background:#dff3e7; } .status-error { color:#9d1c1c; background:#fbe1e1; }
     .status-warning { color:#7b4a00; background:#fff0c8; } .status-info { color:#075c78; background:#dff3fa; }
-    .report-footer { position:fixed; left:12mm; right:12mm; bottom:1mm; color:#697887; font-size:7pt; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    @media screen { body { width:210mm; min-height:297mm; margin:10mm auto; padding:14mm 12mm 19mm; box-shadow:0 2px 18px #0002; } .report-footer { position:static; margin-top:16px; } }
+    .report-footer { display:none; }
+    @media screen { body { width:210mm; min-height:297mm; margin:10mm auto; padding:14mm 12mm 19mm; box-shadow:0 2px 18px #0002; } .report-footer { display:flex; justify-content:space-between; gap:12px; margin-top:16px; color:#697887; font-size:7pt; } }
   </style></head><body>
     <header class="report-header"><div class="report-logo">${logoMarkup}</div><div><h1>COBie QA Report</h1><div class="subtitle">Guerrilla Ops workbook quality assessment</div></div></header>
     <div class="meta"><div><span class="meta-label">Generated</span><br>${esc(generated.toLocaleString())}<br><span class="meta-label">QA stage</span><br>${esc(qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1))}</div><div><span class="meta-label">Facilities</span><br>${esc(facilities.join(', ') || 'No facility names available')}</div><div><span class="meta-label">Workbooks</span><br>${esc(workbookFiles.join(', ') || 'No source file names available')}</div></div>
@@ -1780,7 +1871,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
     </div>
     <table class="sheet-summary"><thead><tr><th>Sheet</th><th>Rules</th><th>Pass</th><th>Fail</th><th>Score</th></tr></thead><tbody>${sheetSummaryRows}</tbody></table>
     ${sheetSections || '<p>No QA rule results are available.</p>'}
-    <footer class="report-footer">Generated by Guerrilla Ops and provided without guarantee of accuracy. Verify results against source information and applicable requirements.</footer>
+    <footer class="report-footer"><span>Generated by Guerrilla Ops and provided without guarantee of accuracy. Verify results against source information and applicable requirements.</span><span>Page numbers are included in the printed report.</span></footer>
   </body></html>`;
 }
 

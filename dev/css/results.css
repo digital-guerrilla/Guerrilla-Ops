@@ -1504,7 +1504,8 @@
   color: var(--text-dark);
   padding: .42rem .65rem;
 }
-.project-lookup-option:hover {
+.project-lookup-option:hover,
+.project-lookup-option-active {
   background: var(--fp-hover);
 }
 .project-lookup-empty {

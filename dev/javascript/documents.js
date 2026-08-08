@@ -1,46 +1,4 @@
 // ── Document result grouping and cards ───────────────────────
-function collectDocsForComps(comps) {
-  const seen=new Set(), entries=[];
-  const doneT=new Set(), doneSp=new Set(), doneSy=new Set(), doneFl=new Set(), doneFac=new Set();
-  const addDoc = (doc, linkedType, linkedName, comp) => {
-    const key = _docUniqueKey(doc);
-    if(seen.has(key))return; seen.add(key);
-    const sp  = comp ? f(comp,'Space').toLowerCase() : (linkedType==='space'?linkedName.toLowerCase():'');
-    const facility = comp?._facility || doc._facility || '';
-    const fl  = sp ? (idx.spFloor[_scopeKey(facility, sp)]||'') : '';
-    const flN = fl ? (idx.floors.find(n=>n.toLowerCase()===fl)||fl) : '';
-    const syss = comp ? (idx.compSys[_rowKey(comp, f(comp,'Name'))]||[]).map(sk=>idx.systems.find(n=>n.toLowerCase()===sk)||sk)
-                      : (linkedType==='system'?[linkedName]:[]);
-    entries.push({ doc, linkedType, linkedName,
-      typeName:     comp?_cobieField(comp, 'typeName'):(linkedType==='type'?linkedName:''),
-      spaceName:    comp?f(comp,'Space'):(linkedType==='space'?linkedName:''),
-      facilityName: comp?(comp._facility||''):(linkedType==='facility'?linkedName:(doc._facility||'')),
-      floorName:    flN, systemNames: syss });
-  };
-  comps.forEach(c => {
-    const cn=f(c,'Name').toLowerCase(), tn=_cobieField(c, 'typeName').toLowerCase();
-    const sp=f(c,'Space').toLowerCase(), fn=(c._facility||'').toLowerCase();
-    const cKey=_rowKey(c,cn), tKey=_scopeKey(fn,tn), spKey=_scopeKey(fn,sp);
-    docsFor('component',cn,c._facility).forEach(d=>addDoc(d,'component',f(c,'Name'),c));
-    if(tn&&!doneT.has(tKey)){doneT.add(tKey);docsFor('type',tn,c._facility).forEach(d=>addDoc(d,'type',_cobieField(c, 'typeName'),null));}
-    if(sp&&!doneSp.has(spKey)){doneSp.add(spKey);docsFor('space',sp,c._facility).forEach(d=>addDoc(d,'space',f(c,'Space'),c));}
-    const floorKey = idx.spFloor[_scopeKey(fn,sp)] || '';
-    const scopedFloorKey = _scopeKey(fn,floorKey);
-    if(floorKey&&!doneFl.has(scopedFloorKey)){
-      doneFl.add(scopedFloorKey);
-      const floorName=idx.floors.find(name=>name.toLowerCase()===floorKey)||floorKey;
-      docsFor('floor',floorKey,c._facility).forEach(d=>addDoc(d,'floor',floorName,c));
-    }
-    if(fn&&!doneFac.has(fn)){doneFac.add(fn);docsFor('facility',fn,c._facility).forEach(d=>addDoc(d,'facility',c._facility||'',null));}
-    (idx.compSys[cKey]||[]).forEach(sk=>{
-      const sysKey=_scopeKey(fn,sk);
-      if(doneSy.has(sysKey))return; doneSy.add(sysKey);
-      const sn=idx.systems.find(n=>n.toLowerCase()===sk)||sk;
-      docsFor('system',sk,c._facility).forEach(d=>addDoc(d,'system',sn,null));
-    });
-  });
-  return entries;
-}
 
 function renderDocumentMode(list, entries) {
   if(!entries.length){
@@ -56,31 +14,27 @@ function renderDocumentCards(entries) {
 }
 
 function _docEntryValues(entry, dimension) {
-  const values = {
-    type:entry.typeNames, space:entry.spaceNames, facility:entry.facilityNames,
-    floor:entry.floorNames, system:entry.systemNames,
-  }[dimension];
+  const values = entry.valuesByDimension?.[dimension];
   if (values?.length) return values;
-  if (dimension === 'doccat') return [f(entry.doc,'Category') || '(Uncategorised)'];
-  const labels = {type:'Type',space:'Space',facility:'Facility',floor:'Floor',system:'System'};
-  return [`(No ${labels[dimension] || 'Value'})`];
+  const filter = _cobieFilterDescriptor(dimension);
+  return [`(${filter?.emptyLabel || `No ${filter?.label || 'Value'}`})`];
 }
 
 function groupDocsNested(entries, dims, depth = 0, parentPath = '') {
   if (!entries.length) return '';
   if (!dims.length) return renderDocumentCards(entries);
   const [dim,...rest] = dims;
-  if (dim === 'doccat') return groupDocsByClassification(entries, rest, depth);
+  if (dim === _cobieDocumentCategoryDimension()) return groupDocsByClassification(entries, rest, depth);
   const map = new Map();
   entries.forEach(e => {
     const ks = _docEntryValues(e, dim);
     ks.forEach(k=>{ if(!map.has(k))map.set(k,[]); map.get(k).push(e); });
   });
-  const ico = {type:'bi-tag-fill',system:'bi-diagram-3-fill',space:'bi-grid-fill',floor:'bi-layers-fill',facility:'bi-building',doccat:'bi-folder2-open'}[dim]||'bi-folder';
+  const ico = _cobieFilterDescriptor(dim)?.icon || 'bi-folder';
   const lvl = depth;
   return [...map.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,grpE])=>{
     const cid='col_'+(collapseCounter++);
-    const facilities = [...new Set(grpE.flatMap(entry => entry.facilityNames || []).filter(Boolean))];
+    const facilities = [...new Set(grpE.flatMap(entry => entry.valuesByDimension?.facility || []).filter(Boolean))];
     const facility = facilities.length === 1 ? facilities[0] : '';
     const gkey = _groupNodeKey(dim, name, facility, depth, parentPath);
     const isOpen = _groupNodeIsOpen(gkey);
@@ -131,12 +85,14 @@ function groupDocsByClassification(entries, remainingDims = [], depth = 0, paren
       const code = entryCode(entry);
       return code === categoryKey || code.startsWith(categoryKey + '_');
     });
-    const categoryNode = idx.categoryTrees?.doccat?.find(node => node.key === categoryKey);
+    const categoryDimension = _cobieDocumentCategoryDimension();
+    const categoryNode = idx.categoryTrees?.[categoryDimension]?.find(node => node.key === categoryKey);
     const categoryLabel = categoryNode?.label || classificationParts(f(categoryEntries[0]?.doc,'Category')).label || categoryKey;
     const cid='col_'+(collapseCounter++);
-    const facilityNames = [...new Set(categoryEntries.flatMap(entry => entry.facilityNames || []).filter(Boolean))];
+    const scopeDimension = _cobieScopeFilterDimension();
+    const facilityNames = [...new Set(categoryEntries.flatMap(entry => entry.valuesByDimension?.[scopeDimension] || []).filter(Boolean))];
     const facility = facilityNames.length === 1 ? facilityNames[0] : '';
-    const gkey = _groupNodeKey('doccat', categoryKey, facility, depth, parentKey);
+    const gkey = _groupNodeKey(categoryDimension, categoryKey, facility, depth, parentKey);
     const isOpen = _groupNodeIsOpen(gkey);
     if (!isOpen) pendingGroups[cid]={
       docEntries:categoryEntries, dims:remainingDims, depth:depth+1, parentPath:gkey,

@@ -1,48 +1,6 @@
 // ── Schema-generated modal model configuration ──────────────
 
-const MODEL_MODAL_PRESENTATION = Object.freeze({
-  facility:{ title:'Project Information', colorToken:'facility' },
-  floor:{ title:'Floor Information', colorToken:'floor' },
-  space:{ title:'Space Information', colorToken:'space' },
-  zone:{ title:'Zone Information', colorToken:'space' },
-  type:{ title:'Type Information', colorToken:'type' },
-  system:{ title:'System Information', colorToken:'system' },
-  component:{ title:'Component Information', colorToken:'component' },
-  contact:{ title:'Contact Information', colorToken:'contact' },
-});
-
-const MODEL_MODAL_FIELD_LABELS = Object.freeze({
-  'space.floorname':'Floor',
-  'component.typename':'Type',
-  'type.warrantyguarantorparts':'Parts Guarantor',
-  'type.warrantydurationparts':'Parts Duration',
-  'type.warrantyguarantorlabor':'Labour Guarantor',
-  'type.warrantydurationlabor':'Labour Duration',
-  'contact.company':'Company / Organisation',
-  'contact.organizationcode':'Organisation Code',
-  'contact.town':'Town / City',
-  'contact.stateregion':'State / Region',
-});
-
-const MODEL_MODAL_AUXILIARY_CARDS = Object.freeze({
-  facility:['attributes', 'documents'],
-  floor:['attributes', 'documents'],
-  space:['attributes', 'documents'],
-  type:['attributes', 'documents'],
-  system:['attributes', 'documents'],
-  component:['attributes', 'documents'],
-});
-
-const MODEL_MODAL_RELATIONSHIPS = Object.freeze([
-  { source:'space', column:'FloorName', target:'floor', owner:'floor', key:'spaces', label:'Spaces', cardinality:'many' },
-  { source:'space', column:'FloorName', target:'floor', owner:'space', key:'floor', label:'Floor', cardinality:'one' },
-  { source:'component', column:'Space', target:'space', owner:'space', key:'components', label:'Components', cardinality:'many' },
-  { source:'component', column:'TypeName', target:'type', owner:'type', key:'components', label:'Components', cardinality:'many' },
-  { source:'system', column:'ComponentNames', target:'component', owner:'system', key:'components', label:'Components', cardinality:'many' },
-  { source:'component', column:'TypeName', target:'type', owner:'component', key:'type', label:'Type', cardinality:'one' },
-  { source:'component', column:'Space', target:'space', owner:'component', key:'space', label:'Space', cardinality:'one' },
-  { source:'system', column:'ComponentNames', target:'component', owner:'component', key:'systems', label:'Systems', cardinality:'many' },
-]);
+const MODEL_MODAL_RELATIONSHIPS = Object.freeze(COBIE_RUNTIME_MODEL.associations);
 
 let MODEL_CONFIG_SCHEMA_STATUS = { loaded:false, error:'' };
 
@@ -81,41 +39,29 @@ function _modalConfigAliases(column) {
 }
 
 function _modalConfigReferenceMap(sheetNode) {
-  const references = _modalConfigChildren(sheetNode, 'references')[0];
-  return new Map(_modalConfigChildren(references, 'reference').map(reference => [
-    _modalConfigNorm(reference.getAttribute('column')),
-    _modalConfigNorm(reference.getAttribute('targetSheet')),
-  ]));
+  const columns = _modalConfigChildren(_modalConfigChildren(sheetNode, 'columns')[0], 'column');
+  return new Map(columns.filter(column => String(column.getAttribute('checks') || '').split('|').includes('CrossReference'))
+    .map(column => [column, _modalConfigChildren(column, 'reference')[0]])
+    .filter(([, reference]) => reference)
+    .map(([column, reference]) => [
+        _modalConfigNorm(column.getAttribute('name')),
+        _modalConfigNorm(reference.getAttribute('targetSheet')),
+      ]));
 }
 
 function _modalConfigField(entityType, column, references) {
   const name = String(column.getAttribute('name') || '').trim();
   const key = _modalConfigNorm(name);
-  const targetType = references.get(key) || '';
+  const ui = _modalConfigChildren(column, 'ui')[0];
+  const targetType = _modalConfigNorm(column.getAttribute('lookupSource')) || references.get(key) || '';
   const categoryLookup = key === 'category' && entityType !== 'contact';
   const lookupSource = categoryLookup ? 'category' : targetType;
   return {
-    label:MODEL_MODAL_FIELD_LABELS[`${entityType}.${key}`] || _modalConfigLabel(name),
+    label:String(ui?.getAttribute('label') || '').trim() || _modalConfigLabel(name),
     aliases:_modalConfigAliases(column),
     edit:lookupSource ? 'lookup' : 'text',
     ...(lookupSource ? { lookupSource } : {}),
   };
-}
-
-function _modalConfigRelationshipSet(sheetNodes) {
-  const relationships = new Set();
-  sheetNodes.forEach(sheetNode => {
-    const source = _modalConfigNorm(sheetNode.getAttribute('name'));
-    const references = _modalConfigChildren(sheetNode, 'references')[0];
-    _modalConfigChildren(references, 'reference').forEach(reference => {
-      relationships.add([
-        source,
-        _modalConfigNorm(reference.getAttribute('column')),
-        _modalConfigNorm(reference.getAttribute('targetSheet')),
-      ].join('|'));
-    });
-  });
-  return relationships;
 }
 
 function _modalConfigAuxiliaryCard(mode, colorToken) {
@@ -145,12 +91,12 @@ function _buildModelModalConfig() {
     return {};
   }
 
-  const relationshipSet = _modalConfigRelationshipSet(sheetNodes);
   const config = {};
   sheetNodes.forEach(sheetNode => {
     const entityType = _modalConfigNorm(sheetNode.getAttribute('name'));
-    const presentation = MODEL_MODAL_PRESENTATION[entityType];
-    if (!presentation) return;
+    const descriptor = _cobieEntityDescriptor(entityType);
+    if (!descriptor?.modal) return;
+    const presentation = { title:descriptor.ui.modalTitle || `${descriptor.ui.label} Information`, colorToken:descriptor.ui.colorToken };
 
     const references = _modalConfigReferenceMap(sheetNode);
     const columnsNode = _modalConfigChildren(sheetNode, 'columns')[0];
@@ -165,13 +111,8 @@ function _buildModelModalConfig() {
       cards[cardKey].fields.push(_modalConfigField(entityType, column, references));
     });
 
-    const associations = MODEL_MODAL_RELATIONSHIPS.filter(relationship =>
-      relationship.owner === entityType && relationshipSet.has([
-        relationship.source,
-        _modalConfigNorm(relationship.column),
-        relationship.target,
-      ].join('|'))
-    ).map(({ key, label, target, cardinality }) => ({ key, label, targetType:target, cardinality }));
+    const associations = MODEL_MODAL_RELATIONSHIPS.filter(relationship => relationship.owner === entityType)
+      .map(({ key, label, targetType, cardinality }) => ({ key, label, targetType, cardinality }));
     if (associations.length) {
       cards.associations = {
         title:'Associations',
@@ -181,7 +122,11 @@ function _buildModelModalConfig() {
       };
     }
 
-    (MODEL_MODAL_AUXILIARY_CARDS[entityType] || []).forEach(mode => {
+    const auxiliaryModes = [
+      ...(descriptor?.attributes ? ['attributes'] : []),
+      ...(descriptor?.documentTarget ? ['documents'] : []),
+    ];
+    auxiliaryModes.forEach(mode => {
       cards[mode] = _modalConfigAuxiliaryCard(mode, presentation.colorToken);
     });
     config[entityType] = {
@@ -191,41 +136,20 @@ function _buildModelModalConfig() {
     };
   });
 
-  const documentAssociations = ['facility', 'floor', 'space', 'type', 'component', 'system'].map(targetType => ({
+  const documentAssociations = [..._cobieDocumentTargetTypes()].map(targetType => ({
     key:targetType === 'facility' ? 'facilities' : `${targetType}s`,
     label:targetType === 'facility' ? 'Facilities' : `${_modalConfigLabel(targetType)}s`,
     targetType,
     cardinality:'many',
   }));
-  config.document = {
-    title:'Document Information',
-    headerColorToken:'doccat',
-    cards:{
-      identification:{
-        title:'Identification',
-        colorToken:'doccat',
-        fields:[
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Directory', aliases:['Directory'], edit:'text' },
-          { label:'Created By', aliases:_cobieFieldAliasesFor('CreatedBy'), edit:'lookup', lookupSource:'contact' },
-        ],
-      },
-      applicableTo:{
-        title:'Applicable to',
-        colorToken:'doccat',
-        mode:'association-summary',
-        associations:documentAssociations,
-      },
-      associations:{
-        title:'Associations',
-        colorToken:'doccat',
-        mode:'associations',
-        associations:documentAssociations,
-      },
-    },
-  };
+  if (config.document) {
+    config.document.cards.applicableTo = {
+      title:'Applicable to', colorToken:'doccat', mode:'association-summary', associations:documentAssociations,
+    };
+    config.document.cards.associations = {
+      title:'Associations', colorToken:'doccat', mode:'associations', associations:documentAssociations,
+    };
+  }
 
   MODEL_CONFIG_SCHEMA_STATUS = { loaded:true, error:'' };
   return config;

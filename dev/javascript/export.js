@@ -1,21 +1,13 @@
 // ── Change tracking and review ────────────────────────────────
 function _resolveChangeFacilities(entityType, entityName, facility) {
   let facNames = facility ? [facility] : [];
-  if (!facNames.length && entityType === 'component') {
-    const o = db.components.find(c => f(c,'Name') === entityName);
-    if (o?._facility) facNames = [o._facility];
-  } else if (!facNames.length && entityType === 'type') {
-    facNames = [...new Set(db.types.filter(t=>f(t,'Name')===entityName).map(t=>t._facility).filter(Boolean))];
-  } else if (!facNames.length && entityType === 'space') {
-    const o = db.spaces.find(s => f(s,'Name') === entityName);
-    if (o?._facility) facNames = [o._facility];
-  } else if (!facNames.length && entityType === 'system') {
-    facNames = [...new Set(db.systems.filter(s=>f(s,'Name')===entityName).map(s=>s._facility).filter(Boolean))];
-  } else if (!facNames.length && entityType === 'floor') {
-    const o = db.floors.find(x => f(x,'Name') === entityName);
-    if (o?._facility) facNames = [o._facility];
-  } else if (!facNames.length && entityType === 'facility') {
+  const descriptor = _cobieEntityDescriptor(entityType);
+  if (!facNames.length && descriptor?.scopeIdentity) {
     facNames = [entityName];
+  } else if (!facNames.length && descriptor) {
+    facNames = [...new Set((db[descriptor.bucket] || [])
+      .filter(row => _cobieEntityIdentity(entityType, row) === entityName)
+      .map(row => row._facility).filter(Boolean))];
   }
   if (!facNames.length) facNames = db.facilities.map(x=>x._facility).filter(Boolean);
   return facNames;
@@ -65,8 +57,6 @@ function openChangesModal() {
   _changeLog.forEach(entry => {
     entry.facNames.forEach(fn => { (byFac[fn] = byFac[fn] || []).push(entry); });
   });
-  const labels = {component:'Component',type:'Type',space:'Space',system:'System',floor:'Floor',facility:'Facility',document:'Document',attribute:'Attribute',coordinate:'Coordinate'};
-  const icons  = {component:'bi-tools',type:'bi-tag-fill',space:'bi-grid-fill',system:'bi-diagram-3-fill',floor:'bi-layers-fill',facility:'bi-building',document:'bi-file-earmark-text',attribute:'bi-list-check',coordinate:'bi-crosshair'};
   let html = '';
   if (!_changeLog.length) {
     html = '<p class="text-muted small mb-0">No changes recorded.</p>';
@@ -82,7 +72,7 @@ function openChangesModal() {
           <span class="badge bg-secondary ms-auto">${entries.length} change${entries.length!==1?'s':''}</span>
         </div>
         <ul class="mb-0 small ps-3">
-          ${entries.map(e=>`<li><i class="bi ${icons[e.entityType]||'bi-pencil'} me-1 text-muted"></i>${esc(labels[e.entityType]||e.entityType)}: <strong>${esc(e.entityName)}</strong></li>`).join('')}
+          ${entries.map(entry => { const ui = _cobieEntityUi(entry.entityType); return `<li><i class="bi ${ui.icon || 'bi-pencil'} me-1 text-muted"></i>${esc(ui.label || entry.entityType)}: <strong>${esc(entry.entityName)}</strong></li>`; }).join('')}
         </ul>
       </div>`;
     });
@@ -111,10 +101,10 @@ function _exportSheetData(facObj) {
     .filter(r => r._facility === fac)
     .map(r => { const o={}; Object.entries(r).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return o; });
   const cleanFac = () => { const o={}; Object.entries(facObj).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return [o]; };
-  return [['Facility',cleanFac()],['Contact',cleanRows(db.contacts||[])],['Floor',cleanRows(db.floors)],
-   ['Space',cleanRows(db.spaces)],['Type',cleanRows(db.types)],['Component',cleanRows(db.components)],
-   ['System',cleanRows(db.systems)],['Document',cleanRows(db.documents)],['Attribute',cleanRows(db.attributes||[])],
-   ['Coordinate',cleanRows(db.coordinates||[])]];
+  return [...COBIE_RUNTIME_MODEL.entities.values()]
+    .filter(descriptor => descriptor.type !== 'picklist')
+    .map(descriptor => [descriptor.sheet,
+      descriptor.scopeIdentity ? cleanFac() : cleanRows(db[descriptor.bucket] || [])]);
 }
 
 async function _buildPreservedXlsx(facObj, onProgress) {
