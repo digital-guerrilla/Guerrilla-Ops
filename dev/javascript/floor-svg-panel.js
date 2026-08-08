@@ -140,9 +140,10 @@ function _writeChunkedFloorAttribute(floorRow, raw, baseName, namePattern, chunk
       Value:chunk,
       SheetName:'Floor',
       RowName:floorName,
-      CreatedBy:'',
+      CreatedBy:'n/a',
       CreatedOn:new Date().toISOString().slice(0, 10),
-      ExtSystem:'', ExtObject:'', ExtIdentifier:'',
+      Category:'n/a', ExtSystem:'n/a', ExtObject:'n/a', ExtIdentifier:'n/a',
+      Description: 'n/a', AllowedValues: 'n/a', Unit: 'n/a',
       _facility:facility,
     });
   });

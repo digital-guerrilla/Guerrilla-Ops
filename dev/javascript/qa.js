@@ -23,7 +23,7 @@ const QA_CHECK_ICON_BY_ISSUE_TYPE = {
 
 const QA_NAMED_CHECK_HANDLERS = Object.freeze({
   NotNull: ({ text, isNA }) => !!text && !isNA,
-  NotEmpty: ({ text }) => !!text,
+  NotEmpty: ({ text }) => !!text && !text.startsWith('svg'),
   Format: ({ text, isNA, schema }) => !!text && !isNA && !!schema.formats.email?.test(text),
   Valid: ({ text, isNA, schema }) => {
     if (!text || isNA) return false;

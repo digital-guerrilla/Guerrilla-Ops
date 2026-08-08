@@ -95,7 +95,7 @@
     <sheet name="Floor" bucket="floors" identityField="Name">
       <runtime mergeRows="true" modal="true" attributes="true" listIndex="floors" listFallbackSheet="Space" listFallbackField="FloorName" descriptionIndex="floor"/>
       <ui label="Floor" pluralLabel="Floors" icon="bi-layers-fill" colorToken="floor" modalTitle="Floor Information"/>
-      <filter dimension="floor" order="5" contextProperty="floors" throughField="Space" throughIndex="spFloor" emptyLabel="No Floor"/>
+      <filter dimension="floor" order="2" contextProperty="floors" throughField="Space" throughIndex="spFloor" emptyLabel="No Floor"/>
       <documents target="true" dimension="floors"/>
       <validation presenceRule="Floor.AtLeastOneRowPresent" stage="Design"/>
       <columns>
@@ -114,7 +114,7 @@
     <sheet name="Space" bucket="spaces" identityField="Name">
       <runtime modal="true" attributes="true" listIndex="spaces" descriptionIndex="space" categoryPicklist="Category-Space"/>
       <ui label="Space" pluralLabel="Spaces" icon="bi-grid-fill" colorToken="space" modalTitle="Space Information"/>
-      <filter dimension="space" order="4" category="true" contextProperty="spaces" valueField="Space" emptyLabel="No Space"/>
+      <filter dimension="space" order="3" category="true" contextProperty="spaces" valueField="Space" emptyLabel="No Space"/>
       <documents target="true" dimension="spaces"/>
       <validation presenceRule="Space.AtLeastOneRowPresent" stage="Design"/>
       <columns>
@@ -159,7 +159,7 @@
     <sheet name="Type" bucket="types" identityField="Name">
       <runtime modal="true" attributes="true" listIndex="types" descriptionIndex="type" categoryPicklist="Category-Product"/>
       <ui label="Type" pluralLabel="Types" icon="bi-tag-fill" colorToken="type" modalTitle="Type Information"/>
-      <filter dimension="type" order="2" category="true" contextProperty="types" valueField="TypeName" emptyLabel="Unassigned" defaultActive="true"/>
+      <filter dimension="type" order="4" category="true" contextProperty="types" valueField="TypeName" emptyLabel="Unassigned" defaultActive="true"/>
       <documents target="true" dimension="types"/>
       <validation presenceRule="Type.AtLeastOneRowPresent" stage="Design|Construction"/>
       <columns>
@@ -242,7 +242,7 @@
     <sheet name="System" bucket="systems" identityField="Name">
       <runtime modal="true" attributes="true" listIndex="systems" descriptionIndex="system" categoryPicklist="Category-Element"/>
       <ui label="System" pluralLabel="Systems" icon="bi-diagram-3-fill" colorToken="system" modalTitle="System Information"/>
-      <filter dimension="system" order="3" category="true" contextProperty="systems" valueIndex="compSys" emptyLabel="No System"/>
+      <filter dimension="system" order="5" category="true" contextProperty="systems" valueIndex="compSys" emptyLabel="No System"/>
       <documents target="true" dimension="systems"/>
       <validation stage="Design|Construction"/>
       <columns>
@@ -267,40 +267,46 @@
       <runtime modal="true" categoryPicklist="DocumentType" categoryDimension="doccat"/>
       <ui label="Document" pluralLabel="Documents" icon="bi-file-earmark-text" colorToken="doccat" modalTitle="Document Information"/>
       <filter dimension="doccat" order="6" category="true" contextProperty="categories" valueIndex="docCatByComp" emptyLabel="No Documents"/>
+      <validation stage="Operation"/>
       <columns>
-        <column name="Name" groupTitle="Identification"/>
+        <column name="Name" checks="NotNull|Unique" groupTitle="Identification">
+          <unique ruleId="Document.PrimaryKey.Unique" keys="Name|SheetName|RowName" severity="error"/>
+        </column>
         <column name="CreatedBy" groupTitle="Audit" lookupSource="Contact"/>
         <column name="CreatedOn" groupTitle="Audit"/>
-        <column name="Category" groupTitle="Identification"/>
+        <column name="Category" groupTitle="Identification" checks="NotNull"/>
         <column name="Description" groupTitle="Identification"/>
         <column name="ApprovalBy" groupTitle="Audit"/>
         <column name="Stage" groupTitle="Identification"/>
-        <column name="SheetName" aliases="Sheet Name" groupTitle="Association"/>
-        <column name="RowName" aliases="Row Name" groupTitle="Association"/>
-        <column name="Directory" groupTitle="Location"/>
-        <column name="File" groupTitle="Location"/>
-        <column name="ExternalSystem" aliases="ExtSystem" groupTitle="External References"/>
-        <column name="ExternalObject" aliases="ExtObject" groupTitle="External References"/>
-        <column name="ExternalIdentifier" aliases="ExtIdentifier" groupTitle="External References"/>
-        <column name="Reference" groupTitle="External References"/>
+        <column name="SheetName" aliases="Sheet Name" groupTitle="Association" checks="NotNull"/>
+        <column name="RowName" aliases="Row Name" groupTitle="Association" checks="NotNull"/>
+        <column name="Directory" groupTitle="Location" checks="NotNull"/>
+        <column name="File" groupTitle="Location" checks="NotEmpty"/>
+        <column name="ExternalSystem" aliases="ExtSystem" groupTitle="External References" checks="NotEmpty"/>
+        <column name="ExternalObject" aliases="ExtObject" groupTitle="External References" checks="NotEmpty"/>
+        <column name="ExternalIdentifier" aliases="ExtIdentifier" groupTitle="External References" checks="NotEmpty"/>
+        <column name="Reference" groupTitle="External References" checks="NotEmpty"/>
       </columns>
     </sheet>
 
     <sheet name="Attribute" bucket="attributes" identityField="Name">
       <ui label="Attribute" pluralLabel="Attributes" icon="bi-list-check" colorToken="attribute"/>
+      <validation stage="Design"/>
       <columns>
-        <column name="Name"/>
-        <column name="CreatedBy"/>
-        <column name="CreatedOn"/>
-        <column name="Category"/>
-        <column name="SheetName" aliases="Sheet Name"/>
-        <column name="RowName" aliases="Row Name"/>
-        <column name="Value" aliases="AttributeValue|Attribute Value|NominalValue|Nominal Value"/>
-        <column name="Unit" aliases="UnitName|Unit Name"/>
-        <column name="AllowedValues"/>
-        <column name="ExternalSystem" aliases="ExtSystem"/>
-        <column name="ExternalObject" aliases="ExtObject"/>
-        <column name="ExternalIdentifier" aliases="ExtIdentifier"/>
+        <column name="Name" checks="NotNull|Unique">
+          <unique ruleId="Attribute.PrimaryKey.Unique" keys="Name|SheetName|RowName" severity="error"/>
+        </column>
+        <column name="CreatedBy" checks="NotEmpty"/>
+        <column name="CreatedOn" checks="NotEmpty"/>
+        <column name="Category" checks="NotEmpty"/>
+        <column name="SheetName" aliases="Sheet Name" checks="NotNull"/>
+        <column name="RowName" aliases="Row Name" checks="NotNull"/>
+        <column name="Value" aliases="AttributeValue|Attribute Value|NominalValue|Nominal Value" checks="NotNull"/>
+        <column name="Unit" aliases="UnitName|Unit Name" checks="NotEmpty"/>
+        <column name="AllowedValues" checks="NotEmpty"/>
+        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>
+        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty"/>
+        <column name="ExternalIdentifier" aliases="ExtIdentifier" checks="NotEmpty"/>
       </columns>
     </sheet>
 
