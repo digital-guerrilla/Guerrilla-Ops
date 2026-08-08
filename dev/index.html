@@ -51,6 +51,8 @@
   <input type="file" id="folderInput" webkitdirectory class="d-none">
 </header>
 
+<div id="file-operation-progress" aria-live="polite"></div>
+
 <!-- UPLOAD -->
 <div id="upload">
   <div class="up-card" id="drop-zone">
@@ -68,7 +70,6 @@
         <i class="bi bi-file-earmark-lock2 me-1"></i>Open Editable XLSX
       </button>
     </div>
-    <p id="load-progress" style="font-size:.8rem;color:var(--accent);margin-top:.9rem;margin-bottom:0;min-height:1.2em"></p>
     <p class="mt-2 mb-0" style="font-size:.74rem;color:#bbb">Runs entirely in your browser. Nothing is uploaded.</p>
   </div>
 </div>
@@ -196,7 +197,7 @@
           <span class="grp-cfg-lbl">Group:</span>
           <ul id="group-sortable">
             <li class="group-chip" data-dim="facility"><i class="bi bi-grip-vertical gchip-grip"></i>Facility</li>
-            <li class="group-chip gchip-active" data-dim="type"><i class="bi bi-grip-vertical gchip-grip"></i>Type</li>
+            <li class="group-chip" data-dim="type"><i class="bi bi-grip-vertical gchip-grip"></i>Type</li>
             <li class="group-chip" data-dim="system"><i class="bi bi-grip-vertical gchip-grip"></i>System</li>
             <li class="group-chip" data-dim="space"><i class="bi bi-grip-vertical gchip-grip"></i>Space</li>
             <li class="group-chip" data-dim="floor"><i class="bi bi-grip-vertical gchip-grip"></i>Floor</li>
@@ -244,6 +245,19 @@
               </button>
             </div>
           </div>
+        </div>
+      </aside>
+      <aside id="qa-graph-panel" class="d-none" aria-label="QA graph panel">
+        <button class="qa-graph-edge-toggle" id="qa-graph-edge-toggle" type="button" title="Resize or collapse QA graph panel" aria-expanded="true">
+          <i class="bi bi-chevron-right"></i>
+          <span>QA</span>
+        </button>
+        <div class="qa-graph-content">
+          <div class="qa-graph-head">
+            <h6 class="mb-0"><i class="bi bi-pie-chart-fill me-2"></i>QA Pass / Fail</h6>
+            <span class="qa-graph-sub">Current filtered QA scope</span>
+          </div>
+          <div class="qa-graph-body" id="qa-graph-body"></div>
         </div>
       </aside>
     </div>
@@ -370,25 +384,6 @@
   </div>
 </div>
 
-<!-- EDIT MODAL -->
-<div class="modal" id="edit-modal" tabindex="-1">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header" style="background:var(--navy);color:#fff">
-        <h5 class="modal-title"><i id="edit-modal-icon" class="bi bi-pencil me-2"></i><span id="edit-modal-label">Edit</span></h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-3" id="edit-modal-body"></div>
-      <div class="modal-footer" style="background:#f8f9fa">
-        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-sm btn-primary" onclick="saveEdit()" style="background:var(--navy);border-color:var(--navy)">
-          <i class="bi bi-check2 me-1"></i>Save Changes
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- COMPONENT PLACEMENT MODAL -->
 <div class="modal" id="component-placement-modal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-fullscreen">
@@ -449,9 +444,9 @@
 <script src="javascript/three-d-viewer.js"></script>
 <script src="javascript/documents.js"></script>
 <script src="javascript/qa.js"></script>
+<script src="javascript/qa-graph.js"></script>
 <script src="javascript/model-config.js"></script>
 <script src="javascript/modals.js"></script>
-<script src="javascript/edit.js"></script>
 <script src="javascript/create.js"></script>
 <script src="javascript/export.js"></script>
 <script src="javascript/component-placement.js"></script>

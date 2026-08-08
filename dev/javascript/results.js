@@ -7,7 +7,7 @@ let allExpanded = false;
 const DEFAULT_GROUP_ORDER = Object.freeze(['facility', 'type', 'system', 'space', 'floor', 'doccat']);
 const groupState = {
   order:  [...DEFAULT_GROUP_ORDER],
-  active: new Set(['type']),
+  active: new Set(),
 };
 const BATCH_SIZE = 200;
 let pendingGroups = {}; // cid → {comps, dims, depth} – lazy group bodies
@@ -27,7 +27,7 @@ function renderComps(comps, documentEntries = []) {
   const list = document.getElementById('comp-list');
 
   if (viewMode === 'qa') {
-    renderQAMode(list);
+    showQAMode(list);
     return;
   }
 
@@ -357,7 +357,7 @@ function _toggleGroupHeader(header, forceOpen) {
     const pending = pendingGroups[cid];
     delete pendingGroups[cid];
     if (pending.isQA) {
-      body.innerHTML = qaGroupBody(pending.qaItems);
+      body.innerHTML = qaPendingGroupBody(pending);
     } else if (pending.isDocMode) {
       body.innerHTML = pending.isDocCategory
         ? groupDocsByClassification(pending.docEntries, pending.dims || [], pending.depth || 0, pending.categoryKey)

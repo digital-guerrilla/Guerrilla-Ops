@@ -117,16 +117,26 @@ function _exportSheetData(facObj) {
    ['Coordinate',cleanRows(db.coordinates||[])]];
 }
 
-async function _buildPreservedXlsx(facObj) {
+async function _buildPreservedXlsx(facObj, onProgress) {
+  onProgress(0.1, 'Loading original workbook');
+  await _yieldForFileProgress();
   const workbook = await XlsxPopulate.fromDataAsync(facObj._sourceBuffer.slice(0));
-  _exportSheetData(facObj).forEach(([name, data]) => {
+  const sheetData = _exportSheetData(facObj);
+  for (let index = 0; index < sheetData.length; index++) {
+    const [name, data] = sheetData[index];
+    onProgress(0.18 + (index / sheetData.length) * 0.38, `Synchronizing ${name} sheet`);
+    await _yieldForFileProgress();
     const populatedSheet = workbook.sheets().find(sheet => sheet.name().toLowerCase() === name.toLowerCase());
     const sourceName = facObj._workbook.SheetNames.find(sheetName => sheetName.toLowerCase() === name.toLowerCase());
     const sourceSheet = sourceName ? facObj._workbook.Sheets[sourceName] : null;
-    if (!populatedSheet && !data.length) return;
+    if (!populatedSheet && !data.length) continue;
     _syncPopulatedSheet(populatedSheet || workbook.addSheet(name), data, sourceSheet);
-  });
+  }
+  onProgress(0.58, 'Serializing workbook and styles');
+  await _yieldForFileProgress();
   const output = await workbook.outputAsync();
+  onProgress(0.68, 'Packaging workbook bytes');
+  await _yieldForFileProgress();
   const blob = output instanceof Blob ? output : new Blob([output], {
     type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   });
@@ -170,32 +180,41 @@ function _copyPopulatedStyle(source, target) {
   });
 }
 
-function _buildFallbackWorkbook(facObj) {
+async function _buildFallbackWorkbook(facObj, onProgress) {
   const sourceWb = facObj._workbook;
   const wb = sourceWb
     ? { ...sourceWb, SheetNames:[...sourceWb.SheetNames], Sheets:{...sourceWb.Sheets} }
     : XLSX.utils.book_new();
-  _exportSheetData(facObj).forEach(([name,data]) => {
+  const sheetData = _exportSheetData(facObj);
+  for (let index = 0; index < sheetData.length; index++) {
+    const [name, data] = sheetData[index];
+    onProgress(0.12 + (index / sheetData.length) * 0.42, `Synchronizing ${name} sheet`);
+    await _yieldForFileProgress();
     const existingName = wb.SheetNames.find(n => n.toLowerCase() === name.toLowerCase());
-    if (!existingName && !data.length) return;
+    if (!existingName && !data.length) continue;
     const sheetName = existingName || name;
     const oldSheet = existingName ? wb.Sheets[existingName] : null;
     wb.Sheets[sheetName] = _syncSheet(data, oldSheet);
     if (!existingName) wb.SheetNames.push(sheetName);
-  });
+  }
   return wb;
 }
 
-async function _buildExport(facObj) {
+async function _buildExport(facObj, onProgress) {
   const isXlsx = /\.xlsx$/i.test(facObj._fileName || '');
   if (isXlsx && facObj._sourceBuffer && typeof XlsxPopulate !== 'undefined') {
-    return _buildPreservedXlsx(facObj);
+    return _buildPreservedXlsx(facObj, onProgress);
   }
   const bookType = /\.xlsm$/i.test(facObj._fileName || '') ? 'xlsm'
     : (/\.xls$/i.test(facObj._fileName || '') ? 'xls' : 'xlsx');
-  const bytes = XLSX_STYLE.write(_buildFallbackWorkbook(facObj), {
+  const workbook = await _buildFallbackWorkbook(facObj, onProgress);
+  onProgress(0.58, 'Serializing workbook and styles');
+  await _yieldForFileProgress();
+  const bytes = XLSX_STYLE.write(workbook, {
     type:'array', bookType, bookVBA:true
   });
+  onProgress(0.68, 'Packaging workbook bytes');
+  await _yieldForFileProgress();
   const blob = new Blob([bytes], { type:'application/octet-stream' });
   return { blob, buffer:await blob.arrayBuffer() };
 }
@@ -208,19 +227,27 @@ function _downloadBlob(blob, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function _exportFacility(facObj, asNew, updateOriginal = false, writablePromise = null) {
+async function _exportFacility(facObj, asNew, updateOriginal = false, writablePromise = null, onProgress = () => {}) {
   const fac = facObj._facility;
   const origName = facObj._fileName || (fac.replace(/[^a-z0-9_\-]/gi,'_') + '.xlsx');
   const outName = asNew ? origName.replace(/\.(xlsx|xls|xlsm)$/i, '_modified.$1') : origName;
   const directWritable = updateOriginal && facObj._fileHandle
     ? (writablePromise || facObj._fileHandle.createWritable())
     : null;
-  const result = await _buildExport(facObj);
+  onProgress(0.03, 'Collecting workbook rows');
+  await _yieldForFileProgress();
+  const result = await _buildExport(facObj, onProgress);
+  onProgress(0.74, directWritable ? 'Opening destination file' : 'Preparing browser download');
+  await _yieldForFileProgress();
 
   if (directWritable) {
     const writable = await directWritable;
     try {
+      onProgress(0.8, 'Writing workbook bytes');
+      await _yieldForFileProgress();
       await writable.write(result.blob);
+      onProgress(0.88, 'Closing destination file');
+      await _yieldForFileProgress();
       await writable.close();
     } catch (err) {
       try { await writable.abort(); } catch (_) {}
@@ -229,10 +256,31 @@ async function _exportFacility(facObj, asNew, updateOriginal = false, writablePr
   } else {
     _downloadBlob(result.blob, outName);
   }
+  onProgress(0.92, 'Reopening saved workbook');
+  await _yieldForFileProgress();
   facObj._sourceBuffer = result.buffer;
   facObj._workbook = XLSX.read(new Uint8Array(result.buffer), {
     type:'array', cellDates:true, cellStyles:true, bookVBA:true
   });
+  onProgress(0.98, 'Updating saved workbook session');
+  await _yieldForFileProgress();
+}
+
+function _setSaveControlsBusy(busy) {
+  document.querySelectorAll('#changes-modal button').forEach(button => { button.disabled = busy; });
+}
+
+function _saveProgressUpdater(facilities, icon = 'bi-floppy') {
+  return (index, fraction, status) => {
+    const fac = facilities[index];
+    _fileOperationProgress({
+      title:'Saving COBie workbooks',
+      status:`${status}: ${fac?._fileName || fac?._facility || 'Workbook'}`,
+      detail:`Workbook ${index + 1} of ${facilities.length}`,
+      percent:((index + fraction) / Math.max(1, facilities.length)) * 100,
+      icon,
+    });
+  };
 }
 
 function _syncSheet(rows, oldSheet) {
@@ -277,33 +325,61 @@ function _writableCellStyle(style) {
 // ── Save, download, and discard actions ──────────────────────
 async function saveToExistingFiles() {
   const writablePromises = new Map();
+  const facilities = db.facilities.filter(fac => fac._facility);
+  const updateProgress = _saveProgressUpdater(facilities);
+  _setSaveControlsBusy(true);
   try {
+    if (facilities.length) updateProgress(0, 0, 'Requesting write access');
+    await _yieldForFileProgress();
     db.facilities.forEach(fac => {
       if (fac._facility && fac._fileHandle) {
         writablePromises.set(fac, fac._fileHandle.createWritable());
       }
     });
-    for (const fac of db.facilities) {
-      if (fac._facility) {
-        await _exportFacility(fac, false, !!fac._fileHandle, writablePromises.get(fac) || null);
-      }
+    for (let index = 0; index < facilities.length; index++) {
+      const fac = facilities[index];
+      updateProgress(index, 0, 'Preparing');
+      await _exportFacility(fac, false, !!fac._fileHandle, writablePromises.get(fac) || null,
+        (fraction, status) => updateProgress(index, fraction, status));
     }
+    _fileOperationProgress({ title:'Saving COBie workbooks', status:'Capturing saved baseline', detail:'Updating change tracking and Undo state', percent:99, icon:'bi-floppy' });
+    await _yieldForFileProgress();
     _afterSave();
+    _fileOperationProgress({ title:'Saving COBie workbooks', status:'Save complete', detail:`${facilities.length} workbook${facilities.length === 1 ? '' : 's'} saved`, percent:100, icon:'bi-check-circle' });
+    _clearFileOperationProgress(1100);
   } catch (err) {
     for (const promise of writablePromises.values()) {
       try { const writable = await promise; await writable.abort(); } catch (_) {}
     }
+    _fileOperationProgress({ title:'Save failed', status:'The workbook could not be saved', detail:err.message, percent:100, icon:'bi-exclamation-triangle' });
+    _clearFileOperationProgress(2600);
     alert('Could not save the workbook: ' + err.message);
+  } finally {
+    _setSaveControlsBusy(false);
   }
 }
 async function saveToNewFiles() {
+  const facilities = db.facilities.filter(fac => fac._facility);
+  const updateProgress = _saveProgressUpdater(facilities, 'bi-download');
+  _setSaveControlsBusy(true);
   try {
-    for (const fac of db.facilities) {
-      if (fac._facility) await _exportFacility(fac, true, false);
+    for (let index = 0; index < facilities.length; index++) {
+      const fac = facilities[index];
+      updateProgress(index, 0, 'Preparing');
+      await _exportFacility(fac, true, false, null,
+        (fraction, status) => updateProgress(index, fraction, status));
     }
+    _fileOperationProgress({ title:'Saving COBie workbooks', status:'Capturing saved baseline', detail:'Updating change tracking and Undo state', percent:99, icon:'bi-download' });
+    await _yieldForFileProgress();
     _afterSave();
+    _fileOperationProgress({ title:'Saving COBie workbooks', status:'Downloads ready', detail:`${facilities.length} workbook${facilities.length === 1 ? '' : 's'} prepared`, percent:100, icon:'bi-check-circle' });
+    _clearFileOperationProgress(1100);
   } catch (err) {
+    _fileOperationProgress({ title:'Save failed', status:'The workbook could not be created', detail:err.message, percent:100, icon:'bi-exclamation-triangle' });
+    _clearFileOperationProgress(2600);
     alert('Could not create the workbook: ' + err.message);
+  } finally {
+    _setSaveControlsBusy(false);
   }
 }
 function _afterSave() {

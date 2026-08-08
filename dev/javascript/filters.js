@@ -110,11 +110,18 @@ function applyFilters() {
     viewMode === 'document' || sel.doccat.size > 0,
   );
 
+  if (viewMode === 'qa' && typeof setQaFilterScope === 'function') {
+    setQaFilterScope(comps, filteredDocumentContexts);
+  }
+
   lastCounts = c;
   renderPanels(c);
   reapplyPanelSearches();
   renderPills();
   renderComps(comps, filteredDocumentContexts.map(_documentContextEntry));
+  if (typeof refreshQaGraphPanel === 'function') {
+    refreshQaGraphPanel();
+  }
   if (typeof refreshFloorSvgPanel === 'function') {
     refreshFloorSvgPanel(comps, c);
   }
@@ -196,6 +203,7 @@ function clearSearch() {
 }
 
 function setMode(mode) {
+  if (mode !== 'qa' && typeof cancelQaRun === 'function') cancelQaRun(true);
   viewMode = mode;
   document.getElementById('btn-asset')   .classList.toggle('active', mode==='asset');
   document.getElementById('btn-document').classList.toggle('active', mode==='document');

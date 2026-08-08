@@ -1,5 +1,5 @@
 // ── Application state and shared constants ───────────────────
-const db  = { types:[], components:[], spaces:[], floors:[], systems:[], documents:[], facilities:[], contacts:[], attributes:[], coordinates:[], picklists:[], facility:null };
+const db  = { types:[], components:[], spaces:[], floors:[], zones:[], systems:[], documents:[], facilities:[], contacts:[], attributes:[], coordinates:[], picklists:[], facility:null };
 const idx = {};
 let docStore = [];
 let cardCtr  = 0;

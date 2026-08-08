@@ -1482,6 +1482,12 @@ function refreshThreeDViewerPanel(filteredComps, counts) {
   const els = _viewer3dElements();
   if (!els.panel || !els.canvas) return;
 
+  if (viewMode === 'qa') {
+    els.panel.classList.add('d-none');
+    _viewer3dTooltipHide();
+    return;
+  }
+
   if (!(db.coordinates || []).length) {
     els.panel.classList.add('d-none');
     _viewer3dScene = null;

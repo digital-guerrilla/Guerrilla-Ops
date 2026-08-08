@@ -1859,6 +1859,11 @@ function refreshFloorSvgPanel(filteredComps, counts) {
   const els = _floorPanelElements();
   if (!els.panel || !els.stage) return;
 
+  if (viewMode === 'qa') {
+    els.panel.classList.add('d-none');
+    return;
+  }
+
   _lastFloorCounts = counts || {};
   _lastFilteredComps = Array.isArray(filteredComps) ? filteredComps : [];
   _highlightRoomIds = _roomIdsToHighlight(counts);

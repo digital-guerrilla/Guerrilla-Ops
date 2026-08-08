@@ -15,22 +15,39 @@ const MODEL_MODAL_CONFIG = Object.freeze({
           { label:'Description', aliases:['Description'], edit:'text' },
           { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
           { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Site Name', aliases:['SiteName', 'Site Name', 'Site'], edit:'text' },
-          { label:'Site Description', aliases:['SiteDescription', 'Site Description'], edit:'text' },
+          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
         ],
       },
-      uniclass: {
-        title: 'Uniclass',
-        colorToken: 'facility',
-        fields: [],
-      },
-      machine: {
-        title: 'Machine',
+      project: {
+        title: 'Project & Site',
         colorToken: 'facility',
         fields: [
-          { label:'Project Ident', aliases:['ProjectIdent', 'Project Ident', 'ProjectIdentifier', 'Project Identifier', 'ProjectCode', 'Project Code'], edit:'text' },
-          { label:'Site Ident', aliases:['SiteIdent', 'Site Ident', 'SiteIdentifier', 'Site Identifier'], edit:'text' },
-          { label:'Facility Ident', aliases:['FacilityIdent', 'Facility Ident', 'FacilityIdentifier', 'Facility Identifier', 'ExtIdentifier', 'Ext Identifier'], edit:'text' },
+          { label:'Project Name', aliases:['ProjectName', 'Project Name'], edit:'text' },
+          { label:'Site Name', aliases:['SiteName', 'Site Name'], edit:'text' },
+        ],
+      },
+      units: {
+        title: 'Units & Measurement',
+        colorToken: 'facility',
+        fields: [
+          { label:'Linear Units', aliases:['LinearUnits', 'Linear Units'], edit:'text' },
+          { label:'Area Units', aliases:['AreaUnits', 'Area Units'], edit:'text' },
+          { label:'Volume Units', aliases:['VolumeUnits', 'Volume Units'], edit:'text' },
+          { label:'Currency', aliases:['Currency', 'CurrencyUnit', 'Currency Unit'], edit:'text' },
+          { label:'Area Measurement', aliases:['AreaMeasurement', 'Area Measurement'], edit:'text' },
+        ],
+      },
+      external: {
+        title: 'External References',
+        colorToken: 'facility',
+        fields: [
+          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
+          { label:'External Project Object', aliases:['ExternalProjectObject', 'External Project Object'], edit:'text' },
+          { label:'External Project Identifier', aliases:['ExternalProjectIdentifier', 'External Project Identifier'], edit:'text' },
+          { label:'External Site Object', aliases:['ExternalSiteObject', 'External Site Object'], edit:'text' },
+          { label:'External Site Identifier', aliases:['ExternalSiteIdentifier', 'External Site Identifier'], edit:'text' },
+          { label:'External Facility Object', aliases:['ExternalFacilityObject', 'External Facility Object', 'ExternalObject', 'ExtObject'], edit:'text' },
+          { label:'External Facility Identifier', aliases:['ExternalFacilityIdentifier', 'External Facility Identifier', 'ExternalIdentifier', 'ExtIdentifier'], edit:'text' },
         ],
       },
       attributes: {
@@ -56,17 +73,33 @@ const MODEL_MODAL_CONFIG = Object.freeze({
         fields: [
           { label:'Name', aliases:['Name'], edit:'text' },
           { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Description', aliases:['Description'], edit:'text' },
           { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
         ],
       },
       geometry: {
         title: 'Geometry',
         colorToken: 'floor',
         fields: [
-          { label:'Floor Type', aliases:['FloorType', 'Floor Type'], edit:'text' },
           { label:'Height', aliases:['Height'], edit:'text' },
           { label:'Elevation', aliases:['Elevation'], edit:'text' },
+        ],
+      },
+      external: {
+        title: 'External References',
+        colorToken: 'floor',
+        fields: [
+          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
+          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
+          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
+        ],
+      },
+      associations: {
+        title: 'Associations',
+        colorToken: 'floor',
+        mode: 'associations',
+        associations: [
+          { key:'spaces', label:'Spaces', targetType:'space', cardinality:'many' },
         ],
       },
       attributes: {
@@ -95,6 +128,7 @@ const MODEL_MODAL_CONFIG = Object.freeze({
           { label:'Description', aliases:['Description'], edit:'text' },
           { label:'Floor', aliases:['FloorName', 'Floor Name', 'Floor'], edit:'lookup', lookupSource:'floor' },
           { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
         ],
       },
       measurements: {
@@ -104,9 +138,16 @@ const MODEL_MODAL_CONFIG = Object.freeze({
           { label:'Gross Area', aliases:['GrossArea', 'Gross Area'], edit:'text' },
           { label:'Net Area', aliases:['NetArea', 'Net Area'], edit:'text' },
           { label:'Usable Height', aliases:['UsableHeight', 'Usable Height'], edit:'text' },
-          { label:'Gross Perimeter', aliases:['GrossPerimeter', 'Gross Perimeter'], edit:'text' },
-          { label:'Net Perimeter', aliases:['NetPerimeter', 'Net Perimeter'], edit:'text' },
           { label:'Room Tag', aliases:['RoomTag', 'Room Tag'], edit:'text' },
+        ],
+      },
+      external: {
+        title: 'External References',
+        colorToken: 'space',
+        fields: [
+          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
+          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
+          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
         ],
       },
       associations: {
@@ -114,6 +155,7 @@ const MODEL_MODAL_CONFIG = Object.freeze({
         colorToken: 'space',
         mode: 'associations',
         associations: [
+          { key:'floor', label:'Floor', targetType:'floor', cardinality:'one' },
           { key:'components', label:'Components', targetType:'component', cardinality:'many' },
         ],
       },
@@ -130,6 +172,40 @@ const MODEL_MODAL_CONFIG = Object.freeze({
     },
   },
 
+  zone: {
+    title: 'Zone Information',
+    headerColorToken: 'space',
+    cards: {
+      identification: {
+        title: 'Identification',
+        colorToken: 'space',
+        fields: [
+          { label:'Name', aliases:['Name'], edit:'text' },
+          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
+          { label:'Description', aliases:['Description'], edit:'text' },
+          { label:'Space Names', aliases:['SpaceNames', 'Space Names'], edit:'text' },
+        ],
+      },
+      audit: {
+        title: 'Audit',
+        colorToken: 'space',
+        fields: [
+          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
+        ],
+      },
+      external: {
+        title: 'External References',
+        colorToken: 'space',
+        fields: [
+          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
+          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
+          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
+        ],
+      },
+    },
+  },
+
   type: {
     title: 'Type Information',
     headerColorToken: 'type',
@@ -139,10 +215,17 @@ const MODEL_MODAL_CONFIG = Object.freeze({
         colorToken: 'type',
         fields: [
           { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
           { label:'Description', aliases:['Description'], edit:'text' },
+          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
           { label:'Asset Type', aliases:['AssetType', 'Asset Type'], edit:'text' },
+        ],
+      },
+      audit: {
+        title: 'Audit',
+        colorToken: 'type',
+        fields: [
           { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
         ],
       },
       manufacturer: {
@@ -150,19 +233,64 @@ const MODEL_MODAL_CONFIG = Object.freeze({
         colorToken: 'type',
         fields: [
           { label:'Manufacturer', aliases:['Manufacturer'], edit:'lookup', lookupSource:'contact' },
-          { label:'Model No.', aliases:['ModelNumber', 'Model Number', 'ModelReference', 'Model Reference'], edit:'text' },
-          { label:'Material', aliases:['Material'], edit:'text' },
-          { label:'Size', aliases:['Size'], edit:'text' },
+          { label:'Model Number', aliases:['ModelNumber', 'Model Number'], edit:'text' },
         ],
       },
       warranty: {
         title: 'Warranty',
         colorToken: 'type',
         fields: [
-          { label:'Warranty (Parts)', aliases:['WarrantyGuarantorParts', 'Warranty Guarantor Parts'], edit:'lookup', lookupSource:'contact' },
-          { label:'Warranty (Labour)', aliases:['WarrantyGuarantorLabor', 'Warranty Guarantor Labor', 'WarrantyGuarantorLabour', 'Warranty Guarantor Labour'], edit:'lookup', lookupSource:'contact' },
-          { label:'Warranty Unit', aliases:['WarrantyDurationUnit', 'Warranty Duration Unit'], edit:'text' },
+          { label:'Parts Guarantor', aliases:['WarrantyGuarantorParts', 'Warranty Guarantor Parts'], edit:'lookup', lookupSource:'contact' },
+          { label:'Parts Duration', aliases:['WarrantyDurationParts', 'Warranty Duration Parts'], edit:'text' },
+          { label:'Labour Guarantor', aliases:['WarrantyGuarantorLabor', 'Warranty Guarantor Labor'], edit:'lookup', lookupSource:'contact' },
+          { label:'Labour Duration', aliases:['WarrantyDurationLabor', 'Warranty Duration Labor'], edit:'text' },
+          { label:'Warranty Duration Unit', aliases:['WarrantyDurationUnit', 'Warranty Duration Unit'], edit:'text' },
+          { label:'Replacement Cost', aliases:['ReplacementCost', 'Replacement Cost'], edit:'text' },
           { label:'Expected Life', aliases:['ExpectedLife', 'Expected Life'], edit:'text' },
+          { label:'Duration Unit', aliases:['DurationUnit', 'Duration Unit'], edit:'text' },
+          { label:'Warranty Description', aliases:['WarrantyDescription', 'Warranty Description'], edit:'text' },
+        ],
+      },
+      dimensions: {
+        title: 'Dimensions & Form',
+        colorToken: 'type',
+        fields: [
+          { label:'Nominal Length', aliases:['NominalLength', 'Nominal Length'], edit:'text' },
+          { label:'Nominal Width', aliases:['NominalWidth', 'Nominal Width'], edit:'text' },
+          { label:'Nominal Height', aliases:['NominalHeight', 'Nominal Height'], edit:'text' },
+          { label:'Shape', aliases:['Shape'], edit:'text' },
+          { label:'Size', aliases:['Size'], edit:'text' },
+        ],
+      },
+      specification: {
+        title: 'Specification',
+        colorToken: 'type',
+        fields: [
+          { label:'Model Reference', aliases:['ModelReference', 'Model Reference'], edit:'text' },
+          { label:'Color', aliases:['Color', 'Colour'], edit:'text' },
+          { label:'Finish', aliases:['Finish'], edit:'text' },
+          { label:'Grade', aliases:['Grade'], edit:'text' },
+          { label:'Material', aliases:['Material'], edit:'text' },
+          { label:'Constituents', aliases:['Constituents'], edit:'text' },
+          { label:'Features', aliases:['Features'], edit:'text' },
+        ],
+      },
+      performance: {
+        title: 'Performance',
+        colorToken: 'type',
+        fields: [
+          { label:'Accessibility Performance', aliases:['AccessibilityPerformance', 'Accessibility Performance'], edit:'text' },
+          { label:'Code Performance', aliases:['CodePerformance', 'Code Performance'], edit:'text' },
+          { label:'Sustainability Performance', aliases:['SustainabilityPerformance', 'Sustainability Performance'], edit:'text' },
+        ],
+      },
+      external: {
+        title: 'External References',
+        colorToken: 'type',
+        fields: [
+          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
+          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
+          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
         ],
       },
       associations: {
@@ -197,7 +325,23 @@ const MODEL_MODAL_CONFIG = Object.freeze({
           { label:'Name', aliases:['Name'], edit:'text' },
           { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
           { label:'Description', aliases:['Description'], edit:'text' },
+        ],
+      },
+      audit: {
+        title: 'Audit',
+        colorToken: 'system',
+        fields: [
           { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
+        ],
+      },
+      external: {
+        title: 'External References',
+        colorToken: 'system',
+        fields: [
+          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
+          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
+          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
         ],
       },
       associations: {
@@ -231,17 +375,37 @@ const MODEL_MODAL_CONFIG = Object.freeze({
         fields: [
           { label:'Name', aliases:['Name'], edit:'text' },
           { label:'Description', aliases:['Description'], edit:'text' },
+          { label:'Type', aliases:['TypeName', 'Type Name'], edit:'lookup', lookupSource:'type' },
+          { label:'Space', aliases:['Space'], edit:'lookup', lookupSource:'space' },
+        ],
+      },
+      audit: {
+        title: 'Audit',
+        colorToken: 'component',
+        fields: [
           { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
         ],
       },
       asset: {
         title: 'Asset',
         colorToken: 'component',
         fields: [
-          { label:'Assembly Type', aliases:['AssemblyType', 'Assembly Type'], edit:'text' },
           { label:'Serial Number', aliases:['SerialNumber', 'Serial Number'], edit:'text' },
           { label:'Installation Date', aliases:['InstallationDate', 'Installation Date'], edit:'text' },
+          { label:'Warranty Start Date', aliases:['WarrantyStartDate', 'Warranty Start Date'], edit:'text' },
           { label:'Tag Number', aliases:['TagNumber', 'Tag Number'], edit:'text' },
+          { label:'Bar Code', aliases:['BarCode', 'Bar Code', 'Barcode'], edit:'text' },
+          { label:'Asset Identifier', aliases:['AssetIdentifier', 'Asset Identifier'], edit:'text' },
+        ],
+      },
+      external: {
+        title: 'External References',
+        colorToken: 'component',
+        fields: [
+          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
+          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
+          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
         ],
       },
       associations: {
@@ -275,24 +439,49 @@ const MODEL_MODAL_CONFIG = Object.freeze({
         title: 'Identification',
         colorToken: 'contact',
         fields: [
-          { label:'Name / Unique ID', aliases:['Name'], edit:'text' },
+          { label:'Email', aliases:['Email'], edit:'text' },
+          { label:'Category', aliases:['Category'], edit:'text' },
           { label:'Given Name', aliases:['GivenName', 'Given Name'], edit:'text' },
           { label:'Family Name', aliases:['FamilyName', 'Family Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'text' },
+          { label:'Company / Organisation', aliases:['Company'], edit:'text' },
+          { label:'Department', aliases:['Department'], edit:'text' },
+          { label:'Organisation Code', aliases:['OrganizationCode', 'Organization Code'], edit:'text' },
+        ],
+      },
+      audit: {
+        title: 'Audit',
+        colorToken: 'contact',
+        fields: [
           { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
         ],
       },
       communication: {
         title: 'Communication',
         colorToken: 'contact',
         fields: [
-          { label:'Email', aliases:['Email'], edit:'text' },
           { label:'Phone', aliases:['Phone'], edit:'text' },
-          { label:'Company / Organisation', aliases:['Company'], edit:'text' },
-          { label:'Department', aliases:['Department'], edit:'text' },
-          { label:'Organisation Code', aliases:['OrganizationCode', 'Organization Code'], edit:'text' },
+        ],
+      },
+      address: {
+        title: 'Address',
+        colorToken: 'contact',
+        fields: [
+          { label:'Street', aliases:['Street'], edit:'text' },
+          { label:'Postal Box', aliases:['PostalBox', 'Postal Box'], edit:'text' },
           { label:'Town / City', aliases:['Town'], edit:'text' },
+          { label:'State / Region', aliases:['StateRegion', 'State Region'], edit:'text' },
+          { label:'Postal Code', aliases:['PostalCode', 'Postal Code'], edit:'text' },
           { label:'Country', aliases:['Country'], edit:'text' },
+        ],
+      },
+      external: {
+        title: 'External References',
+        colorToken: 'contact',
+        fields: [
+          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
+          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
+          { label:'External Identifier', aliases:['ExternalIdentifier', 'ExtIdentifier'], edit:'text' },
         ],
       },
     },

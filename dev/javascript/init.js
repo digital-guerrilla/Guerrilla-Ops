@@ -297,7 +297,6 @@ document.getElementById('pills').addEventListener('click', e => {
   }
   applyFilters();
 });
-
 // ── Result list interactions ──────────────────────────────────
 let _resultRangeAnchor = null;
 let _resultGroupRangeAnchor = null;
@@ -341,8 +340,28 @@ document.getElementById('comp-list').addEventListener('click', e => {
     _resultGroupRangeAnchor = key;
     return;
   }
-  const eb = e.target.closest('[data-edit-entity]');
-  if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey, eb.dataset.editFac); return; }
+  const qaInfo = e.target.closest('[data-qa-info-entity]');
+  if (qaInfo) {
+    const entityType = String(qaInfo.dataset.qaInfoEntity || '').toLowerCase();
+    const entityName = qaInfo.dataset.qaInfoKey || '';
+    const facility = qaInfo.dataset.qaInfoFac || '';
+    if (entityType === 'component') {
+      openComponentInfo(entityName, facility);
+      return;
+    }
+    if (entityType === 'document') {
+      const row = (db.documents || []).find(doc =>
+        f(doc, 'Name').toLowerCase() === entityName.toLowerCase() &&
+        (!facility || String(doc._facility || '').toLowerCase() === facility.toLowerCase())
+      );
+      if (row) openDoc(row);
+      return;
+    }
+    if (entityType) {
+      openGroupInfo(entityType, entityName, facility);
+      return;
+    }
+  }
   const docBtn = e.target.closest('[data-doc]');
   if (docBtn) { const d=docStore[+docBtn.dataset.doc]; if(d) openDoc(d); return; }
   const cpInline = e.target.closest('.cp-btn-inline');
@@ -423,8 +442,6 @@ document.getElementById('type-modal').addEventListener('click', e => {
     });
     return;
   }
-  const eb = e.target.closest('[data-edit-entity]');
-  if (eb) { openEditModal(eb.dataset.editEntity, eb.dataset.editKey, eb.dataset.editFac); return; }
   const b = e.target.closest('[data-doc]');
   if (!b) return;
   const d = docStore[+b.dataset.doc];
@@ -451,86 +468,14 @@ _gList && _gList.addEventListener('click', e => {
   const chip = e.target.closest('.group-chip');
   if (!chip) return;
   const dim = chip.dataset.dim;
-  if (groupState.active.has(dim)) groupState.active.delete(dim);
-  else groupState.active.add(dim);
-  chip.classList.toggle('gchip-active', groupState.active.has(dim));
+  if (viewMode === 'qa' && typeof QA_ENTITY_GROUP_DIMS !== 'undefined' && QA_ENTITY_GROUP_DIMS.includes(dim)) {
+    const nextSheet = groupState.active.has(dim) ? '' : dim;
+    setQaResultsSheetFilter(nextSheet, false);
+    if (typeof _qaGraphSelectedSheet !== 'undefined') _qaGraphSelectedSheet = nextSheet;
+  } else {
+    if (groupState.active.has(dim)) groupState.active.delete(dim);
+    else groupState.active.add(dim);
+    chip.classList.toggle('gchip-active', groupState.active.has(dim));
+  }
   applyFilters();
-});
-
-// ── Edit modal interactions ───────────────────────────────────
-document.getElementById('edit-modal').addEventListener('click', e => {
-  const associationCheckbox = e.target.closest('.sys-assoc-chk,.comp-assoc-chk');
-  if (associationCheckbox) {
-    const list = associationCheckbox.closest('[style*="overflow-y"]');
-    const previous = list?._rangeAnchor || null;
-    const inputs = list ? [...list.querySelectorAll('input[type="checkbox"]')]
-      .filter(input => input.closest('label')?.style.display !== 'none') : [];
-    if (e.shiftKey && previous) {
-      _selectionRange(inputs, previous, associationCheckbox).forEach(input => { input.checked = associationCheckbox.checked; });
-    }
-    if (list) list._rangeAnchor = associationCheckbox;
-    return;
-  }
-  const rmBtn = e.target.closest('.rm-doc-btn');
-  if (rmBtn) {
-    const row = rmBtn.closest('.edit-doc-row');
-    if (row) {
-      _editDocRemovals.push({
-        sheetName:row.dataset.sheet, rowName:row.dataset.row,
-        docName:row.dataset.origName, docRef:row.dataset.docRef,
-      });
-      row.remove();
-    }
-    return;
-  }
-  const addBtn = e.target.closest('.add-doc-btn');
-  if (addBtn) {
-    const cont = document.getElementById('doc-rows-' + addBtn.dataset.sheet.toLowerCase());
-    if (cont) {
-      cont.insertAdjacentHTML('beforeend', _docEditRow(null, addBtn.dataset.sheet, addBtn.dataset.row, true));
-    }
-    return;
-  }
-  const editLinkBtn = e.target.closest('.edit-doc-link-btn');
-  if (editLinkBtn) {
-    const row = editLinkBtn.closest('.edit-doc-row');
-    row?.querySelector('.doc-link-display')?.classList.add('d-none');
-    const editor = row?.querySelector('.doc-link-editor');
-    editor?.classList.remove('d-none');
-    editor?.querySelector('.doc-link-input')?.focus();
-    return;
-  }
-  const pasteBtn = e.target.closest('.paste-doc-link-btn');
-  if (pasteBtn) {
-    const row = pasteBtn.closest('.edit-doc-row');
-    const input = row?.querySelector('.doc-link-input');
-    const note = row?.querySelector('.doc-link-note');
-    navigator.clipboard.readText().then(text => {
-      if (input) input.value = text;
-      if (note) note.textContent = '';
-    }).catch(() => {
-      input?.focus();
-      if (note) note.textContent = 'Press Ctrl+V to paste into the link field.';
-    });
-    return;
-  }
-  const browseBtn = e.target.closest('.browse-doc-link-btn');
-  if (browseBtn) {
-    browseBtn.closest('.edit-doc-row')?.querySelector('.doc-file-picker')?.click();
-  }
-});
-
-document.getElementById('edit-modal').addEventListener('change', e => {
-  const picker = e.target.closest('.doc-file-picker');
-  if (!picker?.files?.length) return;
-  const row = picker.closest('.edit-doc-row');
-  const input = row?.querySelector('.doc-link-input');
-  const note = row?.querySelector('.doc-link-note');
-  const file = picker.files[0];
-  const exposedPath = file.path || file.webkitRelativePath ||
-    (!/fakepath/i.test(picker.value) ? picker.value : '');
-  if (input) input.value = exposedPath || file.name;
-  if (note) note.textContent = exposedPath
-    ? ''
-    : 'Your browser hides the full local path. Paste the full path here if the file name alone is not enough.';
 });

@@ -1,9 +1,42 @@
 // ── Workbook loading and session lifecycle ───────────────────
-function readBuf(file) {
+function _fileOperationProgress({ title, status, detail = '', percent = 0, icon = 'bi-file-earmark-arrow-down' }) {
+  const host = document.getElementById('file-operation-progress');
+  if (!host) return;
+  const value = Math.max(0, Math.min(100, Math.round(percent)));
+  host.innerHTML = `<div class="qa-run-progress file-operation-progress" role="status">
+    <div class="qa-run-progress-head">
+      <span class="qa-run-progress-title"><i class="bi ${esc(icon)}"></i> ${esc(title)}</span>
+      <span class="qa-run-progress-percent">${value}%</span>
+    </div>
+    <div class="qa-run-progress-track" role="progressbar" aria-label="${esc(title)} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value}">
+      <span class="qa-run-progress-fill" style="width:${value}%"></span>
+    </div>
+    <div class="qa-run-progress-status">${esc(status)}</div>
+    <div class="qa-run-progress-detail">${esc(detail)}</div>
+  </div>`;
+}
+
+function _clearFileOperationProgress(delay = 0) {
+  const clear = () => {
+    const host = document.getElementById('file-operation-progress');
+    if (host) host.replaceChildren();
+  };
+  if (delay) setTimeout(clear, delay);
+  else clear();
+}
+
+function _yieldForFileProgress() {
+  return new Promise(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function readBuf(file, onProgress) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onerror = () => reject(new Error(file.name));
     r.onload  = ev => resolve(ev.target.result);
+    r.onprogress = ev => {
+      if (ev.lengthComputable && typeof onProgress === 'function') onProgress(ev.loaded / ev.total);
+    };
     r.readAsArrayBuffer(file);
   });
 }
@@ -43,44 +76,70 @@ async function loadFiles(fileList, handleMap = new Map()) {
     return;
   }
 
-  const prog = document.getElementById('load-progress');
   const parsedFiles = [];
   const failures = [];
+  const updateLoadProgress = (percent, status, detail = '') => _fileOperationProgress({
+    title:'Loading COBie workbooks', status, detail,
+    percent,
+    icon:'bi-file-earmark-arrow-down',
+  });
 
   for (let i = 0; i < files.length; i++) {
-    if (prog) prog.textContent = `Loading ${i + 1} of ${files.length}: ${files[i].name}`;
+    const file = files[i];
+    const fileStart = (i / files.length) * 65;
+    const fileSpan = 65 / files.length;
+    updateLoadProgress(fileStart, `Validating ${file.name}`, `Workbook ${i + 1} of ${files.length}`);
+    await _yieldForFileProgress();
     try {
-      const buf = await readBuf(files[i]);
+      const buf = await readBuf(file, ratio => {
+        updateLoadProgress(fileStart + fileSpan * ratio * 0.55, `Reading ${file.name}`, `${Math.round(ratio * 100)}% of file read`);
+      });
+      updateLoadProgress(fileStart + fileSpan * 0.58, `Decoding workbook structure`, `${file.name} · sheets, cells, styles, and formulas`);
+      await _yieldForFileProgress();
       const wb  = XLSX.read(new Uint8Array(buf), { type:'array', cellDates:true, cellStyles:true, bookVBA:true });
-      parsedFiles.push({ file:files[i], workbook:wb, buffer:buf });
+      parsedFiles.push({ file, workbook:wb, buffer:buf });
+      updateLoadProgress(fileStart + fileSpan, `Workbook decoded`, `${file.name} · ${wb.SheetNames.length} sheet${wb.SheetNames.length === 1 ? '' : 's'} ready`);
     } catch(err) {
-      console.warn('Skipped', files[i].name, err.message);
-      failures.push(`${files[i].name}: ${err.message}`);
+      console.warn('Skipped', file.name, err.message);
+      failures.push(`${file.name}: ${err.message}`);
     }
   }
 
-  if (prog) prog.textContent = '';
   if (!parsedFiles.length) {
+    _fileOperationProgress({ title:'Load failed', status:'No workbooks could be loaded', detail:failures[0] || '', percent:100, icon:'bi-exclamation-triangle' });
+    _clearFileOperationProgress(2400);
     alert('No workbooks could be loaded.\n\n' + failures.join('\n'));
     return;
   }
 
   const appending = db.facilities.length > 0;
+  if (typeof resetQaAudit === 'function') resetQaAudit();
   const previousLengths = {};
-  ['types','components','spaces','floors','systems','documents','facilities','contacts','attributes','coordinates'].forEach(key => {
+  ['types','components','spaces','floors','zones','systems','documents','facilities','contacts','attributes','coordinates'].forEach(key => {
     previousLengths[key] = db[key].length;
   });
   if (!appending) resetDb();
-  parsedFiles.forEach(({ file, workbook, buffer }) => {
+  for (let index = 0; index < parsedFiles.length; index++) {
+    const { file, workbook, buffer } = parsedFiles[index];
+    updateLoadProgress(65 + (index / parsedFiles.length) * 17, 'Merging COBie rows', `${file.name} · workbook ${index + 1} of ${parsedFiles.length}`);
+    await _yieldForFileProgress();
     parseCOBieInto(workbook, file.name, buffer, handleMap.get(file) || null);
-  });
+  }
+  updateLoadProgress(82, 'Rebuilding workbook indexes', 'Linking facilities, floors, spaces, types, components, and systems');
+  await _yieldForFileProgress();
   buildIdx();
+  updateLoadProgress(89, appending ? 'Updating session baseline' : 'Capturing workbook baseline', 'Preparing change tracking and Undo state');
+  await _yieldForFileProgress();
   if (appending) _appendDbState(previousLengths); else _captureDbState();
   _loadMode = incomingMode;
   const label = db.facilities.length === 1
     ? db.facilities[0]._fileName
     : `${db.facilities.length} workbooks loaded`;
+  updateLoadProgress(95, 'Rendering workspace', 'Refreshing filters, results, summaries, and navigation');
+  await _yieldForFileProgress();
   showApp(label);
+  updateLoadProgress(100, 'Load complete', label);
+  _clearFileOperationProgress(900);
   document.getElementById('fileInput').value = '';
   document.getElementById('folderInput').value = '';
   if (failures.length) {
@@ -89,8 +148,9 @@ async function loadFiles(fileList, handleMap = new Map()) {
 }
 
 function resetDb() {
+  if (typeof resetQaAudit === 'function') resetQaAudit();
   db.types=[]; db.components=[]; db.spaces=[];
-  db.floors=[]; db.systems=[]; db.documents=[];
+  db.floors=[]; db.zones=[]; db.systems=[]; db.documents=[];
   db.facilities=[]; db.contacts=[]; db.attributes=[]; db.coordinates=[]; db.picklists=[]; db.facility=null;
   Object.values(selectedCategoryLevels).forEach(levels => levels.clear());
   collapsedFilterCategories.clear();
@@ -129,14 +189,10 @@ function closeWorkbooks() {
   collapseCounter = 0;
   cardCtr = 0;
   allExpanded = false;
-  _editState = null;
-  _editDocRemovals = [];
-  _pendingNewType = null;
   _createType = 'space';
 
   groupState.order = [...DEFAULT_GROUP_ORDER];
   groupState.active.clear();
-  groupState.active.add('type');
   const groupList = document.getElementById('group-sortable');
   DEFAULT_GROUP_ORDER.forEach(dim => {
     const chip = groupList.querySelector(`[data-dim="${dim}"]`);
@@ -148,7 +204,7 @@ function closeWorkbooks() {
 
   document.getElementById('fileInput').value = '';
   document.getElementById('folderInput').value = '';
-  document.getElementById('load-progress').textContent = '';
+  _clearFileOperationProgress();
   document.getElementById('search-input').value = '';
   document.getElementById('s-clear').style.display = 'none';
   document.getElementById('hdr').classList.remove('search-active');
@@ -179,6 +235,7 @@ function closeWorkbooks() {
   document.getElementById('upload').style.display = 'flex';
   if (typeof resetFloorSvgPanel === 'function') resetFloorSvgPanel();
   if (typeof resetThreeDViewerPanel === 'function') resetThreeDViewerPanel();
+  if (typeof resetQaGraphPanel === 'function') resetQaGraphPanel();
   _updateLoaderControls();
 }
 
@@ -194,7 +251,7 @@ function _cloneRecord(row) {
 function _captureDbState() {
   _originalDbState = {
     types: db.types.map(_cloneRecord), components: db.components.map(_cloneRecord),
-    spaces: db.spaces.map(_cloneRecord), floors: db.floors.map(_cloneRecord),
+    spaces: db.spaces.map(_cloneRecord), floors: db.floors.map(_cloneRecord), zones: db.zones.map(_cloneRecord),
     systems: db.systems.map(_cloneRecord), documents: db.documents.map(_cloneRecord),
     facilities: db.facilities.map(_cloneRecord), contacts: db.contacts.map(_cloneRecord),
     attributes: db.attributes.map(_cloneRecord), coordinates: db.coordinates.map(_cloneRecord),
@@ -204,14 +261,15 @@ function _captureDbState() {
 
 function _appendDbState(previousLengths) {
   if (!_originalDbState) { _captureDbState(); return; }
-  ['types','components','spaces','floors','systems','documents','facilities','contacts','attributes','coordinates','picklists'].forEach(key => {
+  ['types','components','spaces','floors','zones','systems','documents','facilities','contacts','attributes','coordinates','picklists'].forEach(key => {
     db[key].slice(previousLengths[key]).forEach(row => _originalDbState[key].push(_cloneRecord(row)));
   });
 }
 
 function _restoreDbState() {
   if (!_originalDbState) return;
-  ['types','components','spaces','floors','systems','documents','facilities','contacts','attributes','coordinates','picklists'].forEach(key => {
+  if (typeof resetQaAudit === 'function') resetQaAudit();
+  ['types','components','spaces','floors','zones','systems','documents','facilities','contacts','attributes','coordinates','picklists'].forEach(key => {
     db[key] = _originalDbState[key].map(_cloneRecord);
   });
   db.facility = db.facilities[0] || null;

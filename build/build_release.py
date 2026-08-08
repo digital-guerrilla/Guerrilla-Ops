@@ -8,6 +8,7 @@ Usage:
     python build_release.py
 """
 import base64
+import hashlib
 import importlib
 import os
 import re
@@ -28,10 +29,16 @@ CSS_DIR     = os.path.join(DEV_DIR, 'css')
 JS_DIR      = os.path.join(DEV_DIR, 'javascript')
 RELEASE_DIR = os.path.join(ROOT_DIR, 'release')
 SVG_SOURCE = os.path.join(DEV_DIR, 'svgs', 'Guerrilla-Ops.svg')
+QA_SCHEMA_SOURCE = os.path.join(DEV_DIR, 'specification', 'ids_cobie.xml')
 
 
 def read(path):
     with open(path, 'r', encoding='utf-8') as fh:
+        return fh.read()
+
+
+def read_exact(path):
+    with open(path, 'r', encoding='utf-8', newline='') as fh:
         return fh.read()
 
 
@@ -96,6 +103,7 @@ def build():
     template_path = os.path.join(DEV_DIR, 'index.html')
     validate_source(template_path)
     validate_source(SVG_SOURCE)
+    validate_source(QA_SCHEMA_SOURCE)
     html = read(template_path)
     css_files, js_modules = local_assets(html)
     for filename in css_files:
@@ -103,6 +111,10 @@ def build():
     for filename in js_modules:
         validate_source(os.path.join(JS_DIR, filename))
     svg_markup = read(SVG_SOURCE).strip()
+    qa_schema = read_exact(QA_SCHEMA_SOURCE)
+    if 'profile="NBIMS-US-V3-current-rules"' not in qa_schema or 'version="2.0"' not in qa_schema:
+        raise ValueError('QA schema source is not the required NBIMS-US-V3 current-rules v2.0 profile')
+    qa_schema_literal = js_string_literal(qa_schema)
     svg_data_url = 'data:image/svg+xml;base64,' + base64.b64encode(svg_markup.encode('utf-8')).decode('ascii')
     favicon_source = '<link rel="icon" type="image/svg+xml" href="svgs/Guerrilla-Ops.svg">'
     if favicon_source not in html:
@@ -123,8 +135,32 @@ def build():
     for module in js_modules:
         path = os.path.join(JS_DIR, module)
         module_source = read(path)
+        if module == 'qa.js':
+            schema_marker = "const _QA_EMBEDDED_SCHEMA = '';"
+            schema_paths = "const _QA_SCHEMA_PATHS = ['dev/specification/ids_cobie.xml', 'specification/ids_cobie.xml'];"
+            schema_loader = 'const xmlText = _QA_EMBEDDED_SCHEMA || _qaReadXmlSync(_QA_SCHEMA_PATHS);'
+            if schema_marker not in module_source:
+                raise ValueError('Missing QA schema embed marker in qa.js')
+            if schema_paths not in module_source:
+                raise ValueError('Missing QA schema path declaration in qa.js')
+            if schema_loader not in module_source:
+                raise ValueError('Missing QA schema loader in qa.js')
+            module_source = module_source.replace(schema_paths, 'const _QA_SCHEMA_PATHS = [];')
+            module_source = module_source.replace(schema_loader, 'const xmlText = _QA_EMBEDDED_SCHEMA;')
+            module_source = module_source.replace(
+                schema_marker,
+                f'const _QA_EMBEDDED_SCHEMA = {qa_schema_literal};',
+            )
+            if f'const _QA_EMBEDDED_SCHEMA = {qa_schema_literal};' not in module_source:
+                raise ValueError('QA schema embedding did not preserve the exact XML source')
         js_parts.append(f'// ── {module} {"─" * max(1, 50 - len(module))}\n\n' + module_source)
     combined_js = '\n\n'.join(js_parts)
+    if '_qaDefaultSchema' in combined_js or 'fallbackUsed' in combined_js:
+        raise ValueError('Legacy QA fallback code must not be included in standalone builds')
+    if 'specification/ids_cobie.xml' in combined_js:
+        raise ValueError('Standalone builds must not reference an external QA XML file')
+    if '_QA_EMBEDDED_SCHEMA || _qaReadXmlSync' in combined_js:
+        raise ValueError('Standalone builds must load QA rules exclusively from embedded XML')
     bundled_js = jsmin(combined_js) if jsmin is not None else combined_js
 
     # Remove all individual <script src="javascript/..."> tags
@@ -141,6 +177,9 @@ def build():
     root_path   = os.path.join(ROOT_DIR, 'index.html')
     root_html = minify_html(html)
     validate_compacted_html(html, root_html)
+    embedded_schema = f'const _QA_EMBEDDED_SCHEMA = {qa_schema_literal};'
+    if embedded_schema not in html or embedded_schema not in root_html:
+        raise ValueError('Generated standalone HTML does not contain the exact current QA XML')
     with open(output_path, 'w', encoding='utf-8') as fh:
         fh.write(html)
     with open(root_path, 'w', encoding='utf-8') as fh:
@@ -154,6 +193,7 @@ def build():
     print(f'  CSS:  {css_kb:.1f} KB')
     print(f'  JS:   {js_kb:.1f} KB  ({len(js_modules)} modules, {"minified" if jsmin else "unminified"})')
     print('  SVG:  hardcoded logo JS with embedded favicon')
+    print(f'  QA:   NBIMS-US-V3-current-rules v2.0 ({hashlib.sha256(qa_schema.encode("utf-8")).hexdigest()[:12]})')
     print(f'  Total:{total_kb:.1f} KB')
 
 

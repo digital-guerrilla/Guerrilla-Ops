@@ -1,7 +1,10 @@
 // ── COBie parsing and identity helpers ───────────────────────
 function readSheet(wb, name) {
   const k = Object.keys(wb.Sheets).find(k => k.toLowerCase() === name.toLowerCase());
-  return k ? XLSX.utils.sheet_to_json(wb.Sheets[k], { defval:'', raw:false }) : [];
+  if (!k) return [];
+  return XLSX.utils.sheet_to_json(wb.Sheets[k], { defval:'', raw:false }).filter(row =>
+    Object.values(row).some(value => value !== null && value !== undefined && String(value).trim() !== '')
+  );
 }
 
 function classificationParts(value) {
@@ -74,6 +77,7 @@ function parseCOBieInto(wb, fileName, sourceBuffer, fileHandle) {
   db.types      .push(...readSheet(wb,'Type')     .map(tag));
   db.components .push(...readSheet(wb,'Component').map(tag));
   db.spaces     .push(...readSheet(wb,'Space')    .map(tag));
+  db.zones      .push(...readSheet(wb,'Zone')     .map(tag));
   readSheet(wb,'Floor').map(tag).forEach(row => {
     const floorName = f(row, 'Name');
     if (!floorName) {

@@ -16,44 +16,10 @@ let _componentPlacementSvgBaseWidth = 0;
 let _componentPlacementSvgBaseHeight = 0;
 let _componentPlacementSvgDragging = false;
 let _componentPlacementSuppressClick = false;
-const _componentPlacementAppliedByMode = { edit:null };
 let _componentPlacementRefreshInfo = false;
 
 function _componentPlacementClone(value) {
   return value ? JSON.parse(JSON.stringify(value)) : null;
-}
-
-function _componentPlacementConsumeApplied(mode) {
-  if (mode !== 'edit') return null;
-  const value = _componentPlacementAppliedByMode.edit || null;
-  _componentPlacementAppliedByMode.edit = null;
-  return _componentPlacementClone(value);
-}
-
-function resetComponentPlacementDraft(mode = '') {
-  _componentPlacementDraft = null;
-  _componentPlacementPreviewSceneCache = null;
-  if (mode === 'edit') _componentPlacementAppliedByMode.edit = null;
-}
-
-function renderComponentSpaceField(mode, currentValue, options = []) {
-  const fieldClass = 'edit-field';
-  const listId = 'dl_component_space';
-  const items = options.slice(0, 400).map(option => typeof option === 'string'
-    ? `<option value="${esc(option)}">`
-    : `<option value="${esc(option.name)}">${esc(option.desc || '')}</option>`
-  ).join('');
-  return `<div class="mb-2">
-    <label class="d-block mb-1" style="font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#666">Space</label>
-    <div class="input-group input-group-sm">
-      <input type="text" class="form-control ${fieldClass}" data-field="Space"
-        value="${esc(String(currentValue || ''))}" list="${listId}" autocomplete="off">
-      <button type="button" class="btn btn-outline-secondary" onclick="openComponentPlacementModal('${mode}')">
-        <i class="bi bi-geo-alt me-1"></i>Locate
-      </button>
-    </div>
-    <datalist id="${listId}">${items}</datalist>
-  </div>`;
 }
 
 function _componentPlacementModalElements() {
@@ -70,29 +36,16 @@ function _componentPlacementModalElements() {
   };
 }
 
-function _componentPlacementSourceModalId() {
-  return _componentPlacementMode === 'info' ? 'type-modal' : 'edit-modal';
-}
-
-function _componentPlacementSourceField(selector) {
-  const modalId = _componentPlacementSourceModalId();
-  return document.querySelector(`#${modalId} ${selector}`);
-}
-
 function _componentPlacementFacility() {
-  return _componentPlacementMode === 'info'
-    ? String(_projectModalContext?.facility || _projectModalContext?.row?._facility || '')
-    : (_editState?.facility || '');
+  return String(_projectModalContext?.facility || _projectModalContext?.row?._facility || '');
 }
 
 function _componentPlacementActiveSpace() {
-  if (_componentPlacementMode === 'info') return f(_projectModalContext?.row, 'Space').trim();
-  return String(_componentPlacementSourceField('[data-field="Space"]')?.value || '').trim();
+  return f(_projectModalContext?.row, 'Space').trim();
 }
 
 function _componentPlacementActiveName() {
-  if (_componentPlacementMode === 'info') return f(_projectModalContext?.row, 'Name').trim();
-  return String(_componentPlacementSourceField('[data-field="Name"]')?.value || '').trim();
+  return f(_projectModalContext?.row, 'Name').trim();
 }
 
 function _componentPlacementFloors() {
@@ -605,8 +558,6 @@ function _componentPlacementSelectRoom(event) {
     roomBounds,
   };
 
-  const spaceField = _componentPlacementSourceField('[data-field="Space"]');
-  if (spaceField) spaceField.value = _componentPlacementDraft.spaceName;
   _componentPlacementRender();
 }
 
@@ -712,9 +663,7 @@ function _writeComponentCoordinates(facility, componentName, placement) {
 }
 
 function _componentPlacementDraftFromCoordinates() {
-  if (!['edit', 'info'].includes(_componentPlacementMode)) return null;
-  if (_componentPlacementMode === 'edit' && !_editState) return null;
-  if (_componentPlacementMode === 'info' && _projectModalContext?.entityType !== 'component') return null;
+  if (_componentPlacementMode !== 'info' || _projectModalContext?.entityType !== 'component') return null;
   const facility = _componentPlacementFacility();
   const componentName = _componentPlacementActiveName();
   const spaceName = _componentPlacementActiveSpace();
@@ -744,11 +693,9 @@ function _componentPlacementDraftFromCoordinates() {
   };
 }
 
-function openComponentPlacementModal(mode) {
-  if (mode === 'edit' && !_editState) return;
-  if (mode === 'info' && _projectModalContext?.entityType !== 'component') return;
-  if (!['edit', 'info'].includes(mode)) return;
-  _componentPlacementMode = mode;
+function openComponentPlacementModal() {
+  if (_projectModalContext?.entityType !== 'component') return;
+  _componentPlacementMode = 'info';
   _componentPlacementPreviewZoom = 1;
   _componentPlacementPreviewRotX = -0.55;
   _componentPlacementPreviewRotY = 0.7;
@@ -757,20 +704,18 @@ function openComponentPlacementModal(mode) {
   _componentPlacementPreviewSceneCache = null;
   _componentPlacementFloorKey = '';
   _componentPlacementResetSvgView();
-  _componentPlacementReturnModalId = mode === 'info' ? 'type-modal' : 'edit-modal';
+  _componentPlacementReturnModalId = 'type-modal';
   const els = _componentPlacementModalElements();
   if (!els.modal) return;
   const sourceModal = document.getElementById(_componentPlacementReturnModalId);
   const showPlacement = () => {
-    _componentPlacementDraft = _componentPlacementClone(_componentPlacementAppliedByMode[mode])
-      || _componentPlacementDraftFromCoordinates();
+    _componentPlacementDraft = _componentPlacementDraftFromCoordinates();
     bootstrap.Modal.getOrCreateInstance(els.modal).show();
   };
   if (sourceModal?.classList.contains('show')) {
     const sourceInstance = bootstrap.Modal.getInstance(sourceModal);
     if (sourceInstance) {
-      if (typeof _editOpeningChildModal !== 'undefined') _editOpeningChildModal = true;
-      if (mode === 'info' && typeof _projectOpeningChildModal !== 'undefined') _projectOpeningChildModal = true;
+      if (typeof _projectOpeningChildModal !== 'undefined') _projectOpeningChildModal = true;
       sourceModal.addEventListener('hidden.bs.modal', showPlacement, { once: true });
       sourceInstance.hide();
       return;
@@ -803,7 +748,6 @@ function initComponentPlacementModal() {
     _componentPlacementPreviewSceneCache = null;
     const returnModal = _componentPlacementReturnModalId ? document.getElementById(_componentPlacementReturnModalId) : null;
     _componentPlacementReturnModalId = '';
-    if (typeof _editOpeningChildModal !== 'undefined') _editOpeningChildModal = false;
     if (typeof _projectOpeningChildModal !== 'undefined') _projectOpeningChildModal = false;
     if (completedMode === 'info' && _componentPlacementRefreshInfo && _typeModalViewContext?.kind === 'component') {
       const component = _findEntity(db.components, _typeModalViewContext.entityName, _typeModalViewContext.facility || '');
@@ -831,23 +775,17 @@ function initComponentPlacementModal() {
       }
       current.height = height;
       _componentPlacementDraft = current;
-      if (_componentPlacementMode === 'edit') {
-        _componentPlacementAppliedByMode.edit = _componentPlacementClone(current);
-      } else if (_componentPlacementMode === 'info') {
-        const component = _projectModalContext?.row;
-        const facility = _componentPlacementFacility();
-        const componentName = f(component, 'Name');
-        if (component && componentName) {
-          _projectSetFieldValue(component, ['Space'], current.spaceName);
-          _writeComponentCoordinates(facility, componentName, current);
-          buildIdx();
-          _projectSyncEntityChangeState('component', component, componentName, facility);
-          _projectAssociationsChanged = true;
-          _componentPlacementRefreshInfo = true;
-        }
+      const component = _projectModalContext?.row;
+      const facility = _componentPlacementFacility();
+      const componentName = f(component, 'Name');
+      if (component && componentName) {
+        _projectSetFieldValue(component, ['Space'], current.spaceName);
+        _writeComponentCoordinates(facility, componentName, current);
+        buildIdx();
+        _projectSyncEntityChangeState('component', component, componentName, facility);
+        _projectAssociationsChanged = true;
+        _componentPlacementRefreshInfo = true;
       }
-      const spaceField = _componentPlacementSourceField('[data-field="Space"]');
-      if (spaceField) spaceField.value = current.spaceName;
       bootstrap.Modal.getInstance(els.modal)?.hide();
       return;
     }

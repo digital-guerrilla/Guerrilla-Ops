@@ -9,7 +9,7 @@ const javascriptDir = path.join(root, 'dev', 'javascript');
 const context = {
   console,
   db: {
-    types:[], components:[], spaces:[], floors:[], systems:[], documents:[],
+    types:[], components:[], spaces:[], floors:[], zones:[], systems:[], documents:[],
     facilities:[], contacts:[], attributes:[], coordinates:[], picklists:[], facility:null,
   },
   idx:{},
@@ -53,6 +53,269 @@ const logoSvgSource = fs.readFileSync(path.join(root, 'dev', 'svgs', 'Guerrilla-
 const releaseBuilderSource = fs.readFileSync(path.join(root, 'build', 'build_release.py'), 'utf8');
 const devIndexSource = fs.readFileSync(path.join(root, 'dev', 'index.html'), 'utf8');
 const modalsSource = fs.readFileSync(path.join(javascriptDir, 'modals.js'), 'utf8');
+const qaSource = fs.readFileSync(path.join(javascriptDir, 'qa.js'), 'utf8');
+const qaGraphSource = fs.readFileSync(path.join(javascriptDir, 'qa-graph.js'), 'utf8');
+const qaResultsSource = fs.readFileSync(path.join(javascriptDir, 'results.js'), 'utf8');
+const appLifecycleSource = fs.readFileSync(path.join(javascriptDir, 'app-lifecycle.js'), 'utf8');
+const qaSchemaSource = fs.readFileSync(path.join(root, 'dev', 'specification', 'ids_cobie.xml'), 'utf8');
+const resultsCssSource = fs.readFileSync(path.join(javascriptDir, '..', 'css', 'results.css'), 'utf8');
+const currentJavascriptSource = fs.readdirSync(javascriptDir)
+  .filter(filename => filename.endsWith('.js'))
+  .map(filename => fs.readFileSync(path.join(javascriptDir, filename), 'utf8'))
+  .join('\n');
+assert(!fs.existsSync(path.join(javascriptDir, 'edit.js')), 'the legacy edit modal module must remain removed');
+assert(!devIndexSource.includes('id="edit-modal"') && !devIndexSource.includes('javascript/edit.js'),
+  'development HTML must not contain or load the legacy edit modal');
+assert(qaResultsSource.includes('active: new Set()') && !appLifecycleSource.includes("groupState.active.add('type')") &&
+  !devIndexSource.includes('class="group-chip gchip-active" data-dim="type"'),
+  'no view may default result grouping to Type');
+['openEditModal', 'data-edit-entity', "getElementById('edit-modal')", '_editState'].forEach(reference => {
+  assert(!currentJavascriptSource.includes(reference), `legacy edit modal reference must remain removed: ${reference}`);
+});
+assert(!qaSource.includes('bi-pencil') && !qaSource.includes('data-edit-entity'),
+  'QA finding cards must use only the editable information action');
+assert(modalsSource.includes("info: { icon:'bi-info-circle-fill', color:'text-info', label:'Advisory' }") &&
+  modalsSource.includes("warning: { icon:'bi-exclamation-triangle-fill', color:'text-warning', label:'Warning' }"),
+  'modal QA flags must distinguish advisories from warning triangles');
+assert(devIndexSource.includes('id="qa-graph-edge-toggle"'),
+  'the QA graph must expose a resize and collapse edge control');
+assert(devIndexSource.includes('id="file-operation-progress"') && appLifecycleSource.includes('function _fileOperationProgress'),
+  'file loading and saving must share a visible QA-styled progress surface');
+['Reading ${file.name}', 'Decoding workbook structure', 'Merging COBie rows',
+  'Rebuilding workbook indexes', 'Capturing workbook baseline', 'Rendering workspace'].forEach(stage => {
+  assert(appLifecycleSource.includes(stage), `file loading progress must report the ${stage} phase`);
+});
+['Collecting workbook rows', 'Synchronizing ${name} sheet', 'Serializing workbook and styles',
+  'Packaging workbook bytes', 'Writing workbook bytes', 'Closing destination file',
+  'Reopening saved workbook', 'Capturing saved baseline', 'Save complete'].forEach(stage => {
+  assert(currentJavascriptSource.includes(stage), `file save progress must report the ${stage} phase`);
+});
+assert(resultsCssSource.includes('width: 50vw;') && resultsCssSource.includes('.qa-graph-collapsed'),
+  'the QA graph must default to half width and support a collapsed state');
+assert(qaGraphSource.includes('_qaGraphDesiredWidth') && qaGraphSource.includes('_bindQaGraphResizeAndToggle'),
+  'the QA graph must bind desktop drag resizing and click collapse behavior');
+assert(qaSchemaSource.includes('profile="NBIMS-US-V3-current-rules"'),
+  'QA must use the current named NBIMS rule profile');
+assert(qaSchemaSource.includes('ruleId="System.PrimaryKey.Unique" keys="Name|ComponentNames"'),
+  'System uniqueness must use Name and ComponentNames as its compound key');
+assert(qaSchemaSource.includes('ruleId="Zone.PrimaryKey.Unique" keys="Name|SpaceNames"'),
+  'Zone uniqueness must use Name and SpaceNames as its compound key');
+assert(!qaSchemaSource.includes('<sheet name="Document"'),
+  'worksheets outside the current rule catalog must not affect QA scores');
+[
+  'Contact.AtLeastOneRowPresent', 'Facility.OneAndOnlyOneFacilityFound',
+  'Space.PrimaryKey.Unique.Warning',
+  'Zone.SpaceNames.CrossReference', 'Type.Type.Component.AComponentForEachType',
+  'Component.PrimaryKey.Unique.Error', 'System.ComponentNames.CrossReference',
+].forEach(ruleId => assert(qaSchemaSource.includes(ruleId), `missing named QA rule ${ruleId}`));
+assert(qaSchemaSource.includes('<column name="Height" checks="ZeroOrGreaterOrNA"/>'),
+  'Floor Height must use ZeroOrGreaterOrNA');
+assert(/<sheet name="Type"[\s\S]*?<column name="Description" checks="NotNull"\/>[\s\S]*?<\/sheet>/.test(qaSchemaSource),
+  'Type Description must be checked by QA');
+assert(releaseBuilderSource.includes("module == 'qa.js'") && releaseBuilderSource.includes('QA_SCHEMA_SOURCE'),
+  'standalone builds must embed the active QA XML profile');
+assert(!qaSource.includes('_qaDefaultSchema') && !qaSource.includes('fallbackUsed') && qaSource.includes('No fallback rules were applied.'),
+  'QA schema failures must be reported explicitly without legacy fallback rules');
+[
+  fs.readFileSync(path.join(root, 'index.html'), 'utf8'),
+  fs.readFileSync(path.join(root, 'release', 'Guerrilla-Ops.html'), 'utf8'),
+].forEach((standaloneSource, index) => {
+  const embedded = standaloneSource.match(/const _QA_EMBEDDED_SCHEMA = ([^\r\n]+);/);
+  assert(embedded, `standalone output ${index + 1} must contain an embedded QA XML string`);
+  assert.strictEqual(vm.runInNewContext(embedded[1]), qaSchemaSource,
+    `standalone output ${index + 1} must embed the exact current QA XML source`);
+  assert(!standaloneSource.includes('_qaDefaultSchema') && !standaloneSource.includes('fallbackUsed'),
+    `standalone output ${index + 1} must not contain legacy QA fallback code`);
+  assert(!standaloneSource.includes('specification/ids_cobie.xml'),
+    `standalone output ${index + 1} must not reference an external QA XML file`);
+  assert(standaloneSource.includes('const _QA_SCHEMA_PATHS = [];'),
+    `standalone output ${index + 1} must disable external QA schema loading`);
+  assert(standaloneSource.includes('const xmlText = _QA_EMBEDDED_SCHEMA;') &&
+    !standaloneSource.includes('_QA_EMBEDDED_SCHEMA || _qaReadXmlSync'),
+    `standalone output ${index + 1} must load QA rules exclusively from embedded XML`);
+});
+
+const qaContext = {
+  console,
+  db:{
+    contacts:[], facilities:[], floors:[], spaces:[], types:[], components:[], systems:[
+      { Name:'Heating', Category:'Supply', ComponentNames:'AHU-01', _facility:'Facility A' },
+      { Name:'Heating', Category:'Supply', ComponentNames:'AHU-02', _facility:'Facility A' },
+    ],
+    documents:[
+      { Name:'Manual', SheetName:'Component', RowName:'AHU-01', File:'manual.pdf', _facility:'Facility A' },
+      { Name:'Manual', SheetName:'Component', RowName:'AHU-02', File:'manual.pdf', _facility:'Facility A' },
+    ],
+    zones:[], attributes:[], coordinates:[],
+  },
+  idx:{},
+  sel:{ facility:new Set(), floor:new Set(), space:new Set(), type:new Set(), system:new Set(), doccat:new Set() },
+  searchQuery:'',
+};
+vm.createContext(qaContext);
+vm.runInContext(qaSource, qaContext, { filename:'qa.js' });
+vm.runInContext(`
+  _qaSchemaCache = {
+    error:'',
+    formats:{ email:/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/ },
+    checkSeverities:Object.create(null),
+    checkSeverityByField:Object.create(null),
+    sheets:[{
+      name:'System', required:false, requiredSeverity:'error', formatSeverity:'warning',
+      uniqueSeverity:'error', referenceSeverity:'error',
+      columns:[
+        { name:'CreatedBy', aliases:[], checks:['NotNull'], severity:'' },
+        { name:'Category', aliases:[], checks:['NotNull'], severity:'' },
+        { name:'ExternalSystem', aliases:['ExtSystem'], checks:['NotEmpty'], severity:'' },
+        { name:'Description', aliases:[], checks:['NotEmpty'], severity:'' },
+        { name:'Name', aliases:[], checks:['NotNull'], severity:'' },
+        { name:'ComponentNames', aliases:[], checks:['NotNull'], severity:'' },
+      ],
+      uniqueRules:[{ ruleId:'System.PrimaryKey.Unique', keys:['Name','ComponentNames'], severity:'error' }],
+      references:[
+        { ruleId:'System.CreatedBy.CrossReference', column:'CreatedBy', targetSheet:'Contact', targetColumn:'Email', required:true, severity:'error', multiValueDelimiter:';' },
+        { ruleId:'System.ComponentNames.CrossReference', column:'ComponentNames', targetSheet:'Component', targetColumn:'Name', required:true, severity:'error', multiValueDelimiter:';' },
+      ],
+      relationRules:[],
+    }],
+  };
+`, qaContext);
+assert.strictEqual(vm.runInContext("_qaNamedCheckResult('NotNull', 'n/a', _qaSchemaCache)", qaContext), false,
+  'NotNull must reject n/a');
+assert.strictEqual(vm.runInContext("_qaNamedCheckResult('NotEmpty', 'n/a', _qaSchemaCache)", qaContext), true,
+  'NotEmpty must accept n/a');
+assert.strictEqual(vm.runInContext("_qaNamedCheckResult('ValidNumberOrNA', 'n/a', _qaSchemaCache)", qaContext), true,
+  'ValidNumberOrNA must accept n/a');
+assert.strictEqual(vm.runInContext("_qaNamedCheckResult('ZeroOrGreaterOrNA', '-1', _qaSchemaCache)", qaContext), false,
+  'ZeroOrGreaterOrNA must reject negative values');
+assert.strictEqual(vm.runInContext("_qaNamedCheckSeverity('NotNull')", qaContext), 'warning',
+  'missing required COBie values must be warnings');
+assert.strictEqual(vm.runInContext("_qaNamedCheckSeverity('NotEmpty')", qaContext), 'info',
+  'missing ancillary COBie values must be advisory findings');
+assert.strictEqual(vm.runInContext("_qaCheckId('Floor.Height.ZeroOrGreaterOrNA', 'format')", qaContext),
+  'Floor.Height.ZeroOrGreaterOrNA', 'named rule IDs must not receive UI issue-type suffixes');
+let qaCompoundFindings = vm.runInContext('runQA()', qaContext);
+assert(!qaCompoundFindings.some(finding => finding.check === 'System.PrimaryKey.Unique' && finding.entityType === 'system'),
+  'repeated System names with different compound keys must be allowed');
+qaContext.db.systems.push({ ...qaContext.db.systems[0] });
+qaCompoundFindings = vm.runInContext('runQA()', qaContext);
+assert(qaCompoundFindings.some(finding => finding.check === 'System.PrimaryKey.Unique' && finding.entityType === 'system'),
+  'an exact duplicate System compound key must fail uniqueness');
+assert(vm.runInContext('qaRuleResults.some(result => result.pass > 0 || result.fail > 0)', qaContext),
+  'QA evaluation must publish pass/fail counts for reactive charts');
+assert(qaCompoundFindings.some(finding => finding.check.endsWith('.NotNull') && finding.sev === 'warning'),
+  'current-profile QA audits must classify required field omissions as warnings');
+assert(qaCompoundFindings.some(finding => finding.check.endsWith('.NotEmpty') && finding.sev === 'info'),
+  'current-profile QA audits must classify ancillary field omissions as advisory');
+assert(qaCompoundFindings.some(finding => finding.issueType === 'reference' && finding.sev === 'error'),
+  'cross-reference failures must remain errors');
+assert(vm.runInContext("qaRuleResults.some(result => result.sheet === 'System' && result.column.includes('Name + ComponentNames'))", qaContext),
+  'System compound-key scores must retain their sheet and combined column dimensions');
+const pdfReportContract = JSON.parse(vm.runInContext(`JSON.stringify((() => {
+  globalThis.esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
+  db.facilities = [{ Name:'Facility A', _facility:'Facility A' }];
+  const html = _qaPdfReportHtml('<svg id="qa-report-brand"></svg>');
+  return {
+    hasA4:html.includes('@page { size:A4 portrait'),
+    hasFacility:html.includes('Facility A'),
+    hasBrand:html.includes('qa-report-brand'),
+    hasSummaries:html.includes('Overall score') && html.includes('Rules assessed') && html.includes('Advisories'),
+    hasDisclaimer:html.includes('provided without guarantee of accuracy'),
+    hasAllResults:qaRuleResults.every(result => html.includes(esc(result.label || result.check)) && html.includes(esc(result.column || 'Sheet'))),
+  };
+})())`, qaContext));
+assert.deepStrictEqual(pdfReportContract, {
+  hasA4:true, hasFacility:true, hasBrand:true, hasSummaries:true, hasDisclaimer:true, hasAllResults:true,
+}, 'the PDF export must include branding, scope, summaries, disclaimer, and every sheet/column QA result');
+qaContext.viewMode = 'asset';
+vm.runInContext(`
+  qaFindings = runQA();
+  qaHasRun = true;
+  _qaFullRunCalls = 0;
+  _qaOriginalRun = runQA;
+  runQA = () => { _qaFullRunCalls++; return []; };
+  db.systems[db.systems.length - 1].ComponentNames = 'AHU-03';
+  qaRevalidateFieldChange('system', 'Heating', 'Facility A', ['ComponentNames']);
+`, qaContext);
+assert.strictEqual(vm.runInContext('_qaFullRunCalls', qaContext), 0,
+  'editing a modal field must not invoke the full QA evaluator');
+assert(!vm.runInContext("qaFindings.some(finding => finding.check === 'System.PrimaryKey.Unique' && finding.entityType === 'system')", qaContext),
+  'row revalidation must remove a resolved compound-key finding');
+vm.runInContext(`
+  db.systems[0].Category = '';
+  qaRevalidateFieldChange('system', 'Heating', 'Facility A', ['Category']);
+`, qaContext);
+assert(vm.runInContext("qaFindings.some(finding => finding.entityType === 'system' && String(finding.fields).includes('Category'))", qaContext),
+  'editing a valid modal cell to an invalid value must add its finding to the QA cache');
+vm.runInContext(`
+  db.systems[0].Category = 'Supply';
+  qaRevalidateFieldChange('system', 'Heating', 'Facility A', ['Category']);
+`, qaContext);
+assert(!vm.runInContext("qaFindings.some(finding => finding.entityType === 'system' && String(finding.fields).includes('Category'))", qaContext),
+  'undoing an invalid modal cell edit must remove its finding from the QA cache');
+vm.runInContext('runQA = _qaOriginalRun', qaContext);
+assert(qaGraphSource.includes('data-qa-sheet') && qaGraphSource.includes('_qaGraphRuleRows(selectedResults)'),
+  'selecting a QA sheet score pill must filter the graph to that sheet\'s rules');
+assert(qaGraphSource.includes('setQaResultsSheetFilter(_qaGraphSelectedSheet)') && qaSource.includes('function _qaVisibleFindings()'),
+  'selecting a QA graph sheet must filter the findings rendered on the left');
+assert(qaGraphSource.includes('data-qa-check') && qaGraphSource.includes('setQaResultsCheckFilter'),
+  'clicking a QA rule card must filter findings rendered on the left');
+assert(resultsCssSource.includes('.qa-graph-sheet-row .qa-donut') && resultsCssSource.includes('.qa-graph-rule-row .qa-donut') && resultsCssSource.includes('align-self: stretch'),
+  'QA sheet and rule donuts must use the same full-height card sizing');
+assert(!qaGraphSource.includes('_qaGraphSheetPillsMarkup') && qaGraphSource.includes('class="qa-graph-summary" data-qa-sheet=""'),
+  'QA graph must use its overall summary to clear filters without a redundant sheet-button list');
+assert(resultsCssSource.includes('border-bottom: 1px solid var(--border-subtle)') && resultsCssSource.includes('background: transparent'),
+  'QA result cards must render as clean full-width rows without grey boxes');
+assert(qaSource.includes('QA_ENTITY_GROUP_DIMS') && qaSource.includes("_qaNorm(finding.sheet || finding.entityType) !== selectedSheet"),
+  'QA entity grouping pills must show findings only from their matching sheet');
+qaContext.groupState = { active:new Set(), order:['facility', 'type', 'system', 'space', 'floor'] };
+qaContext.document = { querySelectorAll:() => [] };
+vm.runInContext(`
+  qaFindings = [
+    { sheet:'Type', entityType:'type', entityName:'Pump' },
+    { sheet:'Space', entityType:'space', entityName:'Room 101' },
+    { sheet:'System', entityType:'system', entityName:'Heating' },
+  ];
+  viewMode = 'asset';
+  setQaResultsSheetFilter('type', false);
+`, qaContext);
+assert.strictEqual(vm.runInContext('_qaVisibleFindings().map(finding => finding.entityType).join() ', qaContext), 'type',
+  'Type grouping must exclude Space and System findings');
+vm.runInContext("setQaResultsSheetFilter('space', false)", qaContext);
+assert.strictEqual(vm.runInContext('_qaVisibleFindings().map(finding => finding.entityType).join()', qaContext), 'space',
+  'Space grouping must exclude Type and System findings');
+assert(qaGraphSource.includes("els.body.innerHTML = ''") && !qaGraphSource.includes('_qaProgressMarkup(_qaRunProgress'),
+  'QA progress must appear only in the run overlay, not inside the graph panel');
+assert(qaGraphSource.includes('_qaGraphRuleDescription') && qaGraphSource.includes('qa-graph-rule-description'),
+  'selected-sheet rule results must include plain-language check descriptions');
+assert(qaSource.includes('async function startQaRun') && qaSource.includes('await new Promise(resolve => setTimeout(resolve, 0))'),
+  'QA execution must yield to the browser between check groups');
+assert(qaSource.includes('_qaPrepareGroupingLookups()') && qaSource.includes('_qaGroupValueCache'),
+  'QA grouping must cache entity lookups and resolved group values');
+assert(qaSource.includes('qaDims:rest') && qaSource.includes('function qaPendingGroupBody'),
+  'nested QA groups must be created lazily when their parent opens');
+assert(qaResultsSource.includes('qaPendingGroupBody(pending)') && fs.readFileSync(path.join(javascriptDir, 'pills.js'), 'utf8').includes('qaPendingGroupBody(pg)'),
+  'single-group and expand-all paths must materialize lazy QA groups through the shared renderer');
+assert(qaSource.includes('function cancelQaRun') && qaSource.includes('No partial results were applied.'),
+  'QA execution must expose cooperative cancellation without publishing partial findings');
+assert(qaSource.includes('role="progressbar"') && qaSource.includes('aria-valuenow'),
+  'QA execution must expose accessible determinate progress');
+assert(resultsCssSource.includes('.qa-run-progress-fill') && resultsCssSource.includes('.qa-run-cancelled'),
+  'QA progress and cancellation states must be styled');
+assert(qaGraphSource.includes("if (typeof qaIsRunning === 'function' && qaIsRunning())"),
+  'the QA graph must not trigger a duplicate synchronous run while QA is active');
+assert(qaResultsSource.includes('showQAMode(list)') && !qaResultsSource.includes('startQaRun(list)'),
+  'returning to the QA tab must render the completed audit instead of starting another run');
+assert(qaSource.includes('function renderQAMode(list)') && !qaSource.includes('function renderQAMode(list, rerun'),
+  'QA rendering must remain presentational and never execute checks');
+assert(qaSource.includes('if (!qaHasRun) return;') && !/function qaRevalidateFieldChange[\s\S]*?\n}\n[\s\S]*?qaFindings = runQA\(\)/.test(qaSource),
+  'modal field changes must not start a full QA audit');
+assert(qaSource.includes("if (col.checks?.length)") && qaSource.includes('_qaNamedCheckResult(checkName, v, schema)'),
+  'row revalidation must evaluate named XML column checks');
+assert(modalsSource.includes('return qaHasRun && Array.isArray(qaFindings) ? qaFindings : [];'),
+  'opening a project modal must not trigger QA before the first audit');
+assert(appLifecycleSource.includes("if (typeof resetQaAudit === 'function') resetQaAudit();"),
+  'workbook lifecycle changes must invalidate the completed QA audit');
 assert(modalsSource.includes("if (entityType === 'facility' && renamedFacility) resolvedName = renamedFacility;"),
   'non-facility rename previews must retain the edited item name instead of the facility scope');
 assert(devIndexSource.includes('<span id="go-logo-hdr" class="go-logo go-logo-hdr" aria-hidden="true"></span>'),
@@ -112,6 +375,11 @@ loadModule('utils.js');
 loadModule('cobie-parser.js');
 loadModule('filters.js');
 loadModule('three-d-viewer.js');
+
+assert.strictEqual(context.readSheet({ Sheets:{ Type:[
+  { Name:'', Category:'', Description:'' },
+  { Name:'', Category:'Pump', Description:'' },
+] } }, 'Type').length, 1, 'import must discard fully blank rows but retain populated unnamed rows for QA');
 
 context.parseCOBieInto(workbook('Facility A', { Name:'Level 01', Description:'First' }), 'a.xlsx');
 context.parseCOBieInto(workbook('Facility A', { Name:'Level 01', Elevation:'3000' }), 'b.xlsx');
@@ -515,10 +783,31 @@ assert(Math.abs(dotPositions[0].u - 0.25) < 1e-10);
 assert(Math.abs(dotPositions[0].v - 0.75) < 1e-10);
 
 loadModule('model-config.js');
-loadModule('edit.js');
 loadModule('modals.js');
+const modalQaFlags = JSON.parse(vm.runInContext(`JSON.stringify({
+  error:_projectFieldIssueBadge([{ sev:'error', detail:'Broken reference' }]),
+  warning:_projectFieldIssueBadge([{ sev:'warning', detail:'Missing value' }]),
+  advisory:_projectFieldIssueBadge([{ sev:'info', detail:'Optional value' }]),
+  mixed:_projectFieldIssueBadge([{ sev:'info', detail:'Optional value' }, { sev:'warning', detail:'Missing value' }]),
+})`, context));
+assert(modalQaFlags.error.includes('bi-exclamation-octagon-fill') && modalQaFlags.error.includes('aria-label="Error"'));
+assert(modalQaFlags.warning.includes('bi-exclamation-triangle-fill') && modalQaFlags.warning.includes('aria-label="Warning"'));
+assert(modalQaFlags.advisory.includes('bi-info-circle-fill') && modalQaFlags.advisory.includes('aria-label="Advisory"'));
+assert(!modalQaFlags.advisory.includes('bi-exclamation-triangle-fill'), 'advisory modal flags must not use warning triangles');
+assert(modalQaFlags.mixed.includes('bi-exclamation-triangle-fill'), 'mixed modal findings must display their highest severity');
+const floorAttributeVisibility = JSON.parse(vm.runInContext(`JSON.stringify({
+  svg:_projectAttributeVisible('floor', 'svg'),
+  svgChunk:_projectAttributeVisible('floor', 'svg_2'),
+  alignment:_projectAttributeVisible('floor', 'svg-alignment'),
+  alignmentChunk:_projectAttributeVisible('floor', 'svg-alignment_2'),
+  ordinary:_projectAttributeVisible('floor', 'Mapping Notes'),
+  otherEntity:_projectAttributeVisible('type', 'svg'),
+})`, context));
+assert.deepStrictEqual(floorAttributeVisibility, {
+  svg:false, svgChunk:false, alignment:false, alignmentChunk:false, ordinary:true, otherEntity:true,
+}, 'Floor modals must hide only internal SVG payload and alignment mapping attributes');
 const contactFieldConfig = JSON.parse(vm.runInContext(`JSON.stringify({
-  createdBy:MODEL_MODAL_CONFIG.component.cards.identification.fields.find(field => field.aliases.includes('CreatedBy')),
+  createdBy:Object.values(MODEL_MODAL_CONFIG.component.cards).flatMap(card => card.fields || []).find(field => field.aliases.includes('CreatedBy')),
   manufacturer:MODEL_MODAL_CONFIG.type.cards.manufacturer.fields.find(field => field.aliases.includes('Manufacturer')),
   parts:MODEL_MODAL_CONFIG.type.cards.warranty.fields.find(field => field.aliases.includes('WarrantyGuarantorParts')),
   labor:MODEL_MODAL_CONFIG.type.cards.warranty.fields.find(field => field.aliases.includes('WarrantyGuarantorLabor'))
@@ -537,6 +826,42 @@ createdByCoverage.forEach(({ type, field }) => {
   assert(field, `${type} must expose CreatedBy`);
   assert.strictEqual(field.lookupSource, 'contact');
 });
+const checkedColumnsByType = Object.fromEntries([...qaSchemaSource.matchAll(
+  /<sheet name="([^"]+)"[^>]*>[\s\S]*?<columns>([\s\S]*?)<\/columns>/g,
+)].map(match => [
+  match[1].toLowerCase(),
+  [...match[2].matchAll(/<column name="([^"]+)"/g)].map(column => column[1]).sort(),
+]));
+const modalColumnsByType = JSON.parse(vm.runInContext(`JSON.stringify(Object.fromEntries(
+  Object.entries(MODEL_MODAL_CONFIG)
+    .filter(([type]) => type !== 'document')
+    .map(([type, config]) => [type, Object.values(config.cards)
+      .flatMap(card => card.fields || [])
+      .map(field => field.aliases[0])])
+))`, context));
+modalColumnsByType.system.push('ComponentNames');
+Object.entries(checkedColumnsByType).forEach(([type, checkedColumns]) => {
+  assert(modalColumnsByType[type], `${type} must have an information modal configuration`);
+  assert.deepStrictEqual([...modalColumnsByType[type]].sort(), checkedColumns,
+    `${type} information modal fields must exactly match its checked XML columns`);
+});
+const checkedEntityAssociations = JSON.parse(vm.runInContext(`JSON.stringify(
+  Object.entries(MODEL_MODAL_CONFIG)
+    .filter(([type]) => type !== 'document')
+    .flatMap(([type, config]) => Object.values(config.cards)
+      .filter(card => card.mode === 'associations')
+      .flatMap(card => (card.associations || []).map(association => ({ type, key:association.key }))))
+)`, context));
+assert.deepStrictEqual(checkedEntityAssociations, [
+  { type:'floor', key:'spaces' },
+  { type:'space', key:'floor' },
+  { type:'space', key:'components' },
+  { type:'type', key:'components' },
+  { type:'system', key:'components' },
+  { type:'component', key:'type' },
+  { type:'component', key:'space' },
+  { type:'component', key:'systems' },
+], 'entity information modals must expose their editable COBie relationships');
 const documentAssociations = JSON.parse(vm.runInContext(
   'JSON.stringify(MODEL_MODAL_CONFIG.document.cards.associations.associations)', context,
 ));
@@ -554,7 +879,8 @@ assert.strictEqual(context._projectNormalizeLookupValue('contact', 'person@examp
 assert.strictEqual(context._projectNormalizeLookupValue('contact', 'not-a-contact', 'person@example.test'), 'person@example.test');
 
 context.db.types = [{ Name:'Pump Type', Category:'Pr_65_53_86 : Pump products', _facility:'Facility A' }];
-context.db.spaces = [{ Name:'Plant Room', Category:'SL_90_50 : Plant rooms', _facility:'Facility A' }];
+context.db.floors = [{ Name:'Level 01', _facility:'Facility A' }];
+context.db.spaces = [{ Name:'Plant Room', FloorName:'', Category:'SL_90_50 : Plant rooms', _facility:'Facility A' }];
 context.db.components = [
   { Name:'Pump 01', TypeName:'', Space:'', _facility:'Facility A' },
   { Name:'Pump 02', TypeName:'', Space:'', _facility:'Facility A' },
@@ -566,6 +892,8 @@ context.db.facilities = [{ Name:'Facility A', _facility:'Facility A' }];
 context.buildIdx();
 const component = context.db.components[0];
 const type = context.db.types[0];
+const associationFloor = context.db.floors[0];
+const space = context.db.spaces[0];
 const system = context.db.systems[0];
 const documentRow = context.db.documents[0];
 const relationshipHierarchy = JSON.parse(vm.runInContext(`JSON.stringify({
@@ -640,17 +968,18 @@ context._setEntityAssociation('component', component, { key:'type' }, 'Pump Type
 context._setEntityAssociation('component', component, { key:'space' }, 'Plant Room', 'Facility A', true);
 assert.strictEqual(component.TypeName, 'Pump Type');
 assert.strictEqual(component.Space, 'Plant Room');
+context._setEntityAssociation('space', space, { key:'floor' }, 'Level 01', 'Facility A', true);
+assert.strictEqual(space.FloorName, 'Level 01', 'the Space modal must assign its Floor relationship');
+context._setEntityAssociation('space', space, { key:'floor' }, 'Level 01', 'Facility A', false);
+assert.strictEqual(space.FloorName, '', 'the Space modal must clear its Floor relationship');
+context._setEntityAssociation('floor', associationFloor, { key:'spaces' }, 'Plant Room', 'Facility A', true);
+assert.strictEqual(space.FloorName, 'Level 01', 'the Floor modal must assign its Space relationship');
+context._setEntityAssociation('floor', associationFloor, { key:'spaces' }, 'Plant Room', 'Facility A', false);
+assert.strictEqual(space.FloorName, '', 'the Floor modal must clear its Space relationship');
 context.buildIdx();
 context._setEntityAssociation('component', component, { key:'systems' }, 'Heating', 'Facility A', true);
 assert.strictEqual(system.ComponentNames, 'Pump 01');
 context._setEntityAssociation('component', component, { key:'type' }, 'Pump Type', 'Facility A', false);
-context._setEntityAssociation('type', type, { key:'components' }, 'Pump 02', 'Facility A', true);
-assert(context._projectEntityDiffersFromBaseline('type', type, 'Pump Type', 'Facility A'));
-context._setEntityAssociation('type', type, { key:'components' }, 'Pump 02', 'Facility A', false);
-assert(!context._projectEntityDiffersFromBaseline('type', type, 'Pump Type', 'Facility A'),
-  'restoring reverse Type membership must clear its dirty state');
-context._setEntityAssociation('type', type, { key:'components' }, 'Pump 02', 'Facility A', true);
-assert.strictEqual(context.db.components[1].TypeName, 'Pump Type', 'reverse Type association must update Component.TypeName');
 context.buildIdx();
 context._setEntityAssociation('system', system, { key:'components' }, 'Pump 02', 'Facility A', true);
 assert.deepStrictEqual(new Set(system.ComponentNames.split(',')), new Set(['Pump 01', 'Pump 02']));

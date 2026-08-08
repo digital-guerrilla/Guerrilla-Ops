@@ -102,7 +102,7 @@ function toggleExpandAll() {
       const body = document.getElementById(cid);
       if (body) {
         if (pg.isQA) {
-          body.innerHTML = qaGroupBody(pg.qaItems);
+          body.innerHTML = qaPendingGroupBody(pg);
         } else if (pg.isDocMode) {
           body.innerHTML = pg.isDocCategory
             ? groupDocsByClassification(pg.docEntries, pg.dims || [], pg.depth || 0, pg.categoryKey)
@@ -118,7 +118,7 @@ function toggleExpandAll() {
         });
       }
     });
-    if (pending.length > 20) requestAnimationFrame(renderPendingBatch);
+    requestAnimationFrame(renderPendingBatch);
   }
   requestAnimationFrame(renderPendingBatch);
 }
