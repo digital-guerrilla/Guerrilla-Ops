@@ -1,3 +1,4 @@
 excel/
-.venv
-.vscode
+.venv/
+.vscode/
+node_modules/
