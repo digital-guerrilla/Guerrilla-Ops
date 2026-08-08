@@ -1,520 +1,234 @@
-// ── Modal model configuration ────────────────────────────────
-// Config-only module used by information modals.
-// Cards define labels and COBie header aliases for each entity type.
+// ── Schema-generated modal model configuration ──────────────
 
-const MODEL_MODAL_CONFIG = Object.freeze({
-  facility: {
-    title: 'Project Information',
-    headerColorToken: 'facility',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'facility',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      project: {
-        title: 'Project & Site',
-        colorToken: 'facility',
-        fields: [
-          { label:'Project Name', aliases:['ProjectName', 'Project Name'], edit:'text' },
-          { label:'Site Name', aliases:['SiteName', 'Site Name'], edit:'text' },
-        ],
-      },
-      units: {
-        title: 'Units & Measurement',
-        colorToken: 'facility',
-        fields: [
-          { label:'Linear Units', aliases:['LinearUnits', 'Linear Units'], edit:'text' },
-          { label:'Area Units', aliases:['AreaUnits', 'Area Units'], edit:'text' },
-          { label:'Volume Units', aliases:['VolumeUnits', 'Volume Units'], edit:'text' },
-          { label:'Currency', aliases:['Currency', 'CurrencyUnit', 'Currency Unit'], edit:'text' },
-          { label:'Area Measurement', aliases:['AreaMeasurement', 'Area Measurement'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'facility',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Project Object', aliases:['ExternalProjectObject', 'External Project Object'], edit:'text' },
-          { label:'External Project Identifier', aliases:['ExternalProjectIdentifier', 'External Project Identifier'], edit:'text' },
-          { label:'External Site Object', aliases:['ExternalSiteObject', 'External Site Object'], edit:'text' },
-          { label:'External Site Identifier', aliases:['ExternalSiteIdentifier', 'External Site Identifier'], edit:'text' },
-          { label:'External Facility Object', aliases:['ExternalFacilityObject', 'External Facility Object', 'ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Facility Identifier', aliases:['ExternalFacilityIdentifier', 'External Facility Identifier', 'ExternalIdentifier', 'ExtIdentifier'], edit:'text' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'facility',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+const MODEL_MODAL_PRESENTATION = Object.freeze({
+  facility:{ title:'Project Information', colorToken:'facility' },
+  floor:{ title:'Floor Information', colorToken:'floor' },
+  space:{ title:'Space Information', colorToken:'space' },
+  zone:{ title:'Zone Information', colorToken:'space' },
+  type:{ title:'Type Information', colorToken:'type' },
+  system:{ title:'System Information', colorToken:'system' },
+  component:{ title:'Component Information', colorToken:'component' },
+  contact:{ title:'Contact Information', colorToken:'contact' },
+});
 
-  floor: {
-    title: 'Floor Information',
-    headerColorToken: 'floor',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'floor',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      geometry: {
-        title: 'Geometry',
-        colorToken: 'floor',
-        fields: [
-          { label:'Height', aliases:['Height'], edit:'text' },
-          { label:'Elevation', aliases:['Elevation'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'floor',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'floor',
-        mode: 'associations',
-        associations: [
-          { key:'spaces', label:'Spaces', targetType:'space', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'floor',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+const MODEL_MODAL_FIELD_LABELS = Object.freeze({
+  'space.floorname':'Floor',
+  'component.typename':'Type',
+  'type.warrantyguarantorparts':'Parts Guarantor',
+  'type.warrantydurationparts':'Parts Duration',
+  'type.warrantyguarantorlabor':'Labour Guarantor',
+  'type.warrantydurationlabor':'Labour Duration',
+  'contact.company':'Company / Organisation',
+  'contact.organizationcode':'Organisation Code',
+  'contact.town':'Town / City',
+  'contact.stateregion':'State / Region',
+});
 
-  space: {
-    title: 'Space Information',
-    headerColorToken: 'space',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'space',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Floor', aliases:['FloorName', 'Floor Name', 'Floor'], edit:'lookup', lookupSource:'floor' },
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      measurements: {
-        title: 'Measurements',
-        colorToken: 'space',
-        fields: [
-          { label:'Gross Area', aliases:['GrossArea', 'Gross Area'], edit:'text' },
-          { label:'Net Area', aliases:['NetArea', 'Net Area'], edit:'text' },
-          { label:'Usable Height', aliases:['UsableHeight', 'Usable Height'], edit:'text' },
-          { label:'Room Tag', aliases:['RoomTag', 'Room Tag'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'space',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'space',
-        mode: 'associations',
-        associations: [
-          { key:'floor', label:'Floor', targetType:'floor', cardinality:'one' },
-          { key:'components', label:'Components', targetType:'component', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'space',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+const MODEL_MODAL_AUXILIARY_CARDS = Object.freeze({
+  facility:['attributes', 'documents'],
+  floor:['attributes', 'documents'],
+  space:['attributes', 'documents'],
+  type:['attributes', 'documents'],
+  system:['attributes', 'documents'],
+  component:['attributes', 'documents'],
+});
 
-  zone: {
-    title: 'Zone Information',
-    headerColorToken: 'space',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'space',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Space Names', aliases:['SpaceNames', 'Space Names'], edit:'text' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'space',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'space',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-    },
-  },
+const MODEL_MODAL_RELATIONSHIPS = Object.freeze([
+  { source:'space', column:'FloorName', target:'floor', owner:'floor', key:'spaces', label:'Spaces', cardinality:'many' },
+  { source:'space', column:'FloorName', target:'floor', owner:'space', key:'floor', label:'Floor', cardinality:'one' },
+  { source:'component', column:'Space', target:'space', owner:'space', key:'components', label:'Components', cardinality:'many' },
+  { source:'component', column:'TypeName', target:'type', owner:'type', key:'components', label:'Components', cardinality:'many' },
+  { source:'system', column:'ComponentNames', target:'component', owner:'system', key:'components', label:'Components', cardinality:'many' },
+  { source:'component', column:'TypeName', target:'type', owner:'component', key:'type', label:'Type', cardinality:'one' },
+  { source:'component', column:'Space', target:'space', owner:'component', key:'space', label:'Space', cardinality:'one' },
+  { source:'system', column:'ComponentNames', target:'component', owner:'component', key:'systems', label:'Systems', cardinality:'many' },
+]);
 
-  type: {
-    title: 'Type Information',
-    headerColorToken: 'type',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'type',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Asset Type', aliases:['AssetType', 'Asset Type'], edit:'text' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'type',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      manufacturer: {
-        title: 'Manufacturer',
-        colorToken: 'type',
-        fields: [
-          { label:'Manufacturer', aliases:['Manufacturer'], edit:'lookup', lookupSource:'contact' },
-          { label:'Model Number', aliases:['ModelNumber', 'Model Number'], edit:'text' },
-        ],
-      },
-      warranty: {
-        title: 'Warranty',
-        colorToken: 'type',
-        fields: [
-          { label:'Parts Guarantor', aliases:['WarrantyGuarantorParts', 'Warranty Guarantor Parts'], edit:'lookup', lookupSource:'contact' },
-          { label:'Parts Duration', aliases:['WarrantyDurationParts', 'Warranty Duration Parts'], edit:'text' },
-          { label:'Labour Guarantor', aliases:['WarrantyGuarantorLabor', 'Warranty Guarantor Labor'], edit:'lookup', lookupSource:'contact' },
-          { label:'Labour Duration', aliases:['WarrantyDurationLabor', 'Warranty Duration Labor'], edit:'text' },
-          { label:'Warranty Duration Unit', aliases:['WarrantyDurationUnit', 'Warranty Duration Unit'], edit:'text' },
-          { label:'Replacement Cost', aliases:['ReplacementCost', 'Replacement Cost'], edit:'text' },
-          { label:'Expected Life', aliases:['ExpectedLife', 'Expected Life'], edit:'text' },
-          { label:'Duration Unit', aliases:['DurationUnit', 'Duration Unit'], edit:'text' },
-          { label:'Warranty Description', aliases:['WarrantyDescription', 'Warranty Description'], edit:'text' },
-        ],
-      },
-      dimensions: {
-        title: 'Dimensions & Form',
-        colorToken: 'type',
-        fields: [
-          { label:'Nominal Length', aliases:['NominalLength', 'Nominal Length'], edit:'text' },
-          { label:'Nominal Width', aliases:['NominalWidth', 'Nominal Width'], edit:'text' },
-          { label:'Nominal Height', aliases:['NominalHeight', 'Nominal Height'], edit:'text' },
-          { label:'Shape', aliases:['Shape'], edit:'text' },
-          { label:'Size', aliases:['Size'], edit:'text' },
-        ],
-      },
-      specification: {
-        title: 'Specification',
-        colorToken: 'type',
-        fields: [
-          { label:'Model Reference', aliases:['ModelReference', 'Model Reference'], edit:'text' },
-          { label:'Color', aliases:['Color', 'Colour'], edit:'text' },
-          { label:'Finish', aliases:['Finish'], edit:'text' },
-          { label:'Grade', aliases:['Grade'], edit:'text' },
-          { label:'Material', aliases:['Material'], edit:'text' },
-          { label:'Constituents', aliases:['Constituents'], edit:'text' },
-          { label:'Features', aliases:['Features'], edit:'text' },
-        ],
-      },
-      performance: {
-        title: 'Performance',
-        colorToken: 'type',
-        fields: [
-          { label:'Accessibility Performance', aliases:['AccessibilityPerformance', 'Accessibility Performance'], edit:'text' },
-          { label:'Code Performance', aliases:['CodePerformance', 'Code Performance'], edit:'text' },
-          { label:'Sustainability Performance', aliases:['SustainabilityPerformance', 'Sustainability Performance'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'type',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'type',
-        mode: 'associations',
-        associations: [
-          { key:'components', label:'Components', targetType:'component', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'type',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+let MODEL_CONFIG_SCHEMA_STATUS = { loaded:false, error:'' };
 
-  system: {
-    title: 'System Information',
-    headerColorToken: 'system',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'system',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'system',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'system',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'system',
-        mode: 'associations',
-        associations: [
-          { key:'components', label:'Components', targetType:'component', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'system',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+function _modalConfigNorm(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 
-  component: {
-    title: 'Component Information',
-    headerColorToken: 'component',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'component',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Type', aliases:['TypeName', 'Type Name'], edit:'lookup', lookupSource:'type' },
-          { label:'Space', aliases:['Space'], edit:'lookup', lookupSource:'space' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'component',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      asset: {
-        title: 'Asset',
-        colorToken: 'component',
-        fields: [
-          { label:'Serial Number', aliases:['SerialNumber', 'Serial Number'], edit:'text' },
-          { label:'Installation Date', aliases:['InstallationDate', 'Installation Date'], edit:'text' },
-          { label:'Warranty Start Date', aliases:['WarrantyStartDate', 'Warranty Start Date'], edit:'text' },
-          { label:'Tag Number', aliases:['TagNumber', 'Tag Number'], edit:'text' },
-          { label:'Bar Code', aliases:['BarCode', 'Bar Code', 'Barcode'], edit:'text' },
-          { label:'Asset Identifier', aliases:['AssetIdentifier', 'Asset Identifier'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'component',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'component',
-        mode: 'associations',
-        associations: [
-          { key:'type', label:'Type', targetType:'type', cardinality:'one' },
-          { key:'space', label:'Space', targetType:'space', cardinality:'one' },
-          { key:'systems', label:'Systems', targetType:'system', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'component',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+function _modalConfigLabel(value) {
+  return String(value || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, character => character.toUpperCase());
+}
 
-  contact: {
-    title: 'Contact Information',
-    headerColorToken: 'contact',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'contact',
-        fields: [
-          { label:'Email', aliases:['Email'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'text' },
-          { label:'Given Name', aliases:['GivenName', 'Given Name'], edit:'text' },
-          { label:'Family Name', aliases:['FamilyName', 'Family Name'], edit:'text' },
-          { label:'Company / Organisation', aliases:['Company'], edit:'text' },
-          { label:'Department', aliases:['Department'], edit:'text' },
-          { label:'Organisation Code', aliases:['OrganizationCode', 'Organization Code'], edit:'text' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'contact',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      communication: {
-        title: 'Communication',
-        colorToken: 'contact',
-        fields: [
-          { label:'Phone', aliases:['Phone'], edit:'text' },
-        ],
-      },
-      address: {
-        title: 'Address',
-        colorToken: 'contact',
-        fields: [
-          { label:'Street', aliases:['Street'], edit:'text' },
-          { label:'Postal Box', aliases:['PostalBox', 'Postal Box'], edit:'text' },
-          { label:'Town / City', aliases:['Town'], edit:'text' },
-          { label:'State / Region', aliases:['StateRegion', 'State Region'], edit:'text' },
-          { label:'Postal Code', aliases:['PostalCode', 'Postal Code'], edit:'text' },
-          { label:'Country', aliases:['Country'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'contact',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExternalIdentifier', 'ExtIdentifier'], edit:'text' },
-        ],
-      },
-    },
-  },
+function _modalConfigChildren(parent, localName) {
+  const key = _modalConfigNorm(localName);
+  return Array.from(parent?.childNodes || []).filter(node =>
+    node?.nodeType === 1 && _modalConfigNorm(node.localName || node.nodeName) === key
+  );
+}
 
-  document: {
-    title: 'Document Information',
-    headerColorToken: 'doccat',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'doccat',
-        fields: [
+function _modalConfigAliases(column) {
+  const names = [
+    column.getAttribute('name') || '',
+    ...String(column.getAttribute('aliases') || '').split('|'),
+  ].map(value => value.trim()).filter(Boolean);
+  const merged = [];
+  const seen = new Set();
+  [...names, ..._cobieFieldAliasesFor(names[0])].forEach(alias => {
+    const key = String(alias || '').trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(String(alias).trim());
+  });
+  return merged;
+}
+
+function _modalConfigReferenceMap(sheetNode) {
+  const references = _modalConfigChildren(sheetNode, 'references')[0];
+  return new Map(_modalConfigChildren(references, 'reference').map(reference => [
+    _modalConfigNorm(reference.getAttribute('column')),
+    _modalConfigNorm(reference.getAttribute('targetSheet')),
+  ]));
+}
+
+function _modalConfigField(entityType, column, references) {
+  const name = String(column.getAttribute('name') || '').trim();
+  const key = _modalConfigNorm(name);
+  const targetType = references.get(key) || '';
+  const categoryLookup = key === 'category' && entityType !== 'contact';
+  const lookupSource = categoryLookup ? 'category' : targetType;
+  return {
+    label:MODEL_MODAL_FIELD_LABELS[`${entityType}.${key}`] || _modalConfigLabel(name),
+    aliases:_modalConfigAliases(column),
+    edit:lookupSource ? 'lookup' : 'text',
+    ...(lookupSource ? { lookupSource } : {}),
+  };
+}
+
+function _modalConfigRelationshipSet(sheetNodes) {
+  const relationships = new Set();
+  sheetNodes.forEach(sheetNode => {
+    const source = _modalConfigNorm(sheetNode.getAttribute('name'));
+    const references = _modalConfigChildren(sheetNode, 'references')[0];
+    _modalConfigChildren(references, 'reference').forEach(reference => {
+      relationships.add([
+        source,
+        _modalConfigNorm(reference.getAttribute('column')),
+        _modalConfigNorm(reference.getAttribute('targetSheet')),
+      ].join('|'));
+    });
+  });
+  return relationships;
+}
+
+function _modalConfigAuxiliaryCard(mode, colorToken) {
+  return {
+    title:mode === 'attributes' ? 'Additional Attributes' : 'Documents',
+    colorToken:mode === 'documents' ? 'doccat' : colorToken,
+    mode,
+  };
+}
+
+function _buildModelModalConfig() {
+  const xml = _cobieSchemaDocument();
+  if (!xml) {
+    MODEL_CONFIG_SCHEMA_STATUS = {
+      loaded:false,
+      error:`${COBIE_SCHEMA_STATUS.error || 'COBie XML could not be loaded.'} Modal configuration was not generated.`,
+    };
+    console.error(MODEL_CONFIG_SCHEMA_STATUS.error);
+    return {};
+  }
+
+  const sheetsNode = _modalConfigChildren(xml.documentElement, 'sheets')[0];
+  const sheetNodes = _modalConfigChildren(sheetsNode, 'sheet');
+  if (!sheetNodes.length) {
+    MODEL_CONFIG_SCHEMA_STATUS = { loaded:false, error:'COBie XML has no sheets; modal configuration was not generated.' };
+    console.error(MODEL_CONFIG_SCHEMA_STATUS.error);
+    return {};
+  }
+
+  const relationshipSet = _modalConfigRelationshipSet(sheetNodes);
+  const config = {};
+  sheetNodes.forEach(sheetNode => {
+    const entityType = _modalConfigNorm(sheetNode.getAttribute('name'));
+    const presentation = MODEL_MODAL_PRESENTATION[entityType];
+    if (!presentation) return;
+
+    const references = _modalConfigReferenceMap(sheetNode);
+    const columnsNode = _modalConfigChildren(sheetNode, 'columns')[0];
+    const cards = {};
+    _modalConfigChildren(columnsNode, 'column').forEach(column => {
+      const groupTitle = String(column.getAttribute('groupTitle') || '').trim();
+      if (!groupTitle) return;
+      const cardKey = _modalConfigNorm(groupTitle) || 'information';
+      if (!cards[cardKey]) {
+        cards[cardKey] = { title:groupTitle, colorToken:presentation.colorToken, fields:[] };
+      }
+      cards[cardKey].fields.push(_modalConfigField(entityType, column, references));
+    });
+
+    const associations = MODEL_MODAL_RELATIONSHIPS.filter(relationship =>
+      relationship.owner === entityType && relationshipSet.has([
+        relationship.source,
+        _modalConfigNorm(relationship.column),
+        relationship.target,
+      ].join('|'))
+    ).map(({ key, label, target, cardinality }) => ({ key, label, targetType:target, cardinality }));
+    if (associations.length) {
+      cards.associations = {
+        title:'Associations',
+        colorToken:presentation.colorToken,
+        mode:'associations',
+        associations,
+      };
+    }
+
+    (MODEL_MODAL_AUXILIARY_CARDS[entityType] || []).forEach(mode => {
+      cards[mode] = _modalConfigAuxiliaryCard(mode, presentation.colorToken);
+    });
+    config[entityType] = {
+      title:presentation.title,
+      headerColorToken:presentation.colorToken,
+      cards,
+    };
+  });
+
+  const documentAssociations = ['facility', 'floor', 'space', 'type', 'component', 'system'].map(targetType => ({
+    key:targetType === 'facility' ? 'facilities' : `${targetType}s`,
+    label:targetType === 'facility' ? 'Facilities' : `${_modalConfigLabel(targetType)}s`,
+    targetType,
+    cardinality:'many',
+  }));
+  config.document = {
+    title:'Document Information',
+    headerColorToken:'doccat',
+    cards:{
+      identification:{
+        title:'Identification',
+        colorToken:'doccat',
+        fields:[
           { label:'Name', aliases:['Name'], edit:'text' },
           { label:'Description', aliases:['Description'], edit:'text' },
           { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
           { label:'Directory', aliases:['Directory'], edit:'text' },
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created By', aliases:_cobieFieldAliasesFor('CreatedBy'), edit:'lookup', lookupSource:'contact' },
         ],
       },
-      associations: {
-        title: 'Associations',
-        colorToken: 'doccat',
-        mode: 'associations',
-        associations: [
-          { key:'facilities', label:'Facilities', targetType:'facility', cardinality:'many' },
-          { key:'floors', label:'Floors', targetType:'floor', cardinality:'many' },
-          { key:'spaces', label:'Spaces', targetType:'space', cardinality:'many' },
-          { key:'types', label:'Types', targetType:'type', cardinality:'many' },
-          { key:'components', label:'Components', targetType:'component', cardinality:'many' },
-          { key:'systems', label:'Systems', targetType:'system', cardinality:'many' },
-        ],
+      applicableTo:{
+        title:'Applicable to',
+        colorToken:'doccat',
+        mode:'association-summary',
+        associations:documentAssociations,
+      },
+      associations:{
+        title:'Associations',
+        colorToken:'doccat',
+        mode:'associations',
+        associations:documentAssociations,
       },
     },
-  },
-});
+  };
+
+  MODEL_CONFIG_SCHEMA_STATUS = { loaded:true, error:'' };
+  return config;
+}
+
+const MODEL_MODAL_CONFIG = Object.freeze(_buildModelModalConfig());

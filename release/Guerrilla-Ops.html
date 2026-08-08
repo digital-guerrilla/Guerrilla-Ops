@@ -2122,6 +2122,23 @@ body {
   gap: .25rem;
   margin-left: auto;
 }
+.project-card-actions .project-doc-add-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: currentColor;
+  padding: .05rem .12rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+.project-card-actions .project-doc-add-btn i {
+  font-size: .88rem;
+}
+.project-card-actions .project-doc-add-btn:hover,
+.project-card-actions .project-doc-add-btn:focus-visible {
+  color: color-mix(in srgb, currentColor, black 20%);
+  outline: none;
+}
 .project-card-facility .project-card-header {
   background: var(--pill-fac-bg);
   color: var(--pill-fac-text);
@@ -2220,6 +2237,28 @@ body {
   font-size: .81rem;
   color: var(--text-dark);
   word-break: break-word;
+}
+.project-attr-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .2rem;
+  column-gap: .42rem;
+}
+.project-attr-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+.project-attr-subfield {
+  display: grid;
+  gap: .1rem;
+  min-width: 0;
+}
+.project-attr-subfield-label {
+  font-size: .64rem;
+  color: var(--text-dark);
+  font-weight: 700;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  line-height: 1.05;
 }
 .project-value-text {
   flex: 1;
@@ -2320,6 +2359,34 @@ body {
 .project-association-component { --project-association-bg:var(--pill-component-bg); --project-association-text:var(--pill-component-text); }
 .project-association-contact { --project-association-bg:var(--pill-contact-bg); --project-association-text:var(--pill-contact-text); }
 .project-association-document { --project-association-bg:var(--pill-doc-bg); --project-association-text:var(--pill-doc-text); }
+.project-applicable-group {
+  display:grid;
+  grid-template-columns:minmax(100px, .35fr) minmax(0, 1fr);
+  gap:.55rem;
+  align-items:start;
+  padding:.48rem 0;
+  border-bottom:1px solid var(--border-subtle);
+}
+.project-applicable-group:last-child { border-bottom:0; }
+.project-applicable-heading {
+  color:var(--project-association-text, var(--text-dark));
+  font-size:.76rem;
+  font-weight:700;
+}
+.project-applicable-values { display:flex; flex-wrap:wrap; gap:.3rem; min-width:0; }
+.project-applicable-values span {
+  max-width:100%;
+  overflow-wrap:anywhere;
+  padding:.16rem .42rem;
+  border:1px solid color-mix(in srgb, var(--project-association-text, var(--text-dark)), transparent 68%);
+  border-radius:5px;
+  background:var(--project-association-bg, var(--card-bg));
+  color:var(--project-association-text, var(--text-dark));
+  font-size:.72rem;
+}
+@media (max-width:520px) {
+  .project-applicable-group { grid-template-columns:1fr; gap:.28rem; }
+}
 .project-association > summary {
   display: flex;
   align-items: center;
@@ -2769,6 +2836,18 @@ body {
   background: var(--card-bg); border: 1px solid var(--border-subtle);
   border-radius: 9px; padding: .7rem .9rem; margin-bottom: .8rem;
 }
+.qa-stage-control {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .22rem .32rem .22rem .55rem;
+  border: 1px solid var(--border-subtle); border-radius: 6px;
+  background: var(--card-bg); color: var(--text-muted);
+  font-size: .76rem; font-weight: 600;
+}
+.qa-stage-control select {
+  min-width: 112px; border: 0; background: transparent;
+  color: var(--text-dark); font: inherit; cursor: pointer;
+}
+.qa-stage-control select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #qa-summary .qa-scope { font-size: .78rem; color: var(--text-muted); flex: 1; min-width: 160px; }
 .qa-sev {
   font-size: .68rem; font-weight: 700; text-transform: uppercase;
@@ -3249,14 +3328,115 @@ function f(row, ...names) {
   for (const n of names) { const r = v(row[n]); if (r) return r; }
   return '';
 }
+
+const _COBIE_SCHEMA_PATHS = Object.freeze([]);
+const _COBIE_EMBEDDED_SCHEMA = '<?xml version="1.0" encoding="UTF-8"?>\r\n<cobieWorkbookSpecification xmlns="https://digital-guerrilla.scot/schemas/cobie-workbook-validation/2.0" version="2.0" profile="NBIMS-US-V3-current-rules" mode="validation">\r\n  <meta>\r\n    <title>COBie Current Validation Rules</title>\r\n    <description>Named worksheet validation rules for Contact, Facility, Floor, Space, Zone, Type, Component, and System.</description>\r\n    <date>2026-08-08</date>\r\n    <author>Digital Guerrilla</author>\r\n  </meta>\r\n\r\n  <formats>\r\n    <format id="email" regex="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"/>\r\n    <format id="isoDate" regex="^\\d{4}-\\d{2}-\\d{2}$"/>\r\n    <format id="isoDateTime" regex="^\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})?$"/>\r\n  </formats>\r\n\r\n  <stages>\r\n    <stage name="Design"/>\r\n    <stage name="Construction"/>\r\n    <stage name="Operation"/>\r\n  </stages>\r\n\r\n  <ruleDefinitions>\r\n    <rule name="NotNull" criticality="warning">Must have a text value that is not "n/a" or empty.</rule>\r\n    <rule name="NotEmpty" criticality="info">Must have a text value; "n/a" is acceptable.</rule>\r\n    <rule name="Unique" criticality="error">Must be unique within the scope of the worksheet.</rule>\r\n    <rule name="CrossReference" criticality="error">Must match the referenced Name or key column in another worksheet.</rule>\r\n    <rule name="OneAndOnlyOneFacilityFound" criticality="error">Only one Facility row is allowed.</rule>\r\n    <rule name="ValidNumber" criticality="warning">Must represent a valid number; "n/a" is not acceptable.</rule>\r\n    <rule name="ValidNumberOrNA" criticality="warning">If text is provided, it must represent a valid number or "n/a".</rule>\r\n    <rule name="AtLeastOneRowPresent" criticality="error">The worksheet must contain at least one row.</rule>\r\n    <rule name="ZeroOrGreaterOrNA" criticality="warning">If text is provided, it must represent zero or a positive number, or "n/a".</rule>\r\n    <rule name="ZeroOrGreater" criticality="warning">If text is provided, it must represent zero or a positive number.</rule>\r\n    <rule name="Format" criticality="warning">Must have a valid email address.</rule>\r\n    <rule name="Valid" criticality="warning">Must have a valid ISO date or date-time.</rule>\r\n  </ruleDefinitions>\r\n\r\n  <sheets>\r\n\r\n    <sheet name="Contact" presenceRule="Contact.AtLeastOneRowPresent" stage="Design">\r\n      <columns>\r\n        <column name="Email" checks="NotNull|Format" groupTitle="Identification"/>\r\n        <column name="CreatedBy" checks="NotNull" groupTitle="Audit"/>\r\n        <column name="CreatedOn" checks="NotNull" groupTitle="Audit"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalIdentifier" aliases="ExtIdentifier" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="Category" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="Company" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="Phone" checks="NotNull" groupTitle="Communication"/>\r\n        <column name="Department" checks="NotEmpty" groupTitle="Identification"/>\r\n        <column name="OrganizationCode" checks="NotEmpty" groupTitle="Identification"/>\r\n        <column name="GivenName" checks="NotEmpty" groupTitle="Identification"/>\r\n        <column name="FamilyName" checks="NotEmpty" groupTitle="Identification"/>\r\n        <column name="Street" checks="NotEmpty" groupTitle="Address"/>\r\n        <column name="PostalBox" checks="NotEmpty" groupTitle="Address"/>\r\n        <column name="Town" checks="NotEmpty" groupTitle="Address"/>\r\n        <column name="StateRegion" checks="NotEmpty" groupTitle="Address"/>\r\n        <column name="PostalCode" checks="NotEmpty" groupTitle="Address"/>\r\n        <column name="Country" checks="NotEmpty" groupTitle="Address"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Contact.Email.Unique" keys="Email" severity="error"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Contact.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="Facility" singleRowRule="Facility.OneAndOnlyOneFacilityFound" stage="Design">\r\n      <columns>\r\n        <column name="Name" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>\r\n        <column name="Category" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="Description" checks="NotEmpty" groupTitle="Identification"/>\r\n        <column name="ProjectName" checks="NotNull" groupTitle="Project &amp; Site"/>\r\n        <column name="SiteName" checks="NotNull" groupTitle="Project &amp; Site"/>\r\n        <column name="LinearUnits" checks="NotNull" groupTitle="Units &amp; Measurement"/>\r\n        <column name="AreaUnits" checks="NotNull" groupTitle="Units &amp; Measurement"/>\r\n        <column name="VolumeUnits" checks="NotNull" groupTitle="Units &amp; Measurement"/>\r\n        <column name="Currency" aliases="CurrencyUnit|Currency Unit" checks="NotNull" groupTitle="Units &amp; Measurement"/>\r\n        <column name="AreaMeasurement" checks="NotNull" groupTitle="Units &amp; Measurement"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalProjectObject" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalProjectIdentifier" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalSiteObject" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalSiteIdentifier" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalFacilityObject" aliases="ExternalObject|ExtObject" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalFacilityIdentifier" aliases="ExternalIdentifier|ExtIdentifier" checks="NotEmpty" groupTitle="External References"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Facility.Name.Unique" keys="Name" severity="error"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Facility.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="Floor" presenceRule="Floor.AtLeastOneRowPresent" stage="Design">\r\n      <columns>\r\n        <column name="Name" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="Category" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="Elevation" checks="ValidNumberOrNA" groupTitle="Geometry"/>\r\n        <column name="Height" checks="ZeroOrGreaterOrNA" groupTitle="Geometry"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Floor.Name.Unique" keys="Name" severity="error"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Floor.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="Space" presenceRule="Space.AtLeastOneRowPresent" stage="Design">\r\n      <columns>\r\n        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="Category" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="Name" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="FloorName" aliases="Floor Name|Floor" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="Description" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="RoomTag" aliases="Room Tag" checks="NotEmpty" groupTitle="Measurements"/>\r\n        <column name="UsableHeight" checks="ZeroOrGreaterOrNA" groupTitle="Measurements"/>\r\n        <column name="GrossArea" checks="ZeroOrGreaterOrNA" groupTitle="Measurements"/>\r\n        <column name="NetArea" checks="ZeroOrGreaterOrNA" groupTitle="Measurements"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Space.PrimaryKey.Unique.Warning" keys="Name" severity="warning"/>\r\n        <unique ruleId="Space.PrimaryKey.Unique.Error" keys="Name" severity="error"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Space.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="Space.FloorName.CrossReference" column="FloorName" targetSheet="Floor" targetColumn="Name" required="true"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="Zone">\r\n      <columns>\r\n        <column name="CreatedBy" checks="NotNull" groupTitle="Audit"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit"/>\r\n        <column name="Category" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="Description" checks="NotEmpty" groupTitle="Identification"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References"/>\r\n        <column name="Name" checks="NotNull" groupTitle="Identification"/>\r\n        <column name="SpaceNames" checks="NotNull" groupTitle="Identification"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Zone.PrimaryKey.Unique" keys="Name|SpaceNames" severity="error"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Zone.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="Zone.SpaceNames.CrossReference" column="SpaceNames" targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter=";"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="Type" presenceRule="Type.AtLeastOneRowPresent" stage="Design|Construction">\r\n      <columns>\r\n        <column name="Name" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="Description" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>\r\n        <column name="Category" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="AssetType" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="Manufacturer" checks="NotNull" groupTitle="Manufacturer" stage="Construction"/>\r\n        <column name="ModelNumber" checks="NotNull" groupTitle="Manufacturer" stage="Construction"/>\r\n        <column name="WarrantyGuarantorParts" checks="NotNull" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="WarrantyDurationParts" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="WarrantyGuarantorLabor" checks="NotNull" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="WarrantyDurationLabor" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="WarrantyDurationUnit" aliases="DurationUnit" checks="NotNull" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="ReplacementCost" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="ExpectedLife" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="DurationUnit" checks="NotNull" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="WarrantyDescription" checks="NotEmpty" groupTitle="Warranty" stage="Construction"/>\r\n        <column name="NominalLength" checks="ZeroOrGreaterOrNA" groupTitle="Dimensions &amp; Form" stage="Design"/>\r\n        <column name="NominalWidth" checks="ZeroOrGreaterOrNA" groupTitle="Dimensions &amp; Form" stage="Design"/>\r\n        <column name="NominalHeight" checks="ZeroOrGreater" groupTitle="Dimensions &amp; Form" stage="Design"/>\r\n        <column name="ModelReference" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>\r\n        <column name="Shape" checks="NotEmpty" groupTitle="Dimensions &amp; Form" stage="Construction"/>\r\n        <column name="Size" checks="NotEmpty" groupTitle="Dimensions &amp; Form" stage="Construction"/>\r\n        <column name="Color" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>\r\n        <column name="Finish" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>\r\n        <column name="Grade" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>\r\n        <column name="Material" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>\r\n        <column name="Constituents" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>\r\n        <column name="Features" checks="NotEmpty" groupTitle="Specification" stage="Construction"/>\r\n        <column name="AccessibilityPerformance" checks="NotEmpty" groupTitle="Performance" stage="Construction"/>\r\n        <column name="CodePerformance" checks="NotEmpty" groupTitle="Performance" stage="Construction"/>\r\n        <column name="SustainabilityPerformance" checks="NotEmpty" groupTitle="Performance" stage="Construction"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Type.Name.Unique" keys="Name" severity="error"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Type.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true" stage="Design"/>\r\n        <reference ruleId="Type.Manufacturer.CrossReference" column="Manufacturer" targetSheet="Contact" targetColumn="Email" required="true" stage="Construction"/>\r\n        <reference ruleId="Type.WarrantyGuarantorParts.CrossReference" column="WarrantyGuarantorParts" targetSheet="Contact" targetColumn="Email" required="true" stage="Construction"/>\r\n        <reference ruleId="Type.WarrantyGuarantorLabor.CrossReference" column="WarrantyGuarantorLabor" targetSheet="Contact" targetColumn="Email" required="true" stage="Construction"/>\r\n      </references>\r\n        <relationRules>\r\n      <relation ruleId="Type.Type.Component.AComponentForEachType" type="atLeastOneTargetPerRow" targetSheet="Component" targetColumn="TypeName" severity="error" stage="Design"/>\r\n      </relationRules>\r\n    </sheet>\r\n\r\n    <sheet name="Component" presenceRule="Component.AtLeastOneRowPresent" stage="Design|Construction">\r\n      <columns>\r\n        <column name="Name" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="TypeName" aliases="Type Name" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="Space" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="Description" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="SerialNumber" checks="NotNull" groupTitle="Asset" stage="Construction"/>\r\n        <column name="InstallationDate" checks="NotNull" groupTitle="Asset" stage="Construction"/>\r\n        <column name="WarrantyStartDate" checks="NotNull" groupTitle="Asset" stage="Construction"/>\r\n        <column name="TagNumber" checks="NotEmpty" groupTitle="Asset" stage="Construction"/>\r\n        <column name="BarCode" checks="NotEmpty" groupTitle="Asset" stage="Construction"/>\r\n        <column name="AssetIdentifier" checks="NotEmpty" groupTitle="Asset" stage="Construction"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Component.PrimaryKey.Unique.Warning" keys="Name" severity="warning" stage="Design"/>\r\n        <unique ruleId="Component.PrimaryKey.Unique.Error" keys="Name" severity="error" stage="Design"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Component.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true" stage="Design"/>\r\n        <reference ruleId="Component.TypeName.CrossReference" column="TypeName" targetSheet="Type" targetColumn="Name" required="true" stage="Design"/>\r\n        <reference ruleId="Component.Space.CrossReference" column="Space" targetSheet="Space" targetColumn="Name" required="true" stage="Design"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="System" stage="Design|Construction">\r\n      <columns>\r\n        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>\r\n        <column name="Category" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References" stage="Design"/>\r\n        <column name="Description" checks="NotEmpty" groupTitle="Identification" stage="Design"/>\r\n        <column name="Name" checks="NotNull" groupTitle="Identification" stage="Design"/>\r\n        <column name="ComponentNames" checks="NotNull" stage="Design"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="System.PrimaryKey.Unique" keys="Name|ComponentNames" severity="error" stage="Design"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="System.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true" stage="Design"/>\r\n        <reference ruleId="System.ComponentNames.CrossReference" column="ComponentNames" targetSheet="Component" targetColumn="Name" required="true" multiValueDelimiter=";" stage="Design"/>\r\n      </references>\r\n    </sheet>\r\n  </sheets>\r\n\r\n  <normalization>\r\n    <trimWhitespace>true</trimWhitespace>\r\n    <treatEmptyAsNull>true</treatEmptyAsNull>\r\n    <naToken>n/a</naToken>\r\n    <stringComparison>case-insensitive</stringComparison>\r\n    <listDelimiter>;</listDelimiter>\r\n  </normalization>\r\n</cobieWorkbookSpecification>\r\n';
+let _COBIE_SCHEMA_DOCUMENT_CACHE;
+let COBIE_SCHEMA_STATUS = { loaded:false, error:'' };
+
+function _cobieNormKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function _cobieReadXmlSync(paths) {
+  for (const p of paths) {
+    try {
+      const req = new XMLHttpRequest();
+      req.open('GET', p, false);
+      req.send(null);
+      if (req.status === 200 || req.status === 0) {
+        const text = req.responseText || '';
+        if (text.trim()) return text;
+      }
+    } catch (_) {
+      // Try next candidate path.
+    }
+  }
+  return '';
+}
+
+function _cobieSchemaDocument() {
+  if (_COBIE_SCHEMA_DOCUMENT_CACHE !== undefined) return _COBIE_SCHEMA_DOCUMENT_CACHE;
+  const xmlText = _COBIE_EMBEDDED_SCHEMA;
+  if (!xmlText) {
+    COBIE_SCHEMA_STATUS = { loaded:false, error:'COBie XML could not be loaded.' };
+    _COBIE_SCHEMA_DOCUMENT_CACHE = null;
+    return null;
+  }
+  const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+  if (xml.querySelector('parsererror')) {
+    COBIE_SCHEMA_STATUS = { loaded:false, error:'COBie XML is invalid.' };
+    _COBIE_SCHEMA_DOCUMENT_CACHE = null;
+    return null;
+  }
+  COBIE_SCHEMA_STATUS = { loaded:true, error:'' };
+  _COBIE_SCHEMA_DOCUMENT_CACHE = xml;
+  return xml;
+}
+
+function _buildCobieSchemaAliasMap() {
+  const map = new Map();
+  const xml = _cobieSchemaDocument();
+  if (!xml) return map;
+
+  const upsert = names => {
+    const list = [...new Set((names || []).map(name => String(name || '').trim()).filter(Boolean))];
+    if (!list.length) return;
+    const merged = [...list];
+    list.forEach(name => {
+      const existing = map.get(_cobieNormKey(name));
+      if (!existing) return;
+      existing.forEach(alias => {
+        if (!merged.some(item => _cobieNormKey(item) === _cobieNormKey(alias))) merged.push(alias);
+      });
+    });
+    merged.forEach(name => map.set(_cobieNormKey(name), merged));
+  };
+
+  xml.querySelectorAll('sheets > sheet > columns > column').forEach(column => {
+    const primary = column.getAttribute('name') || '';
+    const aliases = String(column.getAttribute('aliases') || '')
+      .split('|').map(value => value.trim()).filter(Boolean);
+    upsert([primary, ...aliases]);
+  });
+
+  return map;
+}
+
+const _COBIE_SCHEMA_ALIAS_MAP = _buildCobieSchemaAliasMap();
+
+function _cobieFieldAliasesFor(field) {
+  const aliases = _COBIE_SCHEMA_ALIAS_MAP.get(_cobieNormKey(field));
+  if (aliases?.length) return [...aliases];
+  return [String(field || '').trim()].filter(Boolean);
+}
+
+function _cobieMergeAliases(...lists) {
+  const merged = [];
+  const seen = new Set();
+  lists.forEach(list => {
+    (list || []).forEach(alias => {
+      const text = String(alias || '').trim();
+      const key = text.toLowerCase();
+      if (!text || !key || seen.has(key)) return;
+      seen.add(key);
+      merged.push(text);
+    });
+  });
+  return merged;
+}
+
 const COBIE_FIELD_ALIASES = Object.freeze({
-  typeName:['TypeName', 'Type Name'],
-  floorName:['FloorName', 'Floor Name', 'Floor'],
-  sheetName:['SheetName', 'Sheet Name'],
-  rowName:['RowName', 'Row Name'],
+  typeName:_cobieMergeAliases(_cobieFieldAliasesFor('TypeName'), ['TypeName', 'Type Name']),
+  floorName:_cobieMergeAliases(_cobieFieldAliasesFor('FloorName'), ['FloorName', 'Floor Name', 'Floor']),
+  sheetName:_cobieMergeAliases(_cobieFieldAliasesFor('SheetName'), ['SheetName', 'Sheet Name']),
+  rowName:_cobieMergeAliases(_cobieFieldAliasesFor('RowName'), ['RowName', 'Row Name']),
 });
+
 function _cobieField(row, field) {
-  return f(row, ...(COBIE_FIELD_ALIASES[field] || [field]));
+  const mapped = COBIE_FIELD_ALIASES[field];
+  const aliases = mapped?.length ? mapped : _cobieFieldAliasesFor(field);
+  return f(row, ...aliases);
 }
 function _scopeKey(facility, name) {
   return String(facility || '').toLowerCase() + '::' + String(name || '').toLowerCase();
@@ -9193,13 +9373,34 @@ const QA_CHECK_ICON_BY_ISSUE_TYPE = {
   consistency: 'bi-shuffle',
 };
 
-const _QA_SCHEMA_PATHS = [];
-const _QA_EMBEDDED_SCHEMA = '<?xml version="1.0" encoding="UTF-8"?>\r\n<cobieWorkbookSpecification xmlns="https://digital-guerrilla.scot/schemas/cobie-workbook-validation/2.0" version="2.0" profile="NBIMS-US-V3-current-rules" mode="validation">\r\n  <meta>\r\n    <title>COBie Current Validation Rules</title>\r\n    <description>Named worksheet validation rules for Contact, Facility, Floor, Space, Zone, Type, Component, and System.</description>\r\n    <date>2026-08-08</date>\r\n    <author>Digital Guerrilla</author>\r\n  </meta>\r\n\r\n  <formats>\r\n    <format id="email" regex="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"/>\r\n    <format id="isoDate" regex="^\\d{4}-\\d{2}-\\d{2}$"/>\r\n    <format id="isoDateTime" regex="^\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})?$"/>\r\n  </formats>\r\n\r\n  <ruleDefinitions>\r\n    <rule name="NotNull">Must have a text value that is not "n/a" or empty.</rule>\r\n    <rule name="NotEmpty">Must have a text value; "n/a" is acceptable.</rule>\r\n    <rule name="Unique">Must be unique within the scope of the worksheet.</rule>\r\n    <rule name="CrossReference">Must match the referenced Name or key column in another worksheet.</rule>\r\n    <rule name="OneAndOnlyOneFacilityFound">Only one Facility row is allowed.</rule>\r\n    <rule name="ValidNumber">Must represent a valid number; "n/a" is not acceptable.</rule>\r\n    <rule name="ValidNumberOrNA">If text is provided, it must represent a valid number or "n/a".</rule>\r\n    <rule name="AtLeastOneRowPresent">The worksheet must contain at least one row.</rule>\r\n    <rule name="ZeroOrGreaterOrNA">If text is provided, it must represent zero or a positive number, or "n/a".</rule>\r\n    <rule name="ZeroOrGreater">If text is provided, it must represent zero or a positive number.</rule>\r\n    <rule name="Format">Must have a valid email address.</rule>\r\n    <rule name="Valid">Must have a valid ISO date or date-time.</rule>\r\n  </ruleDefinitions>\r\n\r\n  <sheets>\r\n    <sheet name="Contact" presenceRule="Contact.AtLeastOneRowPresent">\r\n      <columns>\r\n        <column name="Email" checks="NotNull|Format"/>\r\n        <column name="CreatedBy" checks="NotNull"/>\r\n        <column name="CreatedOn" checks="NotNull"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty"/>\r\n        <column name="ExternalIdentifier" aliases="ExtIdentifier" checks="NotEmpty"/>\r\n        <column name="Category" checks="NotNull"/>\r\n        <column name="Company" checks="NotNull"/>\r\n        <column name="Phone" checks="NotNull"/>\r\n        <column name="Department" checks="NotEmpty"/>\r\n        <column name="OrganizationCode" checks="NotEmpty"/>\r\n        <column name="GivenName" checks="NotEmpty"/>\r\n        <column name="FamilyName" checks="NotEmpty"/>\r\n        <column name="Street" checks="NotEmpty"/>\r\n        <column name="PostalBox" checks="NotEmpty"/>\r\n        <column name="Town" checks="NotEmpty"/>\r\n        <column name="StateRegion" checks="NotEmpty"/>\r\n        <column name="PostalCode" checks="NotEmpty"/>\r\n        <column name="Country" checks="NotEmpty"/>\r\n      </columns>\r\n      <uniqueRules><unique ruleId="Contact.Email.Unique" keys="Email" severity="error"/></uniqueRules>\r\n      <references><reference ruleId="Contact.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/></references>\r\n    </sheet>\r\n\r\n    <sheet name="Facility" singleRowRule="Facility.OneAndOnlyOneFacilityFound">\r\n      <columns>\r\n        <column name="Name" checks="NotNull"/>\r\n        <column name="CreatedBy" checks="NotNull"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid"/>\r\n        <column name="Category" checks="NotNull"/>\r\n        <column name="Description" checks="NotEmpty"/>\r\n        <column name="ProjectName" checks="NotNull"/>\r\n        <column name="SiteName" checks="NotNull"/>\r\n        <column name="LinearUnits" checks="NotNull"/>\r\n        <column name="AreaUnits" checks="NotNull"/>\r\n        <column name="VolumeUnits" checks="NotNull"/>\r\n        <column name="Currency" aliases="CurrencyUnit|Currency Unit" checks="NotNull"/>\r\n        <column name="AreaMeasurement" checks="NotNull"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>\r\n        <column name="ExternalProjectObject" checks="NotEmpty"/>\r\n        <column name="ExternalProjectIdentifier" checks="NotEmpty"/>\r\n        <column name="ExternalSiteObject" checks="NotEmpty"/>\r\n        <column name="ExternalSiteIdentifier" checks="NotEmpty"/>\r\n        <column name="ExternalFacilityObject" aliases="ExternalObject|ExtObject" checks="NotEmpty"/>\r\n        <column name="ExternalFacilityIdentifier" aliases="ExternalIdentifier|ExtIdentifier" checks="NotEmpty"/>\r\n      </columns>\r\n      <uniqueRules><unique ruleId="Facility.Name.Unique" keys="Name" severity="error"/></uniqueRules>\r\n      <references><reference ruleId="Facility.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/></references>\r\n    </sheet>\r\n\r\n    <sheet name="Floor" presenceRule="Floor.AtLeastOneRowPresent">\r\n      <columns>\r\n        <column name="Name" checks="NotNull"/>\r\n        <column name="CreatedBy" checks="NotNull"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty"/>\r\n        <column name="Category" checks="NotNull"/>\r\n        <column name="Elevation" checks="ValidNumberOrNA"/>\r\n        <column name="Height" checks="ZeroOrGreaterOrNA"/>\r\n      </columns>\r\n      <uniqueRules><unique ruleId="Floor.Name.Unique" keys="Name" severity="error"/></uniqueRules>\r\n      <references><reference ruleId="Floor.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/></references>\r\n    </sheet>\r\n\r\n    <sheet name="Space" presenceRule="Space.AtLeastOneRowPresent">\r\n      <columns>\r\n        <column name="CreatedBy" checks="NotNull"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty"/>\r\n        <column name="Category" checks="NotNull"/>\r\n        <column name="Name" checks="NotNull"/>\r\n        <column name="FloorName" aliases="Floor Name|Floor" checks="NotNull"/>\r\n        <column name="Description" checks="NotNull"/>\r\n        <column name="RoomTag" aliases="Room Tag" checks="NotEmpty"/>\r\n        <column name="UsableHeight" checks="ZeroOrGreaterOrNA"/>\r\n        <column name="GrossArea" checks="ZeroOrGreaterOrNA"/>\r\n        <column name="NetArea" checks="ZeroOrGreaterOrNA"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Space.PrimaryKey.Unique.Warning" keys="Name" severity="warning"/>\r\n        <unique ruleId="Space.PrimaryKey.Unique.Error" keys="Name" severity="error"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Space.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="Space.FloorName.CrossReference" column="FloorName" targetSheet="Floor" targetColumn="Name" required="true"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="Zone">\r\n      <columns>\r\n        <column name="CreatedBy" checks="NotNull"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid"/>\r\n        <column name="Category" checks="NotNull"/>\r\n        <column name="Description" checks="NotEmpty"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty"/>\r\n        <column name="Name" checks="NotNull"/>\r\n        <column name="SpaceNames" checks="NotNull"/>\r\n      </columns>\r\n      <uniqueRules><unique ruleId="Zone.PrimaryKey.Unique" keys="Name|SpaceNames" severity="error"/></uniqueRules>\r\n      <references>\r\n        <reference ruleId="Zone.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="Zone.SpaceNames.CrossReference" column="SpaceNames" targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter=";"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="Type" presenceRule="Type.AtLeastOneRowPresent">\r\n      <columns>\r\n        <column name="Name" checks="NotNull"/>\r\n        <column name="Description" checks="NotNull"/>\r\n        <column name="CreatedBy" checks="NotNull"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid"/>\r\n        <column name="Category" checks="NotNull"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty"/>\r\n        <column name="AssetType" checks="NotNull"/>\r\n        <column name="Manufacturer" checks="NotNull"/>\r\n        <column name="ModelNumber" checks="NotNull"/>\r\n        <column name="WarrantyGuarantorParts" checks="NotNull"/>\r\n        <column name="WarrantyDurationParts" checks="ZeroOrGreaterOrNA"/>\r\n        <column name="WarrantyGuarantorLabor" checks="NotNull"/>\r\n        <column name="WarrantyDurationLabor" checks="ZeroOrGreaterOrNA"/>\r\n        <column name="WarrantyDurationUnit" aliases="DurationUnit" checks="NotNull"/>\r\n        <column name="ReplacementCost" checks="ZeroOrGreaterOrNA"/>\r\n        <column name="ExpectedLife" checks="ZeroOrGreaterOrNA"/>\r\n        <column name="DurationUnit" checks="NotNull"/>\r\n        <column name="WarrantyDescription" checks="NotEmpty"/>\r\n        <column name="NominalLength" checks="ZeroOrGreaterOrNA"/>\r\n        <column name="NominalWidth" checks="ZeroOrGreaterOrNA"/>\r\n        <column name="NominalHeight" checks="ZeroOrGreater"/>\r\n        <column name="ModelReference" checks="NotEmpty"/>\r\n        <column name="Shape" checks="NotEmpty"/>\r\n        <column name="Size" checks="NotEmpty"/>\r\n        <column name="Color" checks="NotEmpty"/>\r\n        <column name="Finish" checks="NotEmpty"/>\r\n        <column name="Grade" checks="NotEmpty"/>\r\n        <column name="Material" checks="NotEmpty"/>\r\n        <column name="Constituents" checks="NotEmpty"/>\r\n        <column name="Features" checks="NotEmpty"/>\r\n        <column name="AccessibilityPerformance" checks="NotEmpty"/>\r\n        <column name="CodePerformance" checks="NotEmpty"/>\r\n        <column name="SustainabilityPerformance" checks="NotEmpty"/>\r\n      </columns>\r\n      <uniqueRules><unique ruleId="Type.Name.Unique" keys="Name" severity="error"/></uniqueRules>\r\n      <references>\r\n        <reference ruleId="Type.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="Type.Manufacturer.CrossReference" column="Manufacturer" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="Type.WarrantyGuarantorParts.CrossReference" column="WarrantyGuarantorParts" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="Type.WarrantyGuarantorLabor.CrossReference" column="WarrantyGuarantorLabor" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n      </references>\r\n      <relationRules><relation ruleId="Type.Type.Component.AComponentForEachType" type="atLeastOneTargetPerRow" targetSheet="Component" targetColumn="TypeName" severity="error"/></relationRules>\r\n    </sheet>\r\n\r\n    <sheet name="Component" presenceRule="Component.AtLeastOneRowPresent">\r\n      <columns>\r\n        <column name="CreatedBy" checks="NotNull"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty"/>\r\n        <column name="Name" checks="NotNull"/>\r\n        <column name="TypeName" aliases="Type Name" checks="NotNull"/>\r\n        <column name="Space" checks="NotNull"/>\r\n        <column name="Description" checks="NotNull"/>\r\n        <column name="SerialNumber" checks="NotNull"/>\r\n        <column name="InstallationDate" checks="NotNull"/>\r\n        <column name="WarrantyStartDate" checks="NotNull"/>\r\n        <column name="TagNumber" checks="NotEmpty"/>\r\n        <column name="BarCode" checks="NotEmpty"/>\r\n        <column name="AssetIdentifier" checks="NotEmpty"/>\r\n      </columns>\r\n      <uniqueRules>\r\n        <unique ruleId="Component.PrimaryKey.Unique.Warning" keys="Name" severity="warning"/>\r\n        <unique ruleId="Component.PrimaryKey.Unique.Error" keys="Name" severity="error"/>\r\n      </uniqueRules>\r\n      <references>\r\n        <reference ruleId="Component.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="Component.TypeName.CrossReference" column="TypeName" targetSheet="Type" targetColumn="Name" required="true"/>\r\n        <reference ruleId="Component.Space.CrossReference" column="Space" targetSheet="Space" targetColumn="Name" required="true"/>\r\n      </references>\r\n    </sheet>\r\n\r\n    <sheet name="System">\r\n      <columns>\r\n        <column name="CreatedBy" checks="NotNull"/>\r\n        <column name="CreatedOn" checks="NotNull|Valid"/>\r\n        <column name="Category" checks="NotNull"/>\r\n        <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty"/>\r\n        <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty"/>\r\n        <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty"/>\r\n        <column name="Description" checks="NotEmpty"/>\r\n        <column name="Name" checks="NotNull"/>\r\n        <column name="ComponentNames" checks="NotNull"/>\r\n      </columns>\r\n      <uniqueRules><unique ruleId="System.PrimaryKey.Unique" keys="Name|ComponentNames" severity="error"/></uniqueRules>\r\n      <references>\r\n        <reference ruleId="System.CreatedBy.CrossReference" column="CreatedBy" targetSheet="Contact" targetColumn="Email" required="true"/>\r\n        <reference ruleId="System.ComponentNames.CrossReference" column="ComponentNames" targetSheet="Component" targetColumn="Name" required="true" multiValueDelimiter=";"/>\r\n      </references>\r\n    </sheet>\r\n  </sheets>\r\n\r\n  <normalization>\r\n    <trimWhitespace>true</trimWhitespace>\r\n    <treatEmptyAsNull>true</treatEmptyAsNull>\r\n    <naToken>n/a</naToken>\r\n    <stringComparison>case-insensitive</stringComparison>\r\n    <listDelimiter>;</listDelimiter>\r\n  </normalization>\r\n</cobieWorkbookSpecification>\r\n';
+const QA_NAMED_CHECK_HANDLERS = Object.freeze({
+  NotNull: ({ text, isNA }) => !!text && !isNA,
+  NotEmpty: ({ text }) => !!text,
+  Format: ({ text, isNA, schema }) => !!text && !isNA && !!schema.formats.email?.test(text),
+  Valid: ({ text, isNA, schema }) => {
+    if (!text || isNA) return false;
+    schema.formats.isoDate.lastIndex = 0;
+    schema.formats.isoDateTime.lastIndex = 0;
+    return schema.formats.isoDate.test(text) || schema.formats.isoDateTime.test(text);
+  },
+  ValidNumber: ({ isNumber }) => isNumber,
+  ValidNumberOrNA: ({ text, isNA, isNumber }) => !text || isNA || isNumber,
+  ZeroOrGreaterOrNA: ({ text, isNA, isNumber, number }) => !text || isNA || (isNumber && number >= 0),
+  ZeroOrGreater: ({ text, isNumber, number }) => !text || (isNumber && number >= 0),
+});
+
+const QA_RELATION_RULE_HANDLERS = Object.freeze({
+  atLeastOneTargetPerRow: true,
+});
 
 let qaFindings = [];
+let qaAllFindings = [];
 let qaScopeCounts = { comps:0, spaces:0, types:0, docs:0 };
 let qaRuleResults = [];
+let qaAllRuleResults = [];
 let qaHasRun = false;
+const QA_STAGE_ORDER = Object.freeze(['design', 'construction', 'operation']);
+let qaSelectedStage = 'operation';
 let _qaSchemaCache = null;
 let _qaFilterScope = null;
 let _qaCellCache = new WeakMap();
@@ -9255,6 +9456,10 @@ function _qaColumnCell(row, column) {
     if (value) return value;
   }
   return '';
+}
+
+function _qaRowIdentity(sheetName, row) {
+  return _qaNorm(sheetName) === 'contact' ? _qaCell(row, 'Email') : _qaCell(row, 'Name');
 }
 
 function _qaRowsForSheet(sheetName, inScope) {
@@ -9347,23 +9552,6 @@ function _qaCheckMeta(check, patch) {
   QA_CHECKS[check].ico = patch.ico || QA_CHECKS[check].ico;
 }
 
-function _qaReadXmlSync(paths) {
-  for (const p of paths) {
-    try {
-      const req = new XMLHttpRequest();
-      req.open('GET', p, false);
-      req.send(null);
-      if (req.status === 200 || req.status === 0) {
-        const text = req.responseText || '';
-        if (text.trim()) return text;
-      }
-    } catch (_) {
-      // Try next candidate path.
-    }
-  }
-  return '';
-}
-
 function _qaAttr(node, name) {
   return node?.getAttribute?.(name) || '';
 }
@@ -9373,8 +9561,11 @@ function _qaSeverity(value, fallback = 'error') {
   return sev === 'error' || sev === 'warning' || sev === 'info' ? sev : fallback;
 }
 
-function _qaNamedCheckSeverity(checkName, explicitSeverity = '') {
+function _qaNamedCheckSeverity(checkName, explicitSeverity = '', schemaObj = null) {
   if (explicitSeverity) return _qaSeverity(explicitSeverity, 'warning');
+  const schema = schemaObj || _qaParseSchema();
+  const criticality = schema?.ruleCriticalities?.[_qaNorm(checkName)] || '';
+  if (criticality) return _qaSeverity(criticality, 'warning');
   if (_qaNorm(checkName) === 'notempty') return 'info';
   return 'warning';
 }
@@ -9382,6 +9573,37 @@ function _qaNamedCheckSeverity(checkName, explicitSeverity = '') {
 function _qaIssueType(value, fallback = '') {
   const t = _qaNorm(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return t || fallback;
+}
+
+function _qaStages(value) {
+  return String(value || '').split('|').map(_qaNorm).filter(Boolean);
+}
+
+function _qaStage(value, fallback = '') {
+  const stage = _qaNorm(value || fallback);
+  return QA_STAGE_ORDER.includes(stage) ? stage : '';
+}
+
+function _qaStageIncluded(stage, selectedStage = qaSelectedStage) {
+  const ruleIndex = QA_STAGE_ORDER.indexOf(_qaStage(stage, 'design'));
+  const selectedIndex = QA_STAGE_ORDER.indexOf(_qaStage(selectedStage, 'operation'));
+  return ruleIndex >= 0 && ruleIndex <= selectedIndex;
+}
+
+function _qaSheetForStage(sheet, selectedStage = qaSelectedStage) {
+  if (!sheet || !_qaStageIncluded(sheet.stage, selectedStage)) return null;
+  return {
+    ...sheet,
+    columns:(sheet.columns || []).filter(rule => _qaStageIncluded(rule.stage, selectedStage)),
+    references:(sheet.references || []).filter(rule => _qaStageIncluded(rule.stage, selectedStage)),
+    uniqueRules:(sheet.uniqueRules || []).filter(rule => _qaStageIncluded(rule.stage, selectedStage)),
+    relationRules:(sheet.relationRules || []).filter(rule => _qaStageIncluded(rule.stage, selectedStage)),
+  };
+}
+
+function _qaApplyStageFilter() {
+  qaFindings = qaAllFindings.filter(finding => _qaStageIncluded(finding.stage));
+  qaRuleResults = qaAllRuleResults.filter(result => _qaStageIncluded(result.stage));
 }
 
 function _qaIssueLabel(issueType) {
@@ -9422,23 +9644,34 @@ function _qaSchemaError(message) {
     error: message,
     formats: {},
     sheets: [],
+    ruleDefinitions: Object.create(null),
+    ruleCriticalities: Object.create(null),
     checkSeverities: Object.create(null),
     checkSeverityByField: Object.create(null),
   };
 }
 
+function _qaNamedRuleDescription(ruleName, schemaObj = null) {
+  const schema = schemaObj || _qaParseSchema();
+  const key = _qaNorm(ruleName);
+  return String(schema?.ruleDefinitions?.[key] || '').trim();
+}
+
+function _qaRuleDescriptionForCheck(checkId, schemaObj = null) {
+  const parts = String(checkId || '').split('.').map(part => String(part || '').trim()).filter(Boolean);
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const desc = _qaNamedRuleDescription(parts[index], schemaObj);
+    if (desc) return desc;
+  }
+  return '';
+}
+
 function _qaParseSchema() {
   if (_qaSchemaCache) return _qaSchemaCache;
 
-  const xmlText = _QA_EMBEDDED_SCHEMA;
-  if (!xmlText) {
-    _qaSchemaCache = _qaSchemaError('The current QA XML profile could not be loaded. No fallback rules were applied.');
-    return _qaSchemaCache;
-  }
-
-  const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
-  if (xml.querySelector('parsererror')) {
-    _qaSchemaCache = _qaSchemaError('The current QA XML profile is invalid. No fallback rules were applied.');
+  const xml = _cobieSchemaDocument();
+  if (!xml) {
+    _qaSchemaCache = _qaSchemaError(`${COBIE_SCHEMA_STATUS.error || 'The current QA XML profile could not be loaded.'} No fallback rules were applied.`);
     return _qaSchemaCache;
   }
   const root = xml.documentElement;
@@ -9459,6 +9692,17 @@ function _qaParseSchema() {
     }
   });
 
+  const ruleDefinitions = Object.create(null);
+  const ruleCriticalities = Object.create(null);
+  xml.querySelectorAll('ruleDefinitions > rule').forEach(rule => {
+    const name = _qaNorm(_qaAttr(rule, 'name'));
+    const text = String(rule.textContent || '').trim();
+    if (!name || !text) return;
+    ruleDefinitions[name] = text;
+    const sev = _qaSeverity(_qaAttr(rule, 'criticality') || _qaAttr(rule, 'criticallity') || _qaAttr(rule, 'severity'), '');
+    if (sev) ruleCriticalities[name] = sev;
+  });
+
   const sheets = [];
   const checkSeverities = Object.create(null);
   const checkSeverityByField = Object.create(null);
@@ -9475,8 +9719,12 @@ function _qaParseSchema() {
   });
 
   xml.querySelectorAll('sheets > sheet').forEach(sheetNode => {
+    const sheetStages = _qaStages(_qaAttr(sheetNode, 'stage'));
+    const inheritedStage = sheetStages.length === 1 ? _qaStage(sheetStages[0], 'design') : '';
     const sheet = {
       name: _qaAttr(sheetNode, 'name'),
+      stages:sheetStages,
+      stage:inheritedStage || _qaStage(sheetStages[0], 'design'),
       required: _qaNorm(_qaAttr(sheetNode, 'required')) === 'true',
       requiredSeverity: _qaSeverity(_qaAttr(sheetNode, 'requiredSeverity') || _qaAttr(sheetNode, 'severity'), 'error'),
       requiredIssueType: _qaIssueType(_qaAttr(sheetNode, 'requiredIssueType'), 'scope'),
@@ -9511,6 +9759,7 @@ function _qaParseSchema() {
         allowAlternateFormatRef: _qaAttr(col, 'allowAlternateFormatRef'),
         aliases: _qaAttr(col, 'aliases').split('|').map(value => value.trim()).filter(Boolean),
         checks: _qaAttr(col, 'checks').split('|').map(value => value.trim()).filter(Boolean),
+        stage:_qaStage(_qaAttr(col, 'stage'), inheritedStage || 'design'),
       });
     });
 
@@ -9525,6 +9774,7 @@ function _qaParseSchema() {
         icon: _qaAttr(ref, 'icon'),
         multiValueDelimiter: _qaAttr(ref, 'multiValueDelimiter') || ';',
         ruleId: _qaAttr(ref, 'ruleId'),
+        stage:_qaStage(_qaAttr(ref, 'stage'), inheritedStage || 'design'),
       });
     });
 
@@ -9533,6 +9783,7 @@ function _qaParseSchema() {
         ruleId: _qaAttr(rule, 'ruleId'),
         keys: _qaAttr(rule, 'keys').split('|').map(value => value.trim()).filter(Boolean),
         severity: _qaSeverity(_qaAttr(rule, 'severity'), 'error'),
+        stage:_qaStage(_qaAttr(rule, 'stage'), inheritedStage || 'design'),
       });
     });
 
@@ -9543,26 +9794,39 @@ function _qaParseSchema() {
         targetSheet: _qaAttr(rule, 'targetSheet'),
         targetColumn: _qaAttr(rule, 'targetColumn'),
         severity: _qaSeverity(_qaAttr(rule, 'severity'), 'error'),
+        stage:_qaStage(_qaAttr(rule, 'stage'), inheritedStage || 'design'),
       });
     });
 
     sheets.push(sheet);
   });
 
-  _qaSchemaCache = { error: '', formats, sheets, checkSeverities, checkSeverityByField };
+  const unsupportedChecks = [...new Set(sheets.flatMap(sheet =>
+    sheet.columns.flatMap(column => column.checks || [])
+  ).filter(check => !QA_NAMED_CHECK_HANDLERS[check]))];
+  const unsupportedRelations = [...new Set(sheets.flatMap(sheet =>
+    sheet.relationRules.map(rule => rule.type)
+  ).filter(type => !QA_RELATION_RULE_HANDLERS[type]))];
+  const invalidStages = [...new Set(sheets.flatMap(sheet => [
+    ...sheet.stages.filter(stage => !QA_STAGE_ORDER.includes(stage)),
+    ...sheet.columns.map(rule => rule.stage),
+    ...sheet.references.map(rule => rule.stage),
+    ...sheet.uniqueRules.map(rule => rule.stage),
+    ...sheet.relationRules.map(rule => rule.stage),
+  ].filter(stage => !QA_STAGE_ORDER.includes(stage))))];
+  if (unsupportedChecks.length || unsupportedRelations.length || invalidStages.length) {
+    const details = [
+      unsupportedChecks.length ? `checks: ${unsupportedChecks.join(', ')}` : '',
+      unsupportedRelations.length ? `relation types: ${unsupportedRelations.join(', ')}` : '',
+      invalidStages.length ? `stages: ${invalidStages.join(', ')}` : '',
+    ].filter(Boolean).join('; ');
+    _qaSchemaCache = _qaSchemaError(`The current QA XML profile uses unsupported ${details}. No rules were applied.`);
+    return _qaSchemaCache;
+  }
+
+  _qaSchemaCache = { error: '', formats, sheets, ruleDefinitions, ruleCriticalities, checkSeverities, checkSeverityByField };
   return _qaSchemaCache;
 }
-
-const QA_NAMED_CHECK_WORDING = Object.freeze({
-  NotNull: 'Must contain a text value other than "n/a".',
-  NotEmpty: 'Must contain a text value; "n/a" is acceptable.',
-  Format: 'Must contain a valid email address.',
-  Valid: 'Must contain a valid ISO date or date-time.',
-  ValidNumber: 'Must contain a valid number; "n/a" is not acceptable.',
-  ValidNumberOrNA: 'When populated, must contain a valid number or "n/a".',
-  ZeroOrGreaterOrNA: 'When populated, must contain zero or a positive number, or "n/a".',
-  ZeroOrGreater: 'When populated, must contain zero or a positive number.',
-});
 
 function _qaNamedCheckResult(checkName, value, schema) {
   const text = String(value ?? '').trim();
@@ -9570,23 +9834,11 @@ function _qaNamedCheckResult(checkName, value, schema) {
   const isNA = normalized === 'n/a';
   const isNumber = text !== '' && Number.isFinite(Number(text.replace(/,/g, '')));
   const number = isNumber ? Number(text.replace(/,/g, '')) : NaN;
-  if (checkName === 'NotNull') return !!text && !isNA;
-  if (checkName === 'NotEmpty') return !!text;
-  if (checkName === 'Format') return !!text && !isNA && !!schema.formats.email?.test(text);
-  if (checkName === 'Valid') {
-    if (!text || isNA) return false;
-    schema.formats.isoDate.lastIndex = 0;
-    schema.formats.isoDateTime.lastIndex = 0;
-    return schema.formats.isoDate.test(text) || schema.formats.isoDateTime.test(text);
-  }
-  if (checkName === 'ValidNumber') return isNumber;
-  if (checkName === 'ValidNumberOrNA') return !text || isNA || isNumber;
-  if (checkName === 'ZeroOrGreaterOrNA') return !text || isNA || (isNumber && number >= 0);
-  if (checkName === 'ZeroOrGreater') return !text || (isNumber && number >= 0);
-  return true;
+  const handler = QA_NAMED_CHECK_HANDLERS[checkName];
+  return handler ? handler({ text, normalized, isNA, isNumber, number, schema }) : false;
 }
 
-function* _qaRunSteps() {
+function* _qaRunSteps(selectedStage = qaSelectedStage) {
   _qaCellCache = new WeakMap();
   const facSel = sel.facility;
   const inScope = r => !facSel.size || facSel.has((r._facility || '').toLowerCase());
@@ -9602,17 +9854,20 @@ function* _qaRunSteps() {
   };
 
   const schema = _qaParseSchema();
-  const totalSteps = (schema.sheets || []).reduce((total, sheet) => total
+  const stageSheets = (schema.sheets || []).map(sheet => _qaSheetForStage(sheet, selectedStage)).filter(Boolean);
+  const totalSteps = stageSheets.reduce((total, sheet) => total
     + 1
     + (sheet.columns || []).length
     + ((sheet.uniqueRules || []).length ? 1 : 0)
     + ((sheet.references || []).length ? 1 : 0)
     + ((sheet.relationRules || []).length ? 1 : 0), 0);
   let completedSteps = 0;
+  let activeRuleStage = 'design';
   const ruleCounts = new Map();
-  const recordRule = (check, passed, sheet = 'Workbook', column = 'Sheet') => {
-    const key = `${_qaNorm(sheet)}|${_qaNormKey(column)}|${check}`;
-    if (!ruleCounts.has(key)) ruleCounts.set(key, { check, sheet, column, pass:0, fail:0 });
+  const recordRule = (check, passed, sheet = 'Workbook', column = 'Sheet', stage = activeRuleStage) => {
+    const normalizedStage = _qaStage(stage, 'design');
+    const key = `${_qaNorm(sheet)}|${_qaNormKey(column)}|${check}|${normalizedStage}`;
+    if (!ruleCounts.has(key)) ruleCounts.set(key, { check, sheet, column, stage:normalizedStage, pass:0, fail:0 });
     ruleCounts.get(key)[passed ? 'pass' : 'fail']++;
   };
   const publishRuleResults = () => {
@@ -9641,6 +9896,7 @@ function* _qaRunSteps() {
       detail: cfg.detail || '',
       fields: Array.isArray(cfg.fields) ? cfg.fields.filter(Boolean) : [],
       issueType: _qaIssueType(cfg.issueType),
+      stage: _qaStage(cfg.stage, activeRuleStage || 'design'),
     });
   };
 
@@ -9686,7 +9942,8 @@ function* _qaRunSteps() {
     return _qaNorm(row._facility) === _qaNorm(scope.facility);
   });
 
-  for (const sheetRule of schema.sheets) {
+  for (const sheetRule of stageSheets) {
+    activeRuleStage = _qaStage(sheetRule.stage, 'design');
     yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, status:`Preparing ${sheetRule.name} worksheet` };
     const sheetRows = _qaRowsForSheet(sheetRule.name, inScope);
     const rows = _qaRowsForSheet(sheetRule.name, row => inScope(row) && _qaRowMatchesFilterScope(sheetRule.name, row));
@@ -9698,6 +9955,7 @@ function* _qaRunSteps() {
         const passed = rowsInWorkbook(sheetRows, scope).length > 0;
         recordRule(sheetRule.presenceRule, passed, sheetRule.name, 'Sheet');
         if (passed) return;
+        const ruleDescription = _qaRuleDescriptionForCheck(sheetRule.presenceRule, schema);
         add({
           check: sheetRule.presenceRule,
           sev: 'error',
@@ -9706,8 +9964,8 @@ function* _qaRunSteps() {
           entityType: 'sheet',
           entityName: `${sheetRule.name} sheet`,
           facility: scope.facility,
-          detail: `${sheetRule.name} must contain at least one data row in ${scope.label}.`,
-          label: `${sheetRule.name}: at least one row must be present`,
+          detail: `${sheetRule.name}: ${ruleDescription || sheetRule.presenceRule} Scope: ${scope.label}.`,
+          label: `${sheetRule.name}.${sheetRule.presenceRule.split('.').pop()}`,
         });
       });
     }
@@ -9719,6 +9977,7 @@ function* _qaRunSteps() {
         const passed = count === 1;
         recordRule(sheetRule.singleRowRule, passed, sheetRule.name, 'Sheet');
         if (passed) return;
+        const ruleDescription = _qaRuleDescriptionForCheck(sheetRule.singleRowRule, schema);
         add({
           check: sheetRule.singleRowRule,
           sev: 'error',
@@ -9727,8 +9986,8 @@ function* _qaRunSteps() {
           entityType: 'sheet',
           entityName: `${sheetRule.name} sheet`,
           facility: scope.facility,
-          detail: `Exactly one Facility row is required in ${scope.label}; ${count} were found.`,
-          label: 'Facility: exactly one row must be present',
+          detail: `${sheetRule.name}: ${ruleDescription || sheetRule.singleRowRule} Scope: ${scope.label}; found ${count}.`,
+          label: `${sheetRule.name}.${sheetRule.singleRowRule.split('.').pop()}`,
         });
       });
     }
@@ -9750,6 +10009,7 @@ function* _qaRunSteps() {
     completedSteps++;
 
     for (const col of sheetRule.columns) {
+      activeRuleStage = _qaStage(col.stage, sheetRule.stage || 'design');
       yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, column:col.name, status:`Checking ${sheetRule.name}.${col.name}` };
       if (!col.name) {
         completedSteps++;
@@ -9764,15 +10024,16 @@ function* _qaRunSteps() {
             const passed = _qaNamedCheckResult(checkName, value, schema);
             recordRule(ruleId, passed, sheetRule.name, col.name);
             if (passed) return;
+            const ruleWording = _qaNamedRuleDescription(checkName, schema);
             add({
               check: ruleId,
-              sev: _qaNamedCheckSeverity(checkName, col.severity),
+              sev: _qaNamedCheckSeverity(checkName, col.severity, schema),
               sheet: sheetRule.name,
               issueType: checkName === 'Format' || checkName === 'Valid' ? 'format' : 'completeness',
               entityType: _qaNorm(sheetRule.name),
-              entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+              entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
               facility: row._facility || '',
-              detail: `${col.name}: ${QA_NAMED_CHECK_WORDING[checkName] || `Failed ${checkName}.`} Value was ${value ? `"${value}"` : 'empty'}.`,
+              detail: `${col.name}: ${ruleWording || checkName}. Value was ${value ? `"${value}"` : 'empty'}.`,
               fields: [col.name],
               label: `${sheetRule.name}.${col.name}.${checkName}`,
             });
@@ -9794,7 +10055,7 @@ function* _qaRunSteps() {
             issueType: col.issueType || 'completeness',
             icon: col.icon,
             entityType: _qaNorm(sheetRule.name),
-            entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+            entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Required column ${col.name} is blank.`,
             fields: [col.name],
@@ -9821,7 +10082,7 @@ function* _qaRunSteps() {
             issueType: col.issueType || sheetRule.formatIssueType || 'format',
             icon: col.icon || sheetRule.formatIcon,
             entityType: _qaNorm(sheetRule.name),
-            entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+            entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Column ${col.name} value "${v}" does not match ${col.formatRef}${altRx ? ` or ${col.allowAlternateFormatRef}` : ''}.`,
             fields: [col.name],
@@ -9836,6 +10097,7 @@ function* _qaRunSteps() {
       yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, status:`Checking ${sheetRule.name} uniqueness` };
     }
     (sheetRule.uniqueRules || []).forEach(rule => {
+      activeRuleStage = _qaStage(rule.stage, sheetRule.stage || 'design');
       const seen = new Map();
       rows.forEach(row => {
         const values = rule.keys.map(key => _qaCell(row, key));
@@ -9850,17 +10112,18 @@ function* _qaRunSteps() {
         const passed = entry.count === 1;
         recordRule(rule.ruleId, passed, sheetRule.name, rule.keys.join(' + '));
         if (passed) return;
+        const ruleDescription = _qaRuleDescriptionForCheck(rule.ruleId, schema);
         add({
           check: rule.ruleId,
           sev: rule.severity,
           sheet: sheetRule.name,
           issueType: 'uniqueness',
           entityType: _qaNorm(sheetRule.name),
-          entityName: _qaCell(entry.row, 'Name') || '(Unnamed row)',
+          entityName: _qaRowIdentity(sheetRule.name, entry.row) || '(Unnamed row)',
           facility: entry.row._facility || '',
           detail: `${entry.count} rows share worksheet key [${rule.keys.join(', ')}] = "${entry.values.join(' | ')}".`,
           fields: rule.keys,
-          label: `${rule.ruleId}: must be unique within the worksheet`,
+          label: ruleDescription || rule.ruleId,
         });
       });
     });
@@ -9875,6 +10138,7 @@ function* _qaRunSteps() {
     }
 
     if (!sheetRule.uniqueRules?.length && uniqueKeys.length) {
+      activeRuleStage = _qaStage(sheetRule.stage, 'design');
       const seen = new Map();
       rows.forEach(row => {
         const fac = (row._facility || '').toLowerCase();
@@ -9898,7 +10162,7 @@ function* _qaRunSteps() {
           issueType: sheetRule.uniqueIssueType || 'uniqueness',
           icon: sheetRule.uniqueIcon,
           entityType: _qaNorm(sheetRule.name),
-          entityName: _qaCell(rec.row, 'Name') || '(Unnamed row)',
+          entityName: _qaRowIdentity(sheetRule.name, rec.row) || '(Unnamed row)',
           facility: rec.row._facility || '',
           detail: `${sheetRule.name} has ${rec.count} rows with same key [${uniqueKeys.join(', ')}] = "${rec.vals.join(' | ')}".`,
           fields: uniqueKeys,
@@ -9911,6 +10175,7 @@ function* _qaRunSteps() {
       yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, status:`Resolving ${sheetRule.name} cross-references` };
     }
     sheetRule.references.forEach(ref => {
+      activeRuleStage = _qaStage(ref.stage, sheetRule.stage || 'design');
       if (!ref.column || !ref.targetSheet || !ref.targetColumn) return;
 
       rows.forEach(row => {
@@ -9928,7 +10193,7 @@ function* _qaRunSteps() {
             issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
             icon: ref.icon || sheetRule.referenceIcon,
             entityType: _qaNorm(sheetRule.name),
-            entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+            entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Reference column ${ref.column} is blank but required to resolve ${ref.targetSheet}.${ref.targetColumn}.`,
             fields: [ref.column],
@@ -9950,7 +10215,7 @@ function* _qaRunSteps() {
             issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
             icon: ref.icon || sheetRule.referenceIcon,
             entityType: _qaNorm(sheetRule.name),
-            entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+            entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `${ref.column} value "${v}" does not resolve to ${ref.targetSheet}.${ref.targetColumn}.`,
             fields: [ref.column],
@@ -9965,7 +10230,8 @@ function* _qaRunSteps() {
       yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, status:`Checking ${sheetRule.name} relationships` };
     }
     (sheetRule.relationRules || []).forEach(rule => {
-      if (rule.type !== 'atLeastOneTargetPerRow') return;
+      activeRuleStage = _qaStage(rule.stage, sheetRule.stage || 'design');
+      if (!QA_RELATION_RULE_HANDLERS[rule.type]) return;
       const targets = _qaRowsForSheet(rule.targetSheet, inScope);
       rows.forEach(row => {
         const name = _qaCell(row, 'Name');
@@ -10009,15 +10275,40 @@ function qaIsRunning() {
   return !!(_qaRunToken && !_qaRunToken.done && !_qaRunToken.cancelled);
 }
 
+function qaRevalidateAfterEntityCreate() {
+  if (!qaHasRun || qaIsRunning()) return;
+  const list = document.getElementById('comp-list');
+  if (list) startQaRun(list);
+}
+
 function resetQaAudit() {
   cancelQaRun(true);
   qaFindings = [];
+  qaAllFindings = [];
   qaRuleResults = [];
+  qaAllRuleResults = [];
   qaScopeCounts = { comps:0, spaces:0, types:0, docs:0 };
   qaHasRun = false;
   _qaResultsSelectedSheet = '';
   _qaResultsSelectedCheck = '';
   _qaCellCache = new WeakMap();
+}
+
+function setQaStage(stage) {
+  const nextStage = _qaStage(stage, 'operation');
+  if (nextStage === qaSelectedStage) return;
+  qaSelectedStage = nextStage;
+  _qaApplyStageFilter();
+  _qaResultsSelectedCheck = '';
+  const context = typeof _projectActiveEntityContext === 'function' ? _projectActiveEntityContext() : null;
+  if (context?.row && typeof _projectRefreshFieldIssueBadges === 'function') {
+    _projectRefreshFieldIssueBadges(context.entityType, context.entityName, context.facility);
+  }
+  if (viewMode === 'qa') {
+    const list = document.getElementById('comp-list');
+    if (list) renderQAMode(list, false);
+  }
+  if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
 }
 
 function showQAMode(list = document.getElementById('comp-list')) {
@@ -10102,7 +10393,7 @@ async function startQaRun(list = document.getElementById('comp-list')) {
   _qaUpdateProgressSurfaces(initial);
   if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
 
-  const steps = _qaRunSteps();
+  const steps = _qaRunSteps('operation');
   let result = steps.next();
   while (!result.done) {
     if (token !== _qaRunToken || token.cancelled) break;
@@ -10129,19 +10420,26 @@ async function startQaRun(list = document.getElementById('comp-list')) {
     return;
   }
 
-  qaFindings = result.value || [];
+  qaAllFindings = result.value || [];
+  qaAllRuleResults = qaRuleResults;
+  _qaApplyStageFilter();
   qaHasRun = true;
   token.done = true;
   _qaRunToken = null;
   _qaRunProgress = null;
+  const modalContext = typeof _projectActiveEntityContext === 'function' ? _projectActiveEntityContext() : null;
+  if (modalContext?.row && typeof _projectRefreshFieldIssueBadges === 'function') {
+    _projectRefreshFieldIssueBadges(modalContext.entityType, modalContext.entityName, modalContext.facility);
+  }
   if (viewMode !== 'qa') return;
   renderQAMode(list, false);
   if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
 }
 
-function _qaSheetRuleForEntity(schema, entityType) {
+function _qaSheetRuleForEntity(schema, entityType, selectedStage = qaSelectedStage) {
   const type = _qaNorm(entityType);
-  return (schema?.sheets || []).find(sheet => _qaNorm(sheet.name) === type) || null;
+  const sheet = (schema?.sheets || []).find(candidate => _qaNorm(candidate.name) === type) || null;
+  return _qaSheetForStage(sheet, selectedStage);
 }
 
 function _qaFindingMatchesEntityFields(issue, entityType, entityName, facility, fieldKeys = [], previousEntityName = '') {
@@ -10160,17 +10458,17 @@ function _qaFindingMatchesEntityFields(issue, entityType, entityName, facility, 
   return issueFields.some(field => fieldKeys.includes(field));
 }
 
-function _qaValidateEntityFields(entityType, entityName, facility, fields = []) {
+function _qaValidateEntityFields(entityType, entityName, facility, fields = [], selectedStage = 'operation') {
   _qaCellCache = new WeakMap();
   const schema = _qaParseSchema();
-  const sheetRule = _qaSheetRuleForEntity(schema, entityType);
+  const sheetRule = _qaSheetRuleForEntity(schema, entityType, selectedStage);
   if (!sheetRule) return [];
 
   const nameKey = _qaNorm(entityName);
   const facKey = _qaNorm(facility);
   const fieldKeys = [...new Set(fields.map(_qaNormKey).filter(Boolean))];
   const rows = _qaRowsForSheet(sheetRule.name, row =>
-    _qaNorm(_qaCell(row, 'Name')) === nameKey && (!facKey || _qaNorm(row?._facility) === facKey)
+    _qaNorm(_qaRowIdentity(sheetRule.name, row)) === nameKey && (!facKey || _qaNorm(row?._facility) === facKey)
   );
   if (!rows.length) return [];
 
@@ -10193,6 +10491,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
       detail: cfg.detail,
       fields: cfg.fields || [],
       issueType: _qaIssueType(cfg.issueType),
+      stage: _qaStage(cfg.stage, sheetRule.stage || 'design'),
     });
   };
 
@@ -10208,11 +10507,13 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         col.checks.forEach(checkName => {
           if (_qaNamedCheckResult(checkName, v, schema)) return;
           const ruleId = `${sheetRule.name}.${col.name}.${checkName}`;
+          const ruleWording = _qaNamedRuleDescription(checkName, schema);
           push({
             check: ruleId,
+            stage: col.stage,
             sev: _qaNamedCheckSeverity(checkName, col.severity),
             issueType: checkName === 'Format' || checkName === 'Valid' ? 'format' : 'completeness',
-            detail: `${col.name}: ${QA_NAMED_CHECK_WORDING[checkName] || `Failed ${checkName}.`} Value was ${v ? `"${v}"` : 'empty'}.`,
+            detail: `${col.name}: ${ruleWording || checkName}. Value was ${v ? `"${v}"` : 'empty'}.`,
             fields: [col.name],
             label: ruleId,
           });
@@ -10223,6 +10524,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
       if (col.required && !v) {
         push({
           check: 'required-missing',
+          stage: col.stage,
           sev: resolveSeverity('required-missing', col.severity || 'warning', col.name),
           sheet: sheetRule.name,
           issueType: col.issueType || 'completeness',
@@ -10239,6 +10541,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (!mainRx.test(v) && !(altRx && altRx.test(v))) {
           push({
             check: 'format-invalid',
+            stage: col.stage,
             sev: resolveSeverity('format-invalid', col.severity || sheetRule.formatSeverity || 'warning', col.name),
             sheet: sheetRule.name,
             issueType: col.issueType || sheetRule.formatIssueType || 'format',
@@ -10276,6 +10579,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (count > 1) {
           push({
             check: rule.ruleId || 'unique-duplicate',
+            stage: rule.stage,
             sev: rule.severity || resolveSeverity('unique-duplicate', sheetRule.uniqueSeverity || 'error', uniqueKeys[0] || ''),
             issueType: 'uniqueness',
             detail: `${sheetRule.name} has ${count} rows with same key [${uniqueKeys.join(', ')}] = "${keyVals.join(' | ')}".`,
@@ -10294,6 +10598,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (!ref.required) return;
         push({
           check: ref.ruleId || 'reference-missing',
+          stage: ref.stage,
           sev: resolveSeverity('reference-missing', ref.severity || sheetRule.referenceSeverity || 'error', ref.column),
           sheet: sheetRule.name,
           issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
@@ -10311,6 +10616,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (targetSet.has(value.toLowerCase())) return;
         push({
           check: ref.ruleId || 'reference-missing',
+          stage: ref.stage,
           sev: resolveSeverity('reference-missing', ref.severity || sheetRule.referenceSeverity || 'error', ref.column),
           sheet: sheetRule.name,
           issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
@@ -10324,7 +10630,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
 
     if (!fieldKeys.length || fieldKeys.includes(_qaNormKey('Name'))) {
       (sheetRule.relationRules || []).forEach(rule => {
-        if (rule.type !== 'atLeastOneTargetPerRow') return;
+        if (!QA_RELATION_RULE_HANDLERS[rule.type]) return;
         const name = _qaCell(row, 'Name');
         const matched = _qaRowsForSheet(rule.targetSheet, target =>
           _qaNorm(_qaCell(target, rule.targetColumn)) === _qaNorm(name)
@@ -10332,6 +10638,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (matched) return;
         push({
           check:rule.ruleId,
+          stage:rule.stage,
           sev:rule.severity,
           issueType:'consistency',
           detail:`${sheetRule.name} "${name}" has no matching ${rule.targetSheet}.${rule.targetColumn} row.`,
@@ -10349,7 +10656,7 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
   if (!qaHasRun) return;
 
   const schema = _qaParseSchema();
-  const sheetRule = _qaSheetRuleForEntity(schema, entityType);
+  const sheetRule = _qaSheetRuleForEntity(schema, entityType, 'operation');
   const fieldKeys = new Set(fields.map(_qaNormKey).filter(Boolean));
   (sheetRule?.columns || []).forEach(column => {
     const columnKeys = [column.name, ...(column.aliases || [])].map(_qaNormKey).filter(Boolean);
@@ -10357,14 +10664,14 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
     columnKeys.forEach(key => fieldKeys.add(key));
   });
   const affectedFieldKeys = [...fieldKeys];
-  const removed = qaFindings.filter(issue =>
+  const removed = qaAllFindings.filter(issue =>
     _qaFindingMatchesEntityFields(issue, entityType, entityName, facility, affectedFieldKeys, previousEntityName)
   );
-  qaFindings = qaFindings.filter(issue =>
+  qaAllFindings = qaAllFindings.filter(issue =>
     !_qaFindingMatchesEntityFields(issue, entityType, entityName, facility, affectedFieldKeys, previousEntityName)
   );
   if (previousEntityName && _qaNorm(previousEntityName) !== _qaNorm(entityName)) {
-    qaFindings.forEach(issue => {
+    qaAllFindings.forEach(issue => {
       if (_qaNorm(issue.entityType) !== _qaNorm(entityType)) return;
       if (_qaNorm(issue.entityName) !== _qaNorm(previousEntityName)) return;
       if (facility && _qaNorm(issue.facility) !== _qaNorm(facility)) return;
@@ -10372,9 +10679,10 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
     });
   }
 
-  const next = _qaValidateEntityFields(entityType, entityName, facility, fields);
-  if (next.length) qaFindings.push(...next);
-  _qaAdjustRuleResultsForRow(entityType, removed, next);
+  const next = _qaValidateEntityFields(entityType, entityName, facility, fields, 'operation');
+  if (next.length) qaAllFindings.push(...next);
+  _qaAdjustRuleResultsForRow(entityType, removed, next, qaAllRuleResults);
+  _qaApplyStageFilter();
 
   if (viewMode === 'qa') {
     const list = document.getElementById('comp-list');
@@ -10383,7 +10691,7 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
   if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
 }
 
-function _qaAdjustRuleResultsForRow(entityType, previousFindings, nextFindings) {
+function _qaAdjustRuleResultsForRow(entityType, previousFindings, nextFindings, ruleResults = qaRuleResults) {
   const counts = findings => {
     const map = new Map();
     findings.forEach(finding => {
@@ -10401,7 +10709,7 @@ function _qaAdjustRuleResultsForRow(entityType, previousFindings, nextFindings) 
     const columnKey = key.slice(separator + 1);
     const delta = (after.get(key) || 0) - (before.get(key) || 0);
     if (!delta) return;
-    const result = qaRuleResults.find(item =>
+    const result = ruleResults.find(item =>
       item.check === check && _qaNorm(item.sheet) === _qaNorm(entityType) && _qaNormKey(item.column) === columnKey
     );
     if (!result) return;
@@ -10455,10 +10763,13 @@ function renderQAMode(list) {
     ? 'Auditing: ' + [...facSel].map(k => idx.facilityNames.find(n=>n.toLowerCase()===k)||k).join(', ')
     : 'Auditing all loaded facilities';
   const summary = `<div id="qa-summary">
+    <label class="qa-stage-control"><span>QA stage</span><select onchange="setQaStage(this.value)" aria-label="QA check stage">
+      ${QA_STAGE_ORDER.map(stage => `<option value="${stage}"${qaSelectedStage === stage ? ' selected' : ''}>${stage.charAt(0).toUpperCase() + stage.slice(1)}</option>`).join('')}
+    </select></label>
     <span class="qa-sev qa-sev-error">${bySev.error} error${bySev.error!==1?'s':''}</span>
     <span class="qa-sev qa-sev-warning">${bySev.warning} warning${bySev.warning!==1?'s':''}</span>
     ${bySev.info?`<span class="qa-sev qa-sev-info">${bySev.info} advisor${bySev.info!==1?'ies':'y'}</span>`:''}
-    <span class="qa-scope">${esc(scopeTxt)} — active filters set the row-level scope; worksheet-presence checks remain workbook-wide.</span>
+    <span class="qa-scope">${esc(scopeTxt)} — ${esc(qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1))} includes all preceding stages; active filters set the row-level scope.</span>
     ${_qaResultsSelectedSheet ? `<span class="qa-scope">Sheet: ${esc(_qaResultsSelectedSheet)}</span>` : ''}
     ${_qaResultsSelectedCheck ? `<span class="qa-scope">Rule: ${esc(_qaResultsSelectedCheck)}</span>` : ''}
     ${visibleFindings.length?`<button class="xbtn" onclick="exportQAReport()"><i class="bi bi-download me-1"></i>Download XLSX</button>`:''}
@@ -10574,16 +10885,12 @@ function _qaResolveFindingGroupValue(item, dim) {
 }
 
 function _qaCheckBlocks(items, depth = 0) {
-  const SEV_ORDER = { error:0, warning:1, info:2 };
   const byCheck = new Map();
   items.forEach(item => {
     if (!byCheck.has(item.check)) byCheck.set(item.check, []);
     byCheck.get(item.check).push(item);
   });
-  const checks = [...byCheck.keys()].sort((a,b) =>
-    (SEV_ORDER[QA_CHECKS[a]?.sev] ?? 9) - (SEV_ORDER[QA_CHECKS[b]?.sev] ?? 9)
-    || String(QA_CHECKS[a]?.label || a).localeCompare(String(QA_CHECKS[b]?.label || b))
-  );
+  const checks = [...byCheck.keys()];
 
   return checks.map(check => {
     const cfg = QA_CHECKS[check] || { label:check, sheet:'Multiple', sev:'warning', ico:'bi-list-check' };
@@ -10660,7 +10967,9 @@ function qaGroupBody(items) {
 
 function exportQAReport() {
   if (!qaFindings.length) return;
+  const stageLabel = qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1);
   const rows = qaFindings.map(x => ({
+    Stage: stageLabel,
     Severity: x.sev === 'info' ? 'Advisory' : x.sev.charAt(0).toUpperCase() + x.sev.slice(1),
     Check: (QA_CHECKS[x.check] || {}).label || x.check,
     Sheet: (QA_CHECKS[x.check] || {}).sheet || 'Multiple',
@@ -10673,11 +10982,49 @@ function exportQAReport() {
   XLSX.writeFile(wb, 'QA-Report_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
+function _qaRuleSubtitle(result) {
+  const check = String(result?.check || '').trim();
+  const parts = check.split('.').map(part => String(part || '').trim()).filter(Boolean);
+  if (parts.length < 3) return '';
+
+  const named = _qaRuleDescriptionForCheck(check);
+  return named || '';
+}
+
 function _qaPdfReportHtml(logoMarkup = '') {
   const generated = new Date();
+  const selectedFacilityKeys = sel?.facility?.size
+    ? new Set([...sel.facility].map(key => _qaNorm(key)))
+    : null;
+  const rootStyles = (typeof getComputedStyle === 'function' && document?.documentElement)
+    ? getComputedStyle(document.documentElement)
+    : null;
+  const themeToken = name => String(rootStyles?.getPropertyValue(name) || '').trim();
+  const headerThemeBySheet = {
+    facility:  { bg:themeToken('--pill-fac-bg'), text:themeToken('--pill-fac-text'), border:themeToken('--pill-fac-text') },
+    floor:     { bg:themeToken('--pill-floor-bg'), text:themeToken('--pill-floor-text'), border:themeToken('--pill-floor-text') },
+    space:     { bg:themeToken('--pill-space-bg'), text:themeToken('--pill-space-text'), border:themeToken('--pill-space-text') },
+    type:      { bg:themeToken('--pill-type-bg'), text:themeToken('--pill-type-text'), border:themeToken('--pill-type-text') },
+    system:    { bg:themeToken('--pill-system-bg'), text:themeToken('--pill-system-text'), border:themeToken('--pill-system-text') },
+    component: { bg:themeToken('--pill-component-bg'), text:themeToken('--pill-component-text'), border:themeToken('--pill-component-text') },
+    contact:   { bg:themeToken('--pill-contact-bg'), text:themeToken('--pill-contact-text'), border:themeToken('--pill-contact-text') },
+    document:  { bg:themeToken('--pill-doc-bg'), text:themeToken('--pill-doc-text'), border:themeToken('--pill-doc-text') },
+    doccat:    { bg:themeToken('--pill-doc-bg'), text:themeToken('--pill-doc-text'), border:themeToken('--pill-doc-text') },
+  };
+  const sheetHeaderThemeCss = Object.entries(headerThemeBySheet)
+    .map(([sheetKey, tone]) => {
+      const bg = tone.bg || '#e8f1f5';
+      const text = tone.text || '#16324f';
+      const border = tone.border || text;
+      return `.sheet-section.sheet-${sheetKey} h2 { background:${bg}; color:${text}; border-left-color:${border}; }`;
+    }).join('\n');
   const selectedFacilities = sel?.facility?.size
     ? [...sel.facility].map(key => idx.facilityNames.find(name => name.toLowerCase() === key) || key)
     : [];
+  const workbookFiles = [...new Set((db.facilities || [])
+    .filter(row => !selectedFacilityKeys || selectedFacilityKeys.has(_qaNorm(row._facility)))
+    .map(row => String(row._fileName || '').trim())
+    .filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const facilities = [...new Set((selectedFacilities.length ? selectedFacilities : (db.facilities || [])
     .map(row => String(row._facility || f(row, 'Name') || '').trim()))
     .filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -10696,7 +11043,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
     if (!grouped.has(sheet)) grouped.set(sheet, []);
     grouped.get(sheet).push(result);
   });
-  const sheets = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const sheets = [...grouped.entries()];
   const severityFor = result => {
     const finding = qaFindings.find(item => item.check === result.check && _qaNorm(item.sheet || item.entityType) === _qaNorm(result.sheet));
     return String(finding?.sev || QA_CHECKS[result.check]?.sev || 'warning').toLowerCase();
@@ -10713,22 +11060,23 @@ function _qaPdfReportHtml(logoMarkup = '') {
     return `<tr><td>${esc(sheet)}</td><td>${results.length}</td><td>${pass}</td><td>${fail}</td><td><strong>${score}%</strong></td></tr>`;
   }).join('');
   const sheetSections = sheets.map(([sheet, results]) => {
-    const rows = [...results]
-      .sort((a, b) => String(a.column || '').localeCompare(String(b.column || '')) || String(a.label || a.check).localeCompare(String(b.label || b.check)))
-      .map(result => {
+    const sheetKey = _qaNorm(sheet).replace(/[^a-z0-9]+/g, '-');
+    const rows = results.map(result => {
         const severity = severityFor(result);
         const fail = Number(result.fail || 0);
         const status = fail ? (severity === 'info' ? 'Advisory' : severity.charAt(0).toUpperCase() + severity.slice(1)) : 'Pass';
+        const ruleName = String(result.check || result.label || 'rule');
+        const ruleDescription = _qaRuleSubtitle(result);
         return `<tr>
           <td>${esc(result.column || 'Sheet')}</td>
-          <td><span class="rule-name">${esc(result.label || result.check)}</span><span class="rule-id">${esc(result.check)}</span></td>
+          <td><span class="rule-name">${esc(ruleName)}</span>${ruleDescription ? `<span class="rule-id">${esc(ruleDescription)}</span>` : ''}</td>
           <td class="num">${Number(result.pass || 0)}</td>
           <td class="num">${fail}</td>
           <td class="num">${scoreFor(result)}%</td>
           <td><span class="status status-${fail ? severity : 'pass'}">${esc(status)}</span></td>
         </tr>`;
       }).join('');
-    return `<section class="sheet-section">
+    return `<section class="sheet-section sheet-${esc(sheetKey)}">
       <h2>${esc(sheet)} <span>${results.length} rule${results.length === 1 ? '' : 's'}</span></h2>
       <table class="results-table"><thead><tr><th>Column / Scope</th><th>Rule</th><th>Pass</th><th>Fail</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
     </section>`;
@@ -10738,13 +11086,13 @@ function _qaPdfReportHtml(logoMarkup = '') {
   <style>
     @page { size:A4 portrait; margin:14mm 12mm 19mm; }
     * { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    body { margin:0; color:#17202a; background:#fff; font-family:"Segoe UI",Arial,sans-serif; font-size:9pt; line-height:1.35; }
+    body { margin:0; padding-bottom:16mm; color:#17202a; background:#fff; font-family:"Segoe UI",Arial,sans-serif; font-size:9pt; line-height:1.35; }
     .report-header { display:flex; align-items:center; gap:12px; padding-bottom:10px; border-bottom:3px solid #16324f; }
     .report-logo { width:42px; height:48px; flex:0 0 auto; }
     .report-logo svg { width:100%; height:100%; display:block; }
     h1 { margin:0; color:#16324f; font-size:20pt; letter-spacing:0; }
     .subtitle { margin-top:2px; color:#536273; font-size:9pt; }
-    .meta { display:grid; grid-template-columns:1fr 2fr; gap:6px 14px; margin:12px 0; padding:9px 10px; background:#f1f5f8; border-left:4px solid #00a9a5; }
+    .meta { display:grid; grid-template-columns:1fr 1.5fr 1.5fr; gap:6px 14px; margin:12px 0; padding:9px 10px; background:#f1f5f8; border-left:4px solid #00a9a5; }
     .meta-label { color:#607080; font-weight:700; }
     .summary { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; margin:0 0 12px; }
     .summary-card { padding:8px; border:1px solid #d9e1e8; border-radius:4px; }
@@ -10757,6 +11105,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .sheet-summary { margin-bottom:14px; }
     .sheet-section { margin:0 0 13px; }
     .sheet-section h2 { break-after:avoid; margin:0; padding:6px 8px; color:#16324f; background:#e8f1f5; border-left:4px solid #00a9a5; font-size:12pt; }
+    ${sheetHeaderThemeCss}
     .sheet-section h2 span { float:right; color:#607080; font-size:8pt; font-weight:500; }
     .results-table thead { display:table-header-group; }
     .results-table tr { break-inside:avoid; }
@@ -10767,11 +11116,11 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .status { display:inline-block; padding:2px 5px; border-radius:3px; font-size:7pt; font-weight:800; text-transform:uppercase; }
     .status-pass { color:#17653a; background:#dff3e7; } .status-error { color:#9d1c1c; background:#fbe1e1; }
     .status-warning { color:#7b4a00; background:#fff0c8; } .status-info { color:#075c78; background:#dff3fa; }
-    .report-footer { position:fixed; left:0; right:0; bottom:-13mm; padding-top:4px; border-top:1px solid #bdc8d2; color:#697887; font-size:7pt; text-align:center; }
+    .report-footer { position:fixed; left:12mm; right:12mm; bottom:1mm; color:#697887; font-size:7pt; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     @media screen { body { width:210mm; min-height:297mm; margin:10mm auto; padding:14mm 12mm 19mm; box-shadow:0 2px 18px #0002; } .report-footer { position:static; margin-top:16px; } }
   </style></head><body>
     <header class="report-header"><div class="report-logo">${logoMarkup}</div><div><h1>COBie QA Report</h1><div class="subtitle">Guerrilla Ops workbook quality assessment</div></div></header>
-    <div class="meta"><div><span class="meta-label">Generated</span><br>${esc(generated.toLocaleString())}</div><div><span class="meta-label">Facilities</span><br>${esc(facilities.join(', ') || 'No facility names available')}</div></div>
+    <div class="meta"><div><span class="meta-label">Generated</span><br>${esc(generated.toLocaleString())}<br><span class="meta-label">QA stage</span><br>${esc(qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1))}</div><div><span class="meta-label">Facilities</span><br>${esc(facilities.join(', ') || 'No facility names available')}</div><div><span class="meta-label">Workbooks</span><br>${esc(workbookFiles.join(', ') || 'No source file names available')}</div></div>
     <div class="summary">
       <div class="summary-card"><span class="summary-value">${overallScore}%</span><span class="summary-label">Overall score</span></div>
       <div class="summary-card"><span class="summary-value">${qaRuleResults.length}</span><span class="summary-label">Rules assessed</span></div>
@@ -10781,7 +11130,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
     </div>
     <table class="sheet-summary"><thead><tr><th>Sheet</th><th>Rules</th><th>Pass</th><th>Fail</th><th>Score</th></tr></thead><tbody>${sheetSummaryRows}</tbody></table>
     ${sheetSections || '<p>No QA rule results are available.</p>'}
-    <footer class="report-footer">Generated by Guerrilla Ops. This report and software are provided without guarantee of accuracy. Verify results against source information and applicable requirements.</footer>
+    <footer class="report-footer">Generated by Guerrilla Ops and provided without guarantee of accuracy. Verify results against source information and applicable requirements.</footer>
   </body></html>`;
 }
 
@@ -10937,15 +11286,10 @@ function _qaGraphAggregate(ruleResults, property) {
 
 function _qaGraphRuleDescription(result) {
   const check = String(result?.check || '');
-  const suffix = check.split('.').pop();
-  if (typeof QA_NAMED_CHECK_WORDING !== 'undefined' && QA_NAMED_CHECK_WORDING[suffix]) {
-    return QA_NAMED_CHECK_WORDING[suffix];
+  if (typeof _qaRuleDescriptionForCheck === 'function') {
+    const description = _qaRuleDescriptionForCheck(check);
+    if (description) return description;
   }
-  if (/\.Unique(?:\.|$)/i.test(check)) return 'Must be unique within the worksheet.';
-  if (/\.CrossReference(?:\.|$)/i.test(check)) return 'Must match the referenced value in the related worksheet.';
-  if (/AtLeastOneRowPresent/i.test(check)) return 'The worksheet must contain at least one data row.';
-  if (/OneAndOnlyOneFacilityFound/i.test(check)) return 'The workbook must contain exactly one Facility row.';
-  if (/AComponentForEachType/i.test(check)) return 'Each Type must be referenced by at least one Component.';
   return String(result?.label || QA_CHECKS?.[check]?.label || check);
 }
 
@@ -10958,7 +11302,7 @@ function _qaGraphRuleRows(ruleResults) {
       score:total ? Math.round((result.pass / total) * 100) : 100,
       description:_qaGraphRuleDescription(result),
     };
-  }).sort((a, b) => b.fail - a.fail || a.column.localeCompare(b.column) || a.check.localeCompare(b.check));
+  });
 }
 
 function _qaGraphSummary(findings, ruleResults = qaRuleResults) {
@@ -10969,8 +11313,7 @@ function _qaGraphSummary(findings, ruleResults = qaRuleResults) {
     sev[level]++;
   });
 
-  const sheets = _qaGraphAggregate(ruleResults, 'sheet')
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const sheets = _qaGraphAggregate(ruleResults, 'sheet');
   if (_qaGraphSelectedSheet && !sheets.some(sheet => sheet.key === _qaGraphSelectedSheet)) {
     _qaGraphSelectedSheet = '';
   }
@@ -11082,527 +11425,240 @@ function resetQaGraphPanel() {
 
 // ── model-config.js ───────────────────────────────────
 
-// ── Modal model configuration ────────────────────────────────
-// Config-only module used by information modals.
-// Cards define labels and COBie header aliases for each entity type.
+// ── Schema-generated modal model configuration ──────────────
 
-const MODEL_MODAL_CONFIG = Object.freeze({
-  facility: {
-    title: 'Project Information',
-    headerColorToken: 'facility',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'facility',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      project: {
-        title: 'Project & Site',
-        colorToken: 'facility',
-        fields: [
-          { label:'Project Name', aliases:['ProjectName', 'Project Name'], edit:'text' },
-          { label:'Site Name', aliases:['SiteName', 'Site Name'], edit:'text' },
-        ],
-      },
-      units: {
-        title: 'Units & Measurement',
-        colorToken: 'facility',
-        fields: [
-          { label:'Linear Units', aliases:['LinearUnits', 'Linear Units'], edit:'text' },
-          { label:'Area Units', aliases:['AreaUnits', 'Area Units'], edit:'text' },
-          { label:'Volume Units', aliases:['VolumeUnits', 'Volume Units'], edit:'text' },
-          { label:'Currency', aliases:['Currency', 'CurrencyUnit', 'Currency Unit'], edit:'text' },
-          { label:'Area Measurement', aliases:['AreaMeasurement', 'Area Measurement'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'facility',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Project Object', aliases:['ExternalProjectObject', 'External Project Object'], edit:'text' },
-          { label:'External Project Identifier', aliases:['ExternalProjectIdentifier', 'External Project Identifier'], edit:'text' },
-          { label:'External Site Object', aliases:['ExternalSiteObject', 'External Site Object'], edit:'text' },
-          { label:'External Site Identifier', aliases:['ExternalSiteIdentifier', 'External Site Identifier'], edit:'text' },
-          { label:'External Facility Object', aliases:['ExternalFacilityObject', 'External Facility Object', 'ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Facility Identifier', aliases:['ExternalFacilityIdentifier', 'External Facility Identifier', 'ExternalIdentifier', 'ExtIdentifier'], edit:'text' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'facility',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+const MODEL_MODAL_PRESENTATION = Object.freeze({
+  facility:{ title:'Project Information', colorToken:'facility' },
+  floor:{ title:'Floor Information', colorToken:'floor' },
+  space:{ title:'Space Information', colorToken:'space' },
+  zone:{ title:'Zone Information', colorToken:'space' },
+  type:{ title:'Type Information', colorToken:'type' },
+  system:{ title:'System Information', colorToken:'system' },
+  component:{ title:'Component Information', colorToken:'component' },
+  contact:{ title:'Contact Information', colorToken:'contact' },
+});
 
-  floor: {
-    title: 'Floor Information',
-    headerColorToken: 'floor',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'floor',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      geometry: {
-        title: 'Geometry',
-        colorToken: 'floor',
-        fields: [
-          { label:'Height', aliases:['Height'], edit:'text' },
-          { label:'Elevation', aliases:['Elevation'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'floor',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'floor',
-        mode: 'associations',
-        associations: [
-          { key:'spaces', label:'Spaces', targetType:'space', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'floor',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+const MODEL_MODAL_FIELD_LABELS = Object.freeze({
+  'space.floorname':'Floor',
+  'component.typename':'Type',
+  'type.warrantyguarantorparts':'Parts Guarantor',
+  'type.warrantydurationparts':'Parts Duration',
+  'type.warrantyguarantorlabor':'Labour Guarantor',
+  'type.warrantydurationlabor':'Labour Duration',
+  'contact.company':'Company / Organisation',
+  'contact.organizationcode':'Organisation Code',
+  'contact.town':'Town / City',
+  'contact.stateregion':'State / Region',
+});
 
-  space: {
-    title: 'Space Information',
-    headerColorToken: 'space',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'space',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Floor', aliases:['FloorName', 'Floor Name', 'Floor'], edit:'lookup', lookupSource:'floor' },
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      measurements: {
-        title: 'Measurements',
-        colorToken: 'space',
-        fields: [
-          { label:'Gross Area', aliases:['GrossArea', 'Gross Area'], edit:'text' },
-          { label:'Net Area', aliases:['NetArea', 'Net Area'], edit:'text' },
-          { label:'Usable Height', aliases:['UsableHeight', 'Usable Height'], edit:'text' },
-          { label:'Room Tag', aliases:['RoomTag', 'Room Tag'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'space',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'space',
-        mode: 'associations',
-        associations: [
-          { key:'floor', label:'Floor', targetType:'floor', cardinality:'one' },
-          { key:'components', label:'Components', targetType:'component', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'space',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+const MODEL_MODAL_AUXILIARY_CARDS = Object.freeze({
+  facility:['attributes', 'documents'],
+  floor:['attributes', 'documents'],
+  space:['attributes', 'documents'],
+  type:['attributes', 'documents'],
+  system:['attributes', 'documents'],
+  component:['attributes', 'documents'],
+});
 
-  zone: {
-    title: 'Zone Information',
-    headerColorToken: 'space',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'space',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Space Names', aliases:['SpaceNames', 'Space Names'], edit:'text' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'space',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'space',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-    },
-  },
+const MODEL_MODAL_RELATIONSHIPS = Object.freeze([
+  { source:'space', column:'FloorName', target:'floor', owner:'floor', key:'spaces', label:'Spaces', cardinality:'many' },
+  { source:'space', column:'FloorName', target:'floor', owner:'space', key:'floor', label:'Floor', cardinality:'one' },
+  { source:'component', column:'Space', target:'space', owner:'space', key:'components', label:'Components', cardinality:'many' },
+  { source:'component', column:'TypeName', target:'type', owner:'type', key:'components', label:'Components', cardinality:'many' },
+  { source:'system', column:'ComponentNames', target:'component', owner:'system', key:'components', label:'Components', cardinality:'many' },
+  { source:'component', column:'TypeName', target:'type', owner:'component', key:'type', label:'Type', cardinality:'one' },
+  { source:'component', column:'Space', target:'space', owner:'component', key:'space', label:'Space', cardinality:'one' },
+  { source:'system', column:'ComponentNames', target:'component', owner:'component', key:'systems', label:'Systems', cardinality:'many' },
+]);
 
-  type: {
-    title: 'Type Information',
-    headerColorToken: 'type',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'type',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Asset Type', aliases:['AssetType', 'Asset Type'], edit:'text' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'type',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      manufacturer: {
-        title: 'Manufacturer',
-        colorToken: 'type',
-        fields: [
-          { label:'Manufacturer', aliases:['Manufacturer'], edit:'lookup', lookupSource:'contact' },
-          { label:'Model Number', aliases:['ModelNumber', 'Model Number'], edit:'text' },
-        ],
-      },
-      warranty: {
-        title: 'Warranty',
-        colorToken: 'type',
-        fields: [
-          { label:'Parts Guarantor', aliases:['WarrantyGuarantorParts', 'Warranty Guarantor Parts'], edit:'lookup', lookupSource:'contact' },
-          { label:'Parts Duration', aliases:['WarrantyDurationParts', 'Warranty Duration Parts'], edit:'text' },
-          { label:'Labour Guarantor', aliases:['WarrantyGuarantorLabor', 'Warranty Guarantor Labor'], edit:'lookup', lookupSource:'contact' },
-          { label:'Labour Duration', aliases:['WarrantyDurationLabor', 'Warranty Duration Labor'], edit:'text' },
-          { label:'Warranty Duration Unit', aliases:['WarrantyDurationUnit', 'Warranty Duration Unit'], edit:'text' },
-          { label:'Replacement Cost', aliases:['ReplacementCost', 'Replacement Cost'], edit:'text' },
-          { label:'Expected Life', aliases:['ExpectedLife', 'Expected Life'], edit:'text' },
-          { label:'Duration Unit', aliases:['DurationUnit', 'Duration Unit'], edit:'text' },
-          { label:'Warranty Description', aliases:['WarrantyDescription', 'Warranty Description'], edit:'text' },
-        ],
-      },
-      dimensions: {
-        title: 'Dimensions & Form',
-        colorToken: 'type',
-        fields: [
-          { label:'Nominal Length', aliases:['NominalLength', 'Nominal Length'], edit:'text' },
-          { label:'Nominal Width', aliases:['NominalWidth', 'Nominal Width'], edit:'text' },
-          { label:'Nominal Height', aliases:['NominalHeight', 'Nominal Height'], edit:'text' },
-          { label:'Shape', aliases:['Shape'], edit:'text' },
-          { label:'Size', aliases:['Size'], edit:'text' },
-        ],
-      },
-      specification: {
-        title: 'Specification',
-        colorToken: 'type',
-        fields: [
-          { label:'Model Reference', aliases:['ModelReference', 'Model Reference'], edit:'text' },
-          { label:'Color', aliases:['Color', 'Colour'], edit:'text' },
-          { label:'Finish', aliases:['Finish'], edit:'text' },
-          { label:'Grade', aliases:['Grade'], edit:'text' },
-          { label:'Material', aliases:['Material'], edit:'text' },
-          { label:'Constituents', aliases:['Constituents'], edit:'text' },
-          { label:'Features', aliases:['Features'], edit:'text' },
-        ],
-      },
-      performance: {
-        title: 'Performance',
-        colorToken: 'type',
-        fields: [
-          { label:'Accessibility Performance', aliases:['AccessibilityPerformance', 'Accessibility Performance'], edit:'text' },
-          { label:'Code Performance', aliases:['CodePerformance', 'Code Performance'], edit:'text' },
-          { label:'Sustainability Performance', aliases:['SustainabilityPerformance', 'Sustainability Performance'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'type',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'type',
-        mode: 'associations',
-        associations: [
-          { key:'components', label:'Components', targetType:'component', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'type',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+let MODEL_CONFIG_SCHEMA_STATUS = { loaded:false, error:'' };
 
-  system: {
-    title: 'System Information',
-    headerColorToken: 'system',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'system',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'system',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'system',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'system',
-        mode: 'associations',
-        associations: [
-          { key:'components', label:'Components', targetType:'component', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'system',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+function _modalConfigNorm(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 
-  component: {
-    title: 'Component Information',
-    headerColorToken: 'component',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'component',
-        fields: [
-          { label:'Name', aliases:['Name'], edit:'text' },
-          { label:'Description', aliases:['Description'], edit:'text' },
-          { label:'Type', aliases:['TypeName', 'Type Name'], edit:'lookup', lookupSource:'type' },
-          { label:'Space', aliases:['Space'], edit:'lookup', lookupSource:'space' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'component',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      asset: {
-        title: 'Asset',
-        colorToken: 'component',
-        fields: [
-          { label:'Serial Number', aliases:['SerialNumber', 'Serial Number'], edit:'text' },
-          { label:'Installation Date', aliases:['InstallationDate', 'Installation Date'], edit:'text' },
-          { label:'Warranty Start Date', aliases:['WarrantyStartDate', 'Warranty Start Date'], edit:'text' },
-          { label:'Tag Number', aliases:['TagNumber', 'Tag Number'], edit:'text' },
-          { label:'Bar Code', aliases:['BarCode', 'Bar Code', 'Barcode'], edit:'text' },
-          { label:'Asset Identifier', aliases:['AssetIdentifier', 'Asset Identifier'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'component',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExtIdentifier', 'ExternalIdentifier'], edit:'text' },
-        ],
-      },
-      associations: {
-        title: 'Associations',
-        colorToken: 'component',
-        mode: 'associations',
-        associations: [
-          { key:'type', label:'Type', targetType:'type', cardinality:'one' },
-          { key:'space', label:'Space', targetType:'space', cardinality:'one' },
-          { key:'systems', label:'Systems', targetType:'system', cardinality:'many' },
-        ],
-      },
-      attributes: {
-        title: 'Additional Attributes',
-        colorToken: 'component',
-        mode: 'attributes',
-      },
-      documents: {
-        title: 'Documents',
-        colorToken: 'doccat',
-        mode: 'documents',
-      },
-    },
-  },
+function _modalConfigLabel(value) {
+  return String(value || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, character => character.toUpperCase());
+}
 
-  contact: {
-    title: 'Contact Information',
-    headerColorToken: 'contact',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'contact',
-        fields: [
-          { label:'Email', aliases:['Email'], edit:'text' },
-          { label:'Category', aliases:['Category'], edit:'text' },
-          { label:'Given Name', aliases:['GivenName', 'Given Name'], edit:'text' },
-          { label:'Family Name', aliases:['FamilyName', 'Family Name'], edit:'text' },
-          { label:'Company / Organisation', aliases:['Company'], edit:'text' },
-          { label:'Department', aliases:['Department'], edit:'text' },
-          { label:'Organisation Code', aliases:['OrganizationCode', 'Organization Code'], edit:'text' },
-        ],
-      },
-      audit: {
-        title: 'Audit',
-        colorToken: 'contact',
-        fields: [
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
-          { label:'Created On', aliases:['CreatedOn', 'Created On'], edit:'text' },
-        ],
-      },
-      communication: {
-        title: 'Communication',
-        colorToken: 'contact',
-        fields: [
-          { label:'Phone', aliases:['Phone'], edit:'text' },
-        ],
-      },
-      address: {
-        title: 'Address',
-        colorToken: 'contact',
-        fields: [
-          { label:'Street', aliases:['Street'], edit:'text' },
-          { label:'Postal Box', aliases:['PostalBox', 'Postal Box'], edit:'text' },
-          { label:'Town / City', aliases:['Town'], edit:'text' },
-          { label:'State / Region', aliases:['StateRegion', 'State Region'], edit:'text' },
-          { label:'Postal Code', aliases:['PostalCode', 'Postal Code'], edit:'text' },
-          { label:'Country', aliases:['Country'], edit:'text' },
-        ],
-      },
-      external: {
-        title: 'External References',
-        colorToken: 'contact',
-        fields: [
-          { label:'External System', aliases:['ExternalSystem', 'ExtSystem'], edit:'text' },
-          { label:'External Object', aliases:['ExternalObject', 'ExtObject'], edit:'text' },
-          { label:'External Identifier', aliases:['ExternalIdentifier', 'ExtIdentifier'], edit:'text' },
-        ],
-      },
-    },
-  },
+function _modalConfigChildren(parent, localName) {
+  const key = _modalConfigNorm(localName);
+  return Array.from(parent?.childNodes || []).filter(node =>
+    node?.nodeType === 1 && _modalConfigNorm(node.localName || node.nodeName) === key
+  );
+}
 
-  document: {
-    title: 'Document Information',
-    headerColorToken: 'doccat',
-    cards: {
-      identification: {
-        title: 'Identification',
-        colorToken: 'doccat',
-        fields: [
+function _modalConfigAliases(column) {
+  const names = [
+    column.getAttribute('name') || '',
+    ...String(column.getAttribute('aliases') || '').split('|'),
+  ].map(value => value.trim()).filter(Boolean);
+  const merged = [];
+  const seen = new Set();
+  [...names, ..._cobieFieldAliasesFor(names[0])].forEach(alias => {
+    const key = String(alias || '').trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(String(alias).trim());
+  });
+  return merged;
+}
+
+function _modalConfigReferenceMap(sheetNode) {
+  const references = _modalConfigChildren(sheetNode, 'references')[0];
+  return new Map(_modalConfigChildren(references, 'reference').map(reference => [
+    _modalConfigNorm(reference.getAttribute('column')),
+    _modalConfigNorm(reference.getAttribute('targetSheet')),
+  ]));
+}
+
+function _modalConfigField(entityType, column, references) {
+  const name = String(column.getAttribute('name') || '').trim();
+  const key = _modalConfigNorm(name);
+  const targetType = references.get(key) || '';
+  const categoryLookup = key === 'category' && entityType !== 'contact';
+  const lookupSource = categoryLookup ? 'category' : targetType;
+  return {
+    label:MODEL_MODAL_FIELD_LABELS[`${entityType}.${key}`] || _modalConfigLabel(name),
+    aliases:_modalConfigAliases(column),
+    edit:lookupSource ? 'lookup' : 'text',
+    ...(lookupSource ? { lookupSource } : {}),
+  };
+}
+
+function _modalConfigRelationshipSet(sheetNodes) {
+  const relationships = new Set();
+  sheetNodes.forEach(sheetNode => {
+    const source = _modalConfigNorm(sheetNode.getAttribute('name'));
+    const references = _modalConfigChildren(sheetNode, 'references')[0];
+    _modalConfigChildren(references, 'reference').forEach(reference => {
+      relationships.add([
+        source,
+        _modalConfigNorm(reference.getAttribute('column')),
+        _modalConfigNorm(reference.getAttribute('targetSheet')),
+      ].join('|'));
+    });
+  });
+  return relationships;
+}
+
+function _modalConfigAuxiliaryCard(mode, colorToken) {
+  return {
+    title:mode === 'attributes' ? 'Additional Attributes' : 'Documents',
+    colorToken:mode === 'documents' ? 'doccat' : colorToken,
+    mode,
+  };
+}
+
+function _buildModelModalConfig() {
+  const xml = _cobieSchemaDocument();
+  if (!xml) {
+    MODEL_CONFIG_SCHEMA_STATUS = {
+      loaded:false,
+      error:`${COBIE_SCHEMA_STATUS.error || 'COBie XML could not be loaded.'} Modal configuration was not generated.`,
+    };
+    console.error(MODEL_CONFIG_SCHEMA_STATUS.error);
+    return {};
+  }
+
+  const sheetsNode = _modalConfigChildren(xml.documentElement, 'sheets')[0];
+  const sheetNodes = _modalConfigChildren(sheetsNode, 'sheet');
+  if (!sheetNodes.length) {
+    MODEL_CONFIG_SCHEMA_STATUS = { loaded:false, error:'COBie XML has no sheets; modal configuration was not generated.' };
+    console.error(MODEL_CONFIG_SCHEMA_STATUS.error);
+    return {};
+  }
+
+  const relationshipSet = _modalConfigRelationshipSet(sheetNodes);
+  const config = {};
+  sheetNodes.forEach(sheetNode => {
+    const entityType = _modalConfigNorm(sheetNode.getAttribute('name'));
+    const presentation = MODEL_MODAL_PRESENTATION[entityType];
+    if (!presentation) return;
+
+    const references = _modalConfigReferenceMap(sheetNode);
+    const columnsNode = _modalConfigChildren(sheetNode, 'columns')[0];
+    const cards = {};
+    _modalConfigChildren(columnsNode, 'column').forEach(column => {
+      const groupTitle = String(column.getAttribute('groupTitle') || '').trim();
+      if (!groupTitle) return;
+      const cardKey = _modalConfigNorm(groupTitle) || 'information';
+      if (!cards[cardKey]) {
+        cards[cardKey] = { title:groupTitle, colorToken:presentation.colorToken, fields:[] };
+      }
+      cards[cardKey].fields.push(_modalConfigField(entityType, column, references));
+    });
+
+    const associations = MODEL_MODAL_RELATIONSHIPS.filter(relationship =>
+      relationship.owner === entityType && relationshipSet.has([
+        relationship.source,
+        _modalConfigNorm(relationship.column),
+        relationship.target,
+      ].join('|'))
+    ).map(({ key, label, target, cardinality }) => ({ key, label, targetType:target, cardinality }));
+    if (associations.length) {
+      cards.associations = {
+        title:'Associations',
+        colorToken:presentation.colorToken,
+        mode:'associations',
+        associations,
+      };
+    }
+
+    (MODEL_MODAL_AUXILIARY_CARDS[entityType] || []).forEach(mode => {
+      cards[mode] = _modalConfigAuxiliaryCard(mode, presentation.colorToken);
+    });
+    config[entityType] = {
+      title:presentation.title,
+      headerColorToken:presentation.colorToken,
+      cards,
+    };
+  });
+
+  const documentAssociations = ['facility', 'floor', 'space', 'type', 'component', 'system'].map(targetType => ({
+    key:targetType === 'facility' ? 'facilities' : `${targetType}s`,
+    label:targetType === 'facility' ? 'Facilities' : `${_modalConfigLabel(targetType)}s`,
+    targetType,
+    cardinality:'many',
+  }));
+  config.document = {
+    title:'Document Information',
+    headerColorToken:'doccat',
+    cards:{
+      identification:{
+        title:'Identification',
+        colorToken:'doccat',
+        fields:[
           { label:'Name', aliases:['Name'], edit:'text' },
           { label:'Description', aliases:['Description'], edit:'text' },
           { label:'Category', aliases:['Category'], edit:'lookup', lookupSource:'category' },
           { label:'Directory', aliases:['Directory'], edit:'text' },
-          { label:'Created By', aliases:['CreatedBy', 'Created By'], edit:'lookup', lookupSource:'contact' },
+          { label:'Created By', aliases:_cobieFieldAliasesFor('CreatedBy'), edit:'lookup', lookupSource:'contact' },
         ],
       },
-      associations: {
-        title: 'Associations',
-        colorToken: 'doccat',
-        mode: 'associations',
-        associations: [
-          { key:'facilities', label:'Facilities', targetType:'facility', cardinality:'many' },
-          { key:'floors', label:'Floors', targetType:'floor', cardinality:'many' },
-          { key:'spaces', label:'Spaces', targetType:'space', cardinality:'many' },
-          { key:'types', label:'Types', targetType:'type', cardinality:'many' },
-          { key:'components', label:'Components', targetType:'component', cardinality:'many' },
-          { key:'systems', label:'Systems', targetType:'system', cardinality:'many' },
-        ],
+      applicableTo:{
+        title:'Applicable to',
+        colorToken:'doccat',
+        mode:'association-summary',
+        associations:documentAssociations,
+      },
+      associations:{
+        title:'Associations',
+        colorToken:'doccat',
+        mode:'associations',
+        associations:documentAssociations,
       },
     },
-  },
-});
+  };
 
+  MODEL_CONFIG_SCHEMA_STATUS = { loaded:true, error:'' };
+  return config;
+}
+
+const MODEL_MODAL_CONFIG = Object.freeze(_buildModelModalConfig());
 
 // ── modals.js ─────────────────────────────────────────
 
@@ -11614,6 +11670,10 @@ let _projectOpeningChildModal = false;
 const _associationOptionsCache = new Map();
 let _associationOptionsCacheCounter = 0;
 const _ASSOCIATION_OPTION_LIMIT = 120;
+const _ALIASES_ROW_NAME = _cobieFieldAliasesFor('RowName');
+const _ALIASES_SHEET_NAME = _cobieFieldAliasesFor('SheetName');
+const _ALIASES_TYPE_NAME = _cobieFieldAliasesFor('TypeName');
+const _ALIASES_FLOOR_NAME = _cobieFieldAliasesFor('FloorName');
 
 function _setReference(row, aliases, oldName, newName) {
   if (f(row, ...aliases).toLowerCase() !== oldName.toLowerCase()) return;
@@ -11626,7 +11686,7 @@ function _renameDocumentRows(sheetName, oldName, newName, facility) {
   db.documents.forEach(doc => {
     if (facility && doc._facility !== facility) return;
     if (_cobieField(doc, 'sheetName').toLowerCase() !== sheetName.toLowerCase()) return;
-    _setReference(doc, ['RowName', 'Row Name'], oldName, newName);
+    _setReference(doc, _ALIASES_ROW_NAME, oldName, newName);
   });
 }
 
@@ -11651,7 +11711,7 @@ function _cascadeEntityRename(entityType, oldName, newName, facility) {
     });
   } else if (entityType === 'type') {
     db.components.forEach(component => {
-      if (!facility || component._facility === facility) _setReference(component, ['TypeName', 'Type Name'], oldName, newName);
+      if (!facility || component._facility === facility) _setReference(component, _ALIASES_TYPE_NAME, oldName, newName);
     });
     _replaceSelectedKey('type', oldName, newName);
   } else if (entityType === 'space') {
@@ -11661,7 +11721,7 @@ function _cascadeEntityRename(entityType, oldName, newName, facility) {
     _replaceSelectedKey('space', oldName, newName);
   } else if (entityType === 'floor') {
     db.spaces.forEach(space => {
-      if (!facility || space._facility === facility) _setReference(space, ['FloorName', 'Floor Name', 'Floor'], oldName, newName);
+      if (!facility || space._facility === facility) _setReference(space, _ALIASES_FLOOR_NAME, oldName, newName);
     });
     _replaceSelectedKey('floor', oldName, newName);
   } else if (entityType === 'system') {
@@ -11886,9 +11946,13 @@ function _associationTargetRows(targetType, facility) {
 }
 
 function _associationTargetName(targetType, row) {
-  return targetType === 'facility'
-    ? String(row?._facility || f(row, 'Name') || '').trim()
-    : f(row, 'Name').trim();
+  return _projectEntityIdentity(targetType, row);
+}
+
+function _projectEntityIdentity(entityType, row, fallback = '') {
+  if (entityType === 'facility') return String(row?._facility || f(row, 'Name') || fallback).trim();
+  if (entityType === 'contact') return String(f(row, 'Email') || fallback).trim();
+  return String(f(row, 'Name') || fallback).trim();
 }
 
 function _associationCategory(targetType, row, facility) {
@@ -12153,6 +12217,32 @@ function _infoAssociationsCard(entityType, row, associations, facility) {
   return controls || '<div class="project-empty">No associations configured.</div>';
 }
 
+function _documentApplicableToMarkup(row, associations, facility) {
+  const groups = (associations || []).map(association => {
+    const selected = _associationSelectedNames('document', row, association, facility);
+    if (!selected.size) return '';
+    const displayNames = new Map(_associationTargetRows(association.targetType, facility)
+      .map(targetRow => {
+        const name = _associationTargetName(association.targetType, targetRow);
+        return [name.toLowerCase(), name];
+      }));
+    const names = [...selected].map(name => displayNames.get(name) || name);
+    return `<div class="project-applicable-group project-association-${esc(association.targetType)}">
+      <div class="project-applicable-heading">${esc(association.label || association.key)}</div>
+      <div class="project-applicable-values">${names.map(name => `<span>${esc(name)}</span>`).join('')}</div>
+    </div>`;
+  }).filter(Boolean).join('');
+  return groups || '<div class="project-empty">No applicable records selected.</div>';
+}
+
+function _associationRefreshDocumentSummary(entityType, row) {
+  if (entityType !== 'document' || !row) return;
+  const card = MODEL_MODAL_CONFIG?.document?.cards?.applicableTo;
+  const host = document.querySelector('#type-modal [data-document-applicable-summary]');
+  if (!card || !host) return;
+  host.innerHTML = _documentApplicableToMarkup(row, card.associations, row._facility || _projectActiveFacilityName() || '');
+}
+
 function _setDocumentAssociation(documentRow, targetType, targetName, targetFacility, selected) {
   const sheetName = _INFO_ENTITY_SHEET[targetType] || '';
   if (!documentRow || !sheetName || !targetName) return;
@@ -12167,15 +12257,15 @@ function _setDocumentAssociation(documentRow, targetType, targetName, targetFaci
   if (selected && !match) {
     const blank = links.find(row => !_cobieField(row, 'sheetName') && !_cobieField(row, 'rowName'));
     const target = blank || { ...documentRow };
-    _projectSetFieldValue(target, ['SheetName', 'Sheet Name'], sheetName);
-    _projectSetFieldValue(target, ['RowName', 'Row Name'], targetName);
+    _projectSetFieldValue(target, _ALIASES_SHEET_NAME, sheetName);
+    _projectSetFieldValue(target, _ALIASES_ROW_NAME, targetName);
     target._facility = targetFacility || documentRow._facility || '';
     target._associationGroup = associationGroup;
     if (!blank) db.documents.push(target);
   } else if (!selected && match) {
     if (links.length === 1) {
-      _projectSetFieldValue(match, ['SheetName', 'Sheet Name'], '');
-      _projectSetFieldValue(match, ['RowName', 'Row Name'], '');
+      _projectSetFieldValue(match, _ALIASES_SHEET_NAME, '');
+      _projectSetFieldValue(match, _ALIASES_ROW_NAME, '');
     } else {
       const index = db.documents.indexOf(match);
       if (index !== -1) db.documents.splice(index, 1);
@@ -12200,9 +12290,9 @@ function _setEntityAssociation(entityType, row, association, targetName, targetF
     return;
   }
   if (entityType === 'component' && key === 'type') {
-    _projectSetFieldValue(row, ['TypeName', 'Type Name'], selected ? targetName : '');
+    _projectSetFieldValue(row, _ALIASES_TYPE_NAME, selected ? targetName : '');
     if (typeof qaRevalidateFieldChange === 'function') {
-      qaRevalidateFieldChange(entityType, f(row, 'Name'), facility, ['TypeName', 'Type Name']);
+      qaRevalidateFieldChange(entityType, f(row, 'Name'), facility, _ALIASES_TYPE_NAME);
       _projectRefreshFieldIssueBadges(entityType, f(row, 'Name'), facility);
     }
   } else if (entityType === 'component' && key === 'space') {
@@ -12216,15 +12306,15 @@ function _setEntityAssociation(entityType, row, association, targetName, targetF
     if (selected) systems.add(targetName); else systems.delete(targetName);
     _updateCompSystems(f(row, 'Name'), systems, facility);
   } else if (entityType === 'space' && key === 'floor') {
-    _projectSetFieldValue(row, ['FloorName', 'Floor Name', 'Floor'], selected ? targetName : '');
+    _projectSetFieldValue(row, _ALIASES_FLOOR_NAME, selected ? targetName : '');
     if (typeof qaRevalidateFieldChange === 'function') {
-      qaRevalidateFieldChange(entityType, f(row, 'Name'), facility, ['FloorName', 'Floor Name', 'Floor']);
+      qaRevalidateFieldChange(entityType, f(row, 'Name'), facility, _ALIASES_FLOOR_NAME);
       _projectRefreshFieldIssueBadges(entityType, f(row, 'Name'), facility);
     }
   } else if ((entityType === 'type' || entityType === 'space') && key === 'components') {
     const component = _findEntity(db.components, targetName, targetFacility || facility);
     if (component) {
-      const aliases = entityType === 'type' ? ['TypeName', 'Type Name'] : ['Space'];
+      const aliases = entityType === 'type' ? _ALIASES_TYPE_NAME : ['Space'];
       _projectSetFieldValue(component, aliases, selected ? f(row, 'Name') : '');
       if (typeof qaRevalidateFieldChange === 'function') {
         qaRevalidateFieldChange('component', f(component, 'Name'), component._facility || facility, aliases);
@@ -12233,9 +12323,9 @@ function _setEntityAssociation(entityType, row, association, targetName, targetF
   } else if (entityType === 'floor' && key === 'spaces') {
     const space = _findEntity(db.spaces, targetName, targetFacility || facility);
     if (space) {
-      _projectSetFieldValue(space, ['FloorName', 'Floor Name', 'Floor'], selected ? f(row, 'Name') : '');
+      _projectSetFieldValue(space, _ALIASES_FLOOR_NAME, selected ? f(row, 'Name') : '');
       if (typeof qaRevalidateFieldChange === 'function') {
-        qaRevalidateFieldChange('space', f(space, 'Name'), space._facility || facility, ['FloorName', 'Floor Name', 'Floor']);
+        qaRevalidateFieldChange('space', f(space, 'Name'), space._facility || facility, _ALIASES_FLOOR_NAME);
       }
     }
   } else if (entityType === 'system' && key === 'components') {
@@ -12260,6 +12350,42 @@ function _associationRefreshControl(control) {
   if (count) count.textContent = checked.length ? `${checked.length} selected` : 'None selected';
 }
 
+function _associationRefreshModelFields(entityType, row) {
+  const context = _projectActiveEntityContext();
+  if (!row || context?.row !== row || String(context.entityType || '') !== String(entityType || '')) return;
+  document.querySelectorAll('#type-modal .project-field-row[data-aliases]').forEach(fieldRow => {
+    const aliases = String(fieldRow.dataset.aliases || '').split('|').map(alias => alias.trim()).filter(Boolean);
+    if (!aliases.length) return;
+    const value = f(row, ...aliases);
+    const original = String(fieldRow.dataset.originalValue || '');
+    const valueCell = fieldRow.querySelector('[data-role="field-value"]');
+    if (!valueCell || valueCell.querySelector('.project-inline-editor')) return;
+    const dirty = !_projectIsNewEntityRow(row) && value !== original;
+    valueCell.dataset.rawValue = value;
+    valueCell.innerHTML = _projectValueMarkup(value, dirty);
+    fieldRow.classList.toggle('project-dirty', dirty);
+    if (dirty) fieldRow.dataset.dirtyKind = 'field';
+    else delete fieldRow.dataset.dirtyKind;
+  });
+}
+
+function _associationRefreshControlsFromModel(entityType, row) {
+  const type = String(entityType || '');
+  const associations = MODEL_MODAL_CONFIG?.[type]?.cards?.associations?.associations || [];
+  if (!row || !associations.length) return;
+  const facility = String(row._facility || _projectActiveFacilityName() || '');
+  document.querySelectorAll('#type-modal .project-association[data-association-key]').forEach(control => {
+    const association = associations.find(item => item.key === control.dataset.associationKey);
+    const state = _associationOptionsCache.get(control.dataset.optionsCache || '');
+    if (!association || !state) return;
+    const selected = _associationSelectedNames(type, row, association, facility);
+    state.options.forEach(option => { option.selected = selected.has(option.name.toLowerCase()); });
+    _associationRenderOptions(control, control.querySelector('.project-association-search')?.value || '');
+    _associationRefreshControl(control);
+  });
+  _associationRefreshDocumentSummary(type, row);
+}
+
 function _commitAssociationControl(control, changedInputs) {
   const context = _projectActiveEntityContext();
   const entityType = String(context?.entityType || '');
@@ -12276,22 +12402,29 @@ function _commitAssociationControl(control, changedInputs) {
     const option = cached?.options.find(item => item.name.toLowerCase() === input.value.toLowerCase());
     if (option) option.selected = input.checked;
   });
+  const activeRow = entityType === 'document' ? (_projectActiveEntityContext()?.row || row) : row;
   buildIdx();
   _projectSyncEntityChangeState(
     entityType,
-    row,
-    f(row, 'Name') || context.entityName || '',
-    row._facility || context.facility || '',
+    activeRow,
+    f(activeRow, 'Name') || context.entityName || '',
+    activeRow._facility || context.facility || '',
   );
+  _associationRefreshModelFields(entityType, activeRow);
   _projectAssociationsChanged = true;
   if (typeof _renderSummary === 'function') _renderSummary();
   _associationRefreshControl(control);
+  _associationRefreshDocumentSummary(entityType, activeRow);
 }
 
 function _findInfoEntityRow(entityType, entityName, facility = '') {
   const bucket = _INFO_ENTITY_DB[entityType];
   const rows = bucket ? db[bucket] : null;
   if (!Array.isArray(rows)) return null;
+  if (entityType === 'contact') {
+    const key = String(entityName || '').trim().toLowerCase();
+    return rows.find(row => f(row, 'Email').toLowerCase() === key && (!facility || row._facility === facility)) || null;
+  }
   return _findEntity(rows, entityName, facility);
 }
 
@@ -12329,7 +12462,7 @@ function buildEntityInfoBody(entityType, entityName, facility = '', entityRow = 
   }
   _associationOptionsCache.clear();
 
-  const rowName = f(row, 'Name') || entityName || '';
+  const rowName = _projectEntityIdentity(type, row, entityName);
   const rowFacility = String(row._facility || facility || '');
   const originalRow = _projectOriginalEntityRow(type, rowName, rowFacility) || row;
   const originalAttrValues = _projectOriginalAttributeMapForEntity(type, rowName, rowFacility);
@@ -12352,17 +12485,17 @@ function buildEntityInfoBody(entityType, entityName, facility = '', entityRow = 
     let actionsHtml = '';
 
     if (card?.mode === 'attributes') {
-      const attrs = Object.entries(row?._attrs || {})
-        .filter(([name, value]) => name && value && _projectAttributeVisible(type, name))
-        .sort(([a], [b]) => a.localeCompare(b));
+      const attrs = _projectEntityAttributeRows(type, rowName, rowFacility, row?._attrs || null)
+        .filter(attr => _projectAttributeVisible(type, attr.name));
       bodyHtml = attrs.length
-        ? attrs.map(([name, value]) => {
-          const raw = String(value || '');
-          const original = String(originalAttrValues.get(String(name || '').toLowerCase()) || '');
-          return _projectAttributeRowMarkup(name, raw, original);
+        ? attrs.map(attr => {
+          const original = originalAttrValues.get(String(attr.name || '').toLowerCase()) || { value:'', unit:'' };
+          return _projectAttributeRowMarkup(attr.name, attr.value, attr.unit, original.value, original.unit);
         }).join('')
         : '<p class="project-empty mb-0">No additional attributes provided.</p>';
       actionsHtml = _projectAddActionButton('project-doc-add-btn project-add-attribute-btn', 'Add attribute');
+    } else if (card?.mode === 'association-summary') {
+      bodyHtml = `<div data-document-applicable-summary>${_documentApplicableToMarkup(row, card.associations, rowFacility)}</div>`;
     } else if (card?.mode === 'associations') {
       bodyHtml = _infoAssociationsCard(type, row, card.associations, rowFacility);
     } else if (card?.mode === 'documents') {
@@ -12421,7 +12554,31 @@ const _PROJECT_FIELD_GROUPS = (() => {
 let _projectModalFacility = '';
 let _projectModalContext = null;
 let _newEntityDraft = null;
+const _projectCreatedEntityRows = new WeakSet();
 const _projectDocCollapsedCategories = new Set();
+let _projectIndexRefreshFrame = 0;
+
+function _projectIsNewEntityRow(row) {
+  return !!row && (_newEntityDraft?.row === row || _projectCreatedEntityRows.has(row));
+}
+
+function _projectScheduleIndexRefresh() {
+  if (_projectIndexRefreshFrame) return;
+  if (typeof requestAnimationFrame !== 'function') {
+    buildIdx();
+    return;
+  }
+  _projectIndexRefreshFrame = requestAnimationFrame(() => {
+    _projectIndexRefreshFrame = 0;
+    buildIdx();
+  });
+}
+
+function _projectCancelIndexRefresh() {
+  if (!_projectIndexRefreshFrame) return;
+  cancelAnimationFrame(_projectIndexRefreshFrame);
+  _projectIndexRefreshFrame = 0;
+}
 
 function _restoreNewEntityInfoContext(returnContext, savedType = '', savedRow = null) {
   _newEntityDraft = null;
@@ -12430,7 +12587,7 @@ function _restoreNewEntityInfoContext(returnContext, savedType = '', savedRow = 
   } else if (savedType === 'document' && savedRow) {
     openDoc(savedRow);
   } else if (savedType && savedRow) {
-    openGroupInfo(savedType, f(savedRow, 'Name'), savedRow._facility || '');
+    openGroupInfo(savedType, _projectEntityIdentity(savedType, savedRow), savedRow._facility || '');
   } else {
     bootstrap.Modal.getInstance(document.getElementById('type-modal'))?.hide();
   }
@@ -12443,7 +12600,7 @@ function openNewEntityInfoModal(entityType, prefillName = '', facility = '', ret
   if (!config || !bucket || !Array.isArray(db[bucket])) return;
 
   const draft = {
-    Name:String(prefillName || '').trim(),
+    Name:type === 'contact' ? '' : String(prefillName || '').trim(),
     CreatedBy:'', CreatedOn:'', ExtSystem:'', ExtObject:'', ExtIdentifier:'', Reference:'',
     _facility:String(facility || db.facilities[0]?._facility || '').trim(),
   };
@@ -12496,14 +12653,15 @@ function _saveNewEntityInfo() {
     else _projectFinishAttributeEdit(editor, role, true);
   }
 
-  const entityName = f(state.row, 'Name').trim();
+  const identityField = state.type === 'contact' ? 'Email' : 'Name';
+  const entityName = f(state.row, identityField).trim();
   if (!entityName) {
-    alert('Name is required.');
+    alert(`${identityField} is required.`);
     return;
   }
   const rows = db[_INFO_ENTITY_DB[state.type]];
   const duplicate = rows.some(row => {
-    if (f(row, 'Name').toLowerCase() !== entityName.toLowerCase()) return false;
+    if (f(row, identityField).toLowerCase() !== entityName.toLowerCase()) return false;
     if (String(row._facility || '').toLowerCase() !== String(state.row._facility || '').toLowerCase()) return false;
     if (state.type !== 'document') return true;
     return _cobieField(row, 'sheetName').toLowerCase() === _cobieField(state.row, 'sheetName').toLowerCase() &&
@@ -12515,7 +12673,7 @@ function _saveNewEntityInfo() {
   }
 
   rows.push(state.row);
-  buildIdx();
+  _projectCreatedEntityRows.add(state.row);
   state.saving = true;
   Object.entries(state.associations || {}).forEach(([key, values]) => {
     const association = MODEL_MODAL_CONFIG?.[state.type]?.cards?.associations?.associations?.find(item => item.key === key);
@@ -12550,11 +12708,12 @@ function _saveNewEntityInfo() {
       fieldReturn.row._facility || '',
     );
   }
-  buildIdx();
   _logChange(state.type, entityName, state.row._facility || '');
+  if (typeof qaRevalidateAfterEntityCreate === 'function') qaRevalidateAfterEntityCreate();
   if (['type', 'space', 'system'].includes(state.type)) {
     _justCreated.add(`${state.type}::${entityName.toLowerCase()}`);
   }
+  _projectCancelIndexRefresh();
   refreshDisplay();
   _restoreNewEntityInfoContext(state.returnContext, state.type, state.row);
 }
@@ -12577,6 +12736,23 @@ function _projectUnitInfo(fac) {
   };
 }
 
+function _projectAttributeDisplayValue(value, unit = '') {
+  const raw = String(value || '').trim();
+  const suffix = String(unit || '').trim();
+  if (raw && suffix) return `${raw} ${suffix}`;
+  return raw || suffix;
+}
+
+function _projectAttributeUnit(row) {
+  return f(row, 'Unit', 'UnitName', 'Unit Name');
+}
+
+function _projectSetAttributeUnit(row, value) {
+  const aliases = ['Unit', 'UnitName', 'Unit Name'];
+  const key = aliases.find(alias => Object.prototype.hasOwnProperty.call(row, alias));
+  row[key || aliases[0]] = value;
+}
+
 function _projectAttributeUnitSuffix(attrName, fac) {
   const units = _projectUnitInfo(fac);
   const name = String(attrName || '').toLowerCase();
@@ -12589,9 +12765,46 @@ function _projectAttributeUnitSuffix(attrName, fac) {
 }
 
 function _projectAttrRows(fac) {
-  return Object.entries(fac?._attrs || {})
-    .filter(([name, value]) => name && value)
-    .sort(([a], [b]) => a.localeCompare(b));
+  const facilityName = String(fac?._facility || f(fac, 'Name') || '').trim();
+  return _projectEntityAttributeRows('facility', facilityName, facilityName, fac?._attrs || null);
+}
+
+function _projectEntityAttributeRows(entityType, entityName, facilityName, fallbackAttrs = null) {
+  const type = String(entityType || '').toLowerCase();
+  const rowName = String(entityName || '').toLowerCase();
+  const fac = String(facilityName || '').toLowerCase();
+  const entries = new Map();
+
+  (db.attributes || []).forEach(row => {
+    if (String(row._facility || '').toLowerCase() !== fac) return;
+    if (_cobieField(row, 'sheetName').toLowerCase() !== type) return;
+    if (_cobieField(row, 'rowName').toLowerCase() !== rowName) return;
+    const name = String(f(row, 'Name') || '').trim();
+    if (!name) return;
+    const key = name.toLowerCase();
+    if (entries.has(key)) return;
+    entries.set(key, {
+      name,
+      value:String(f(row, 'Value', 'AttributeValue', 'Attribute Value', 'NominalValue', 'Nominal Value') || ''),
+      unit:String(_projectAttributeUnit(row) || ''),
+    });
+  });
+
+  if (!entries.size && fallbackAttrs && typeof fallbackAttrs === 'object') {
+    Object.entries(fallbackAttrs).forEach(([name, value]) => {
+      const label = String(name || '').trim();
+      if (!label) return;
+      entries.set(label.toLowerCase(), {
+        name:label,
+        value:String(value || ''),
+        unit:'',
+      });
+    });
+  }
+
+  return [...entries.values()]
+    .filter(attr => attr.name && (attr.value || attr.unit))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function _projectLookupOptionsFromFacilities(aliases) {
@@ -12697,7 +12910,10 @@ function _projectOriginalAttributeMap(currentFacilityName) {
     if (_cobieField(row, 'rowName').toLowerCase() !== baselineName.toLowerCase()) return;
     const key = f(row, 'Name').toLowerCase();
     if (!key) return;
-    map.set(key, f(row, 'Value', 'AttributeValue', 'Attribute Value', 'NominalValue', 'Nominal Value'));
+    map.set(key, {
+      value:String(f(row, 'Value', 'AttributeValue', 'Attribute Value', 'NominalValue', 'Nominal Value') || ''),
+      unit:String(_projectAttributeUnit(row) || ''),
+    });
   });
   return map;
 }
@@ -12747,7 +12963,10 @@ function _projectOriginalAttributeMapForEntity(entityType, currentName, facility
     if (_cobieField(row, 'rowName').toLowerCase() !== baselineName.toLowerCase()) return;
     const key = f(row, 'Name').toLowerCase();
     if (!key) return;
-    map.set(key, f(row, 'Value', 'AttributeValue', 'Attribute Value', 'NominalValue', 'Nominal Value'));
+    map.set(key, {
+      value:String(f(row, 'Value', 'AttributeValue', 'Attribute Value', 'NominalValue', 'Nominal Value') || ''),
+      unit:String(_projectAttributeUnit(row) || ''),
+    });
   });
   return map;
 }
@@ -12836,13 +13055,16 @@ function _projectEntityDiffersFromBaseline(entityType, entityRow, entityName, fa
     }
   }
 
-  const currentAttrs = Object.entries(entityRow._attrs || {})
-    .filter(([name, value]) => name && value)
-    .map(([name, value]) => [String(name).toLowerCase(), String(value || '')]);
+  const currentAttrs = _projectEntityAttributeRows(type, entityName, facility, entityRow._attrs || null)
+    .map(attr => [
+      String(attr.name || '').toLowerCase(),
+      { value:String(attr.value || ''), unit:String(attr.unit || '') },
+    ]);
   const baselineAttrs = _projectOriginalAttributeMapForEntity(type, entityName, facility);
   if (currentAttrs.length !== baselineAttrs.size) return true;
-  for (const [name, value] of currentAttrs) {
-    if ((baselineAttrs.get(name) || '') !== value) return true;
+  for (const [name, attr] of currentAttrs) {
+    const baseline = baselineAttrs.get(name) || { value:'', unit:'' };
+    if (baseline.value !== attr.value || baseline.unit !== attr.unit) return true;
   }
   if (_projectAssociationsDifferFromBaseline(type, entityRow, facility, cards)) return true;
   return false;
@@ -13000,13 +13222,28 @@ function _projectFieldRow(field, value, originalValue = value, fieldIssues = [])
   </div>`;
 }
 
-function _projectAttributeRowMarkup(name, value, originalValue = value, displayValue = value) {
+function _projectAttributeRowMarkup(name, value, unit = '', originalValue = value, originalUnit = unit) {
   const raw = String(value || '');
+  const rawUnit = String(unit || '');
+  const rawName = String(name || '');
   const original = String(originalValue || '');
-  const dirty = raw !== original;
-  return `<div class="project-field-row project-attr-row${dirty ? ' project-dirty' : ''}" data-attr-name="${esc(name)}" data-original-attr-name="${esc(name)}" data-original-attr-value="${esc(original)}"${dirty ? ' data-dirty-kind="attribute"' : ''}>
-    <div class="project-field-name project-editable" data-role="attr-name" title="Double click to edit">${esc(name)}</div>
-    <div class="project-field-value project-editable" data-role="attr-value" data-raw-value="${esc(raw)}" title="Double click to edit">${_projectValueMarkup(displayValue, dirty)}</div>
+  const originalUnitText = String(originalUnit || '');
+  const dirty = raw !== original || rawUnit !== originalUnitText;
+  return `<div class="project-field-row project-attr-row${dirty ? ' project-dirty' : ''}" data-attr-name="${esc(name)}" data-original-attr-name="${esc(name)}" data-original-attr-value="${esc(original)}" data-original-attr-unit="${esc(originalUnitText)}"${dirty ? ' data-dirty-kind="attribute"' : ''}>
+    <div class="project-attr-fields">
+      <div class="project-attr-subfield">
+        <span class="project-attr-subfield-label">Name</span>
+        <div class="project-field-value project-editable" data-role="attr-name" data-raw-value="${esc(rawName)}" title="Double click to edit">${_projectValueMarkup(rawName, false)}</div>
+      </div>
+      <div class="project-attr-subfield">
+        <span class="project-attr-subfield-label">Value</span>
+        <div class="project-field-value project-editable" data-role="attr-value" data-raw-value="${esc(raw)}" title="Double click to edit">${_projectValueMarkup(raw, dirty)}</div>
+      </div>
+      <div class="project-attr-subfield">
+        <span class="project-attr-subfield-label">Unit</span>
+        <div class="project-field-value project-editable" data-role="attr-unit" data-raw-value="${esc(rawUnit)}" title="Double click to edit">${_projectValueMarkup(rawUnit, false)}</div>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -13164,11 +13401,9 @@ function _projectToggleDocCategory(container, key) {
 
 function _projectAdditionalAttributesCard(fac, originalAttrValues) {
   const attrs = _projectAttrRows(fac);
-  const rows = attrs.map(([name, value]) => {
-    const raw = String(value || '');
-    const original = String(originalAttrValues.get(String(name || '').toLowerCase()) || '');
-    const show = raw ? raw + _projectAttributeUnitSuffix(name, fac) : '';
-    return _projectAttributeRowMarkup(name, raw, original, show);
+  const rows = attrs.map(attr => {
+    const original = originalAttrValues.get(String(attr.name || '').toLowerCase()) || { value:'', unit:'' };
+    return _projectAttributeRowMarkup(attr.name, attr.value, attr.unit, original.value, original.unit);
   }).join('');
 
   const body = rows || '<p class="project-empty mb-0">No additional attributes provided.</p>';
@@ -13294,6 +13529,7 @@ function _projectEnsureAttributeRow(facilityName, attrName) {
     _facility:facilityName,
   };
   _projectSetAttributeValue(row, '');
+  _projectSetAttributeUnit(row, '');
   db.attributes.push(row);
   return row;
 }
@@ -13313,6 +13549,7 @@ function _projectEnsureAttributeRowForEntity(entityType, entityName, facilityNam
     _facility:facilityName,
   };
   _projectSetAttributeValue(row, '');
+  _projectSetAttributeUnit(row, '');
   db.attributes.push(row);
   return row;
 }
@@ -13329,7 +13566,9 @@ function _projectMarkRowDirty(row, kind) {
   if (!row) return;
   row.classList.add('project-dirty');
   row.dataset.dirtyKind = kind || 'field';
-  const valueCell = row.querySelector(kind === 'attribute' ? '[data-role="attr-value"]' : '[data-role="field-value"]');
+  const valueCell = kind === 'attribute'
+    ? (row.querySelector('[data-role="attr-unit"]') || row.querySelector('[data-role="attr-value"]'))
+    : row.querySelector('[data-role="field-value"]');
   if (!valueCell) return;
   if (!valueCell.querySelector('.project-value-text')) {
     valueCell.innerHTML = `<span class="project-value-text">${valueCell.innerHTML}</span>`;
@@ -13471,7 +13710,7 @@ function _projectFinishFieldEdit(editor, commit) {
   const newValue = commit
     ? _projectNormalizeLookupValue(lookupType, input?.value || '', oldValue)
     : oldValue;
-  const isNewEntity = _newEntityDraft?.row === entity;
+  const isNewEntity = _projectIsNewEntityRow(entity);
 
   let displayValue = oldValue;
   if (commit && newValue !== oldValue && aliases.length) {
@@ -13499,13 +13738,13 @@ function _projectFinishFieldEdit(editor, commit) {
         }
         if (_projectModalContext) _projectModalContext.entityName = resolvedName;
         displayValue = resolvedName;
-        row.classList.add('project-dirty');
+        if (!isNewEntity) row.classList.add('project-dirty');
         if (!isNewEntity) _logChange(entityType, resolvedName, entityFacility || '', oldEntityName || '');
       }
     } else {
       _projectSetFieldValue(entity, aliases, newValue);
       displayValue = newValue;
-      row.classList.add('project-dirty');
+      if (!isNewEntity) row.classList.add('project-dirty');
       if (!isNewEntity) _logChange(entityType, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
     }
 
@@ -13527,8 +13766,11 @@ function _projectFinishFieldEdit(editor, commit) {
 
   _projectSetValueCellMarkup(valueCell, displayValue);
   if (commit && aliases.length && displayValue !== oldValue) {
-    if (displayValue !== (row.dataset.originalValue || '')) _projectMarkRowDirty(row, 'field');
+    if (isNewEntity) _projectClearRowDirty(row);
+    else if (displayValue !== (row.dataset.originalValue || '')) _projectMarkRowDirty(row, 'field');
     else _projectClearRowDirty(row);
+    _projectScheduleIndexRefresh();
+    _associationRefreshControlsFromModel(entityType, entity);
     if (!isNewEntity) {
       _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
     }
@@ -13543,58 +13785,88 @@ function _projectFinishAttributeEdit(editor, role, commit) {
   if (!row) return;
   const entity = _projectActiveEntityRow();
   if (!entity) return;
+  const isNewEntity = _projectIsNewEntityRow(entity);
   const entityType = _projectActiveEntityType();
   const entityName = _projectActiveEntityName() || f(entity, 'Name') || entity._facility || '';
   const entityFacility = _projectActiveFacilityName();
   const nameCell = row.querySelector('[data-role="attr-name"]');
   const valueCell = row.querySelector('[data-role="attr-value"]');
+  const unitCell = row.querySelector('[data-role="attr-unit"]');
   const input = editor.querySelector('input');
-  if (!nameCell || !valueCell) return;
+  if (!nameCell || !valueCell || !unitCell) return;
 
   const oldName = row.dataset.attrName || '';
   const oldValue = valueCell.dataset.rawValue || '';
-  const newRaw = commit ? String(input?.value || '').trim() : (role === 'attr-name' ? oldName : oldValue);
+  const oldUnit = unitCell.dataset.rawValue || '';
+  const originalValue = row.dataset.originalAttrValue || '';
+  const originalUnit = row.dataset.originalAttrUnit || '';
+  const newRaw = commit
+    ? String(input?.value || '').trim()
+    : (role === 'attr-name' ? oldName : (role === 'attr-unit' ? oldUnit : oldValue));
 
   if (role === 'attr-name') {
     const finalName = newRaw || oldName;
     row.dataset.attrName = finalName;
-    nameCell.textContent = finalName || 'Attribute';
+    _projectSetValueCellMarkup(nameCell, finalName);
     if (commit && finalName && finalName !== oldName) {
       if (entity._attrs && oldName) delete entity._attrs[oldName];
-      (entity._attrs ||= {})[finalName] = oldValue;
+      (entity._attrs ||= {})[finalName] = _projectAttributeDisplayValue(oldValue, oldUnit);
       const attrRow = _projectEnsureAttributeRowForEntity(entityType, entityName, entityFacility || '', oldName || finalName);
       attrRow.Name = finalName;
-      if (finalName !== (row.dataset.originalAttrName || oldName || '')) _projectMarkRowDirty(row, 'attribute');
+      _projectSetAttributeValue(attrRow, oldValue);
+      _projectSetAttributeUnit(attrRow, oldUnit);
+      if (isNewEntity) _projectClearRowDirty(row);
+      else if (finalName !== (row.dataset.originalAttrName || oldName || '')) _projectMarkRowDirty(row, 'attribute');
       else _projectClearRowDirty(row);
-      _logChange('attribute', finalName, entityFacility || '');
+      if (!isNewEntity) _logChange('attribute', finalName, entityFacility || '');
       if (typeof _clearChangeEntries === 'function' && oldName && oldName !== finalName) {
         _clearChangeEntries('attribute', oldName, entityFacility || '', oldName);
       }
-      _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
+      if (!isNewEntity) _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
     }
-  } else {
+  } else if (role === 'attr-value') {
     const finalValue = newRaw;
-    const facilityRef = _projectFacilityRow() || entity;
-    const suffix = _projectAttributeUnitSuffix(row.dataset.attrName || oldName, facilityRef);
-    _projectSetValueCellMarkup(valueCell, finalValue, finalValue ? finalValue + suffix : '');
+    _projectSetValueCellMarkup(valueCell, finalValue);
     if (commit && finalValue !== oldValue) {
       const attrName = row.dataset.attrName || oldName || 'New Attribute';
-      (entity._attrs ||= {})[attrName] = finalValue;
+      (entity._attrs ||= {})[attrName] = _projectAttributeDisplayValue(finalValue, oldUnit);
       const attrRow = _projectEnsureAttributeRowForEntity(entityType, entityName, entityFacility || '', attrName);
       _projectSetAttributeValue(attrRow, finalValue);
-      if (finalValue !== (row.dataset.originalAttrValue || '')) _projectMarkRowDirty(row, 'attribute');
+      _projectSetAttributeUnit(attrRow, oldUnit);
+      if (isNewEntity) _projectClearRowDirty(row);
+      else if (finalValue !== originalValue || oldUnit !== originalUnit) _projectMarkRowDirty(row, 'attribute');
       else _projectClearRowDirty(row);
-      _logChange('attribute', attrName, entityFacility || '');
-      if (typeof _clearChangeEntries === 'function' && finalValue === (row.dataset.originalAttrValue || '')) {
+      if (!isNewEntity) _logChange('attribute', attrName, entityFacility || '');
+      if (typeof _clearChangeEntries === 'function' && finalValue === originalValue && oldUnit === originalUnit) {
         _clearChangeEntries('attribute', attrName, entityFacility || '', attrName);
       }
-      _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
+      if (!isNewEntity) _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
+    }
+  } else if (role === 'attr-unit') {
+    const finalUnit = newRaw;
+    _projectSetValueCellMarkup(unitCell, finalUnit);
+    if (commit && finalUnit !== oldUnit) {
+      const attrName = row.dataset.attrName || oldName || 'New Attribute';
+      const currentValue = valueCell.dataset.rawValue || '';
+      (entity._attrs ||= {})[attrName] = _projectAttributeDisplayValue(currentValue, finalUnit);
+      const attrRow = _projectEnsureAttributeRowForEntity(entityType, entityName, entityFacility || '', attrName);
+      _projectSetAttributeValue(attrRow, currentValue);
+      _projectSetAttributeUnit(attrRow, finalUnit);
+      if (isNewEntity) _projectClearRowDirty(row);
+      else if (currentValue !== originalValue || finalUnit !== originalUnit) _projectMarkRowDirty(row, 'attribute');
+      else _projectClearRowDirty(row);
+      if (!isNewEntity) _logChange('attribute', attrName, entityFacility || '');
+      if (typeof _clearChangeEntries === 'function' && currentValue === originalValue && finalUnit === originalUnit) {
+        _clearChangeEntries('attribute', attrName, entityFacility || '', attrName);
+      }
+      if (!isNewEntity) _projectSyncEntityChangeState(entityType, entity, _projectActiveEntityName() || f(entity, 'Name') || '', entityFacility || '');
     }
   }
 
   if (typeof editor._cleanupLookup === 'function') editor._cleanupLookup();
   editor.remove();
   if (role === 'attr-name') nameCell.classList.remove('d-none');
+  else if (role === 'attr-unit') unitCell.classList.remove('d-none');
   else valueCell.classList.remove('d-none');
 }
 
@@ -13603,9 +13875,13 @@ function _projectStartInlineEdit(target) {
   if (!row || row.querySelector('.project-inline-editor')) return;
   const role = target.dataset.role || 'field-value';
   const valueCell = row.querySelector('[data-role="field-value"]');
+  const attrValueCell = row.querySelector('[data-role="attr-value"]');
+  const attrUnitCell = row.querySelector('[data-role="attr-unit"]');
   const current = role === 'field-value'
     ? (valueCell?.dataset.rawValue || '')
-    : role === 'attr-name' ? (row.dataset.attrName || '') : ((row.querySelector('[data-role="attr-value"]')?.dataset.rawValue) || '');
+    : role === 'attr-name' ? (row.dataset.attrName || '')
+      : role === 'attr-unit' ? (attrUnitCell?.dataset.rawValue || '')
+        : (attrValueCell?.dataset.rawValue || '');
 
   const lookupType = role === 'field-value' ? (row.dataset.lookup || '') : '';
   const lookupOptions = lookupType ? _projectLookupOptions(lookupType) : [];
@@ -13800,6 +14076,10 @@ if (_projectModalEl) {
       if (!row) return;
       const entity = _projectActiveEntityRow();
       if (!entity) return;
+      if (_projectIsNewEntityRow(entity)) {
+        _projectClearRowDirty(row);
+        return;
+      }
       const entityType = _projectActiveEntityType();
       const entityName = _projectActiveEntityName() || f(entity, 'Name') || '';
       const entityFacility = _projectActiveFacilityName() || '';
@@ -13833,6 +14113,8 @@ if (_projectModalEl) {
       }
       _projectSetValueCellMarkup(row.querySelector('[data-role="field-value"]'), original);
       _projectClearRowDirty(row);
+      _projectScheduleIndexRefresh();
+      _associationRefreshControlsFromModel(entityType, entity);
       _projectSyncEntityChangeState(entityType, entity, resolvedEntityName, resolvedFacility);
       if (typeof qaRevalidateFieldChange === 'function') {
         qaRevalidateFieldChange(
@@ -13888,7 +14170,7 @@ if (_projectModalEl) {
       );
       return;
     }
-    const addDocumentButton = event.target.closest('.project-doc-add-btn');
+    const addDocumentButton = event.target.closest('.project-doc-add-btn:not(.project-add-attribute-btn)');
     if (addDocumentButton) {
       const context = _projectActiveEntityContext();
       const entityType = String(context?.entityType || 'facility').toLowerCase();
@@ -13939,13 +14221,26 @@ if (_projectModalEl) {
     if (!body) return;
     const empty = body.querySelector('.project-empty');
     if (empty) empty.remove();
-    body.insertAdjacentHTML('beforeend', `<div class="project-field-row project-attr-row project-dirty" data-attr-name="New Attribute" data-original-attr-name="" data-original-attr-value="">
-      <div class="project-field-name project-editable" data-role="attr-name" title="Double click to edit">New Attribute</div>
-      <div class="project-field-value project-editable" data-role="attr-value" data-raw-value="" title="Double click to edit"><span class="project-empty">Not provided</span></div>
+    const isNewEntity = _projectIsNewEntityRow(_projectActiveEntityRow());
+    body.insertAdjacentHTML('beforeend', `<div class="project-field-row project-attr-row${isNewEntity ? '' : ' project-dirty'}" data-attr-name="New Attribute" data-original-attr-name="" data-original-attr-value="" data-original-attr-unit="">
+      <div class="project-attr-fields">
+        <div class="project-attr-subfield">
+          <span class="project-attr-subfield-label">Name</span>
+          <div class="project-field-value project-editable" data-role="attr-name" data-raw-value="New Attribute" title="Double click to edit">New Attribute</div>
+        </div>
+        <div class="project-attr-subfield">
+          <span class="project-attr-subfield-label">Value</span>
+          <div class="project-field-value project-editable" data-role="attr-value" data-raw-value="" title="Double click to edit"><span class="project-empty">Not provided</span></div>
+        </div>
+        <div class="project-attr-subfield">
+          <span class="project-attr-subfield-label">Unit</span>
+          <div class="project-field-value project-editable" data-role="attr-unit" data-raw-value="" title="Double click to edit"><span class="project-empty">Not provided</span></div>
+        </div>
+      </div>
     </div>`);
     const newRow = body.querySelector('.project-attr-row:last-child');
-    _projectMarkRowDirty(newRow, 'attribute');
-    const added = body.querySelector('.project-attr-row:last-child .project-field-name');
+    if (!isNewEntity) _projectMarkRowDirty(newRow, 'attribute');
+    const added = body.querySelector('.project-attr-row:last-child [data-role="attr-name"]');
     if (added) _projectStartInlineEdit(added);
   });
 

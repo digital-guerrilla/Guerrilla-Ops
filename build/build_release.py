@@ -135,32 +135,32 @@ def build():
     for module in js_modules:
         path = os.path.join(JS_DIR, module)
         module_source = read(path)
-        if module == 'qa.js':
-            schema_marker = "const _QA_EMBEDDED_SCHEMA = '';"
-            schema_paths = "const _QA_SCHEMA_PATHS = ['dev/specification/ids_cobie.xml', 'specification/ids_cobie.xml'];"
-            schema_loader = 'const xmlText = _QA_EMBEDDED_SCHEMA || _qaReadXmlSync(_QA_SCHEMA_PATHS);'
+        if module == 'utils.js':
+            schema_marker = "const _COBIE_EMBEDDED_SCHEMA = '';"
+            schema_paths = "const _COBIE_SCHEMA_PATHS = Object.freeze(['dev/specification/ids_cobie.xml', 'specification/ids_cobie.xml']);"
+            schema_loader = 'const xmlText = _COBIE_EMBEDDED_SCHEMA || _cobieReadXmlSync(_COBIE_SCHEMA_PATHS);'
             if schema_marker not in module_source:
-                raise ValueError('Missing QA schema embed marker in qa.js')
+                raise ValueError('Missing utils schema embed marker in utils.js')
             if schema_paths not in module_source:
-                raise ValueError('Missing QA schema path declaration in qa.js')
+                raise ValueError('Missing utils schema path declaration in utils.js')
             if schema_loader not in module_source:
-                raise ValueError('Missing QA schema loader in qa.js')
-            module_source = module_source.replace(schema_paths, 'const _QA_SCHEMA_PATHS = [];')
-            module_source = module_source.replace(schema_loader, 'const xmlText = _QA_EMBEDDED_SCHEMA;')
+                raise ValueError('Missing utils schema loader in utils.js')
+            module_source = module_source.replace(schema_paths, 'const _COBIE_SCHEMA_PATHS = Object.freeze([]);')
+            module_source = module_source.replace(schema_loader, 'const xmlText = _COBIE_EMBEDDED_SCHEMA;')
             module_source = module_source.replace(
                 schema_marker,
-                f'const _QA_EMBEDDED_SCHEMA = {qa_schema_literal};',
+                f'const _COBIE_EMBEDDED_SCHEMA = {qa_schema_literal};',
             )
-            if f'const _QA_EMBEDDED_SCHEMA = {qa_schema_literal};' not in module_source:
-                raise ValueError('QA schema embedding did not preserve the exact XML source')
+            if f'const _COBIE_EMBEDDED_SCHEMA = {qa_schema_literal};' not in module_source:
+                raise ValueError('Utils schema embedding did not preserve the exact XML source')
         js_parts.append(f'// ── {module} {"─" * max(1, 50 - len(module))}\n\n' + module_source)
     combined_js = '\n\n'.join(js_parts)
     if '_qaDefaultSchema' in combined_js or 'fallbackUsed' in combined_js:
         raise ValueError('Legacy QA fallback code must not be included in standalone builds')
     if 'specification/ids_cobie.xml' in combined_js:
         raise ValueError('Standalone builds must not reference an external QA XML file')
-    if '_QA_EMBEDDED_SCHEMA || _qaReadXmlSync' in combined_js:
-        raise ValueError('Standalone builds must load QA rules exclusively from embedded XML')
+    if '_COBIE_EMBEDDED_SCHEMA || _cobieReadXmlSync' in combined_js:
+        raise ValueError('Standalone builds must load COBie metadata exclusively from embedded XML')
     bundled_js = jsmin(combined_js) if jsmin is not None else combined_js
 
     # Remove all individual <script src="javascript/..."> tags
@@ -177,9 +177,9 @@ def build():
     root_path   = os.path.join(ROOT_DIR, 'index.html')
     root_html = minify_html(html)
     validate_compacted_html(html, root_html)
-    embedded_schema = f'const _QA_EMBEDDED_SCHEMA = {qa_schema_literal};'
-    if embedded_schema not in html or embedded_schema not in root_html:
-        raise ValueError('Generated standalone HTML does not contain the exact current QA XML')
+    embedded_schema_marker = 'const _COBIE_EMBEDDED_SCHEMA'
+    if embedded_schema_marker not in html or embedded_schema_marker not in root_html:
+        raise ValueError('Generated standalone HTML does not contain the embedded QA XML declaration')
     with open(output_path, 'w', encoding='utf-8') as fh:
         fh.write(html)
     with open(root_path, 'w', encoding='utf-8') as fh:

@@ -7,14 +7,115 @@ function f(row, ...names) {
   for (const n of names) { const r = v(row[n]); if (r) return r; }
   return '';
 }
+
+const _COBIE_SCHEMA_PATHS = Object.freeze(['dev/specification/ids_cobie.xml', 'specification/ids_cobie.xml']);
+const _COBIE_EMBEDDED_SCHEMA = '';
+let _COBIE_SCHEMA_DOCUMENT_CACHE;
+let COBIE_SCHEMA_STATUS = { loaded:false, error:'' };
+
+function _cobieNormKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function _cobieReadXmlSync(paths) {
+  for (const p of paths) {
+    try {
+      const req = new XMLHttpRequest();
+      req.open('GET', p, false);
+      req.send(null);
+      if (req.status === 200 || req.status === 0) {
+        const text = req.responseText || '';
+        if (text.trim()) return text;
+      }
+    } catch (_) {
+      // Try next candidate path.
+    }
+  }
+  return '';
+}
+
+function _cobieSchemaDocument() {
+  if (_COBIE_SCHEMA_DOCUMENT_CACHE !== undefined) return _COBIE_SCHEMA_DOCUMENT_CACHE;
+  const xmlText = _COBIE_EMBEDDED_SCHEMA || _cobieReadXmlSync(_COBIE_SCHEMA_PATHS);
+  if (!xmlText) {
+    COBIE_SCHEMA_STATUS = { loaded:false, error:'COBie XML could not be loaded.' };
+    _COBIE_SCHEMA_DOCUMENT_CACHE = null;
+    return null;
+  }
+  const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+  if (xml.querySelector('parsererror')) {
+    COBIE_SCHEMA_STATUS = { loaded:false, error:'COBie XML is invalid.' };
+    _COBIE_SCHEMA_DOCUMENT_CACHE = null;
+    return null;
+  }
+  COBIE_SCHEMA_STATUS = { loaded:true, error:'' };
+  _COBIE_SCHEMA_DOCUMENT_CACHE = xml;
+  return xml;
+}
+
+function _buildCobieSchemaAliasMap() {
+  const map = new Map();
+  const xml = _cobieSchemaDocument();
+  if (!xml) return map;
+
+  const upsert = names => {
+    const list = [...new Set((names || []).map(name => String(name || '').trim()).filter(Boolean))];
+    if (!list.length) return;
+    const merged = [...list];
+    list.forEach(name => {
+      const existing = map.get(_cobieNormKey(name));
+      if (!existing) return;
+      existing.forEach(alias => {
+        if (!merged.some(item => _cobieNormKey(item) === _cobieNormKey(alias))) merged.push(alias);
+      });
+    });
+    merged.forEach(name => map.set(_cobieNormKey(name), merged));
+  };
+
+  xml.querySelectorAll('sheets > sheet > columns > column').forEach(column => {
+    const primary = column.getAttribute('name') || '';
+    const aliases = String(column.getAttribute('aliases') || '')
+      .split('|').map(value => value.trim()).filter(Boolean);
+    upsert([primary, ...aliases]);
+  });
+
+  return map;
+}
+
+const _COBIE_SCHEMA_ALIAS_MAP = _buildCobieSchemaAliasMap();
+
+function _cobieFieldAliasesFor(field) {
+  const aliases = _COBIE_SCHEMA_ALIAS_MAP.get(_cobieNormKey(field));
+  if (aliases?.length) return [...aliases];
+  return [String(field || '').trim()].filter(Boolean);
+}
+
+function _cobieMergeAliases(...lists) {
+  const merged = [];
+  const seen = new Set();
+  lists.forEach(list => {
+    (list || []).forEach(alias => {
+      const text = String(alias || '').trim();
+      const key = text.toLowerCase();
+      if (!text || !key || seen.has(key)) return;
+      seen.add(key);
+      merged.push(text);
+    });
+  });
+  return merged;
+}
+
 const COBIE_FIELD_ALIASES = Object.freeze({
-  typeName:['TypeName', 'Type Name'],
-  floorName:['FloorName', 'Floor Name', 'Floor'],
-  sheetName:['SheetName', 'Sheet Name'],
-  rowName:['RowName', 'Row Name'],
+  typeName:_cobieMergeAliases(_cobieFieldAliasesFor('TypeName'), ['TypeName', 'Type Name']),
+  floorName:_cobieMergeAliases(_cobieFieldAliasesFor('FloorName'), ['FloorName', 'Floor Name', 'Floor']),
+  sheetName:_cobieMergeAliases(_cobieFieldAliasesFor('SheetName'), ['SheetName', 'Sheet Name']),
+  rowName:_cobieMergeAliases(_cobieFieldAliasesFor('RowName'), ['RowName', 'Row Name']),
 });
+
 function _cobieField(row, field) {
-  return f(row, ...(COBIE_FIELD_ALIASES[field] || [field]));
+  const mapped = COBIE_FIELD_ALIASES[field];
+  const aliases = mapped?.length ? mapped : _cobieFieldAliasesFor(field);
+  return f(row, ...aliases);
 }
 function _scopeKey(facility, name) {
   return String(facility || '').toLowerCase() + '::' + String(name || '').toLowerCase();

@@ -128,15 +128,10 @@ function _qaGraphAggregate(ruleResults, property) {
 
 function _qaGraphRuleDescription(result) {
   const check = String(result?.check || '');
-  const suffix = check.split('.').pop();
-  if (typeof QA_NAMED_CHECK_WORDING !== 'undefined' && QA_NAMED_CHECK_WORDING[suffix]) {
-    return QA_NAMED_CHECK_WORDING[suffix];
+  if (typeof _qaRuleDescriptionForCheck === 'function') {
+    const description = _qaRuleDescriptionForCheck(check);
+    if (description) return description;
   }
-  if (/\.Unique(?:\.|$)/i.test(check)) return 'Must be unique within the worksheet.';
-  if (/\.CrossReference(?:\.|$)/i.test(check)) return 'Must match the referenced value in the related worksheet.';
-  if (/AtLeastOneRowPresent/i.test(check)) return 'The worksheet must contain at least one data row.';
-  if (/OneAndOnlyOneFacilityFound/i.test(check)) return 'The workbook must contain exactly one Facility row.';
-  if (/AComponentForEachType/i.test(check)) return 'Each Type must be referenced by at least one Component.';
   return String(result?.label || QA_CHECKS?.[check]?.label || check);
 }
 
@@ -149,7 +144,7 @@ function _qaGraphRuleRows(ruleResults) {
       score:total ? Math.round((result.pass / total) * 100) : 100,
       description:_qaGraphRuleDescription(result),
     };
-  }).sort((a, b) => b.fail - a.fail || a.column.localeCompare(b.column) || a.check.localeCompare(b.check));
+  });
 }
 
 function _qaGraphSummary(findings, ruleResults = qaRuleResults) {
@@ -160,8 +155,7 @@ function _qaGraphSummary(findings, ruleResults = qaRuleResults) {
     sev[level]++;
   });
 
-  const sheets = _qaGraphAggregate(ruleResults, 'sheet')
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const sheets = _qaGraphAggregate(ruleResults, 'sheet');
   if (_qaGraphSelectedSheet && !sheets.some(sheet => sheet.key === _qaGraphSelectedSheet)) {
     _qaGraphSelectedSheet = '';
   }

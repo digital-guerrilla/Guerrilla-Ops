@@ -4,5 +4,8 @@
   "scripts": {
     "test": "node tests/regression-checks.js",
     "build": "python build/build_release.py"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.13"
   }
 }

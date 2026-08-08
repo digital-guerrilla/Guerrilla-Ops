@@ -23,13 +23,34 @@ const QA_CHECK_ICON_BY_ISSUE_TYPE = {
   consistency: 'bi-shuffle',
 };
 
-const _QA_SCHEMA_PATHS = ['dev/specification/ids_cobie.xml', 'specification/ids_cobie.xml'];
-const _QA_EMBEDDED_SCHEMA = '';
+const QA_NAMED_CHECK_HANDLERS = Object.freeze({
+  NotNull: ({ text, isNA }) => !!text && !isNA,
+  NotEmpty: ({ text }) => !!text,
+  Format: ({ text, isNA, schema }) => !!text && !isNA && !!schema.formats.email?.test(text),
+  Valid: ({ text, isNA, schema }) => {
+    if (!text || isNA) return false;
+    schema.formats.isoDate.lastIndex = 0;
+    schema.formats.isoDateTime.lastIndex = 0;
+    return schema.formats.isoDate.test(text) || schema.formats.isoDateTime.test(text);
+  },
+  ValidNumber: ({ isNumber }) => isNumber,
+  ValidNumberOrNA: ({ text, isNA, isNumber }) => !text || isNA || isNumber,
+  ZeroOrGreaterOrNA: ({ text, isNA, isNumber, number }) => !text || isNA || (isNumber && number >= 0),
+  ZeroOrGreater: ({ text, isNumber, number }) => !text || (isNumber && number >= 0),
+});
+
+const QA_RELATION_RULE_HANDLERS = Object.freeze({
+  atLeastOneTargetPerRow: true,
+});
 
 let qaFindings = [];
+let qaAllFindings = [];
 let qaScopeCounts = { comps:0, spaces:0, types:0, docs:0 };
 let qaRuleResults = [];
+let qaAllRuleResults = [];
 let qaHasRun = false;
+const QA_STAGE_ORDER = Object.freeze(['design', 'construction', 'operation']);
+let qaSelectedStage = 'operation';
 let _qaSchemaCache = null;
 let _qaFilterScope = null;
 let _qaCellCache = new WeakMap();
@@ -85,6 +106,10 @@ function _qaColumnCell(row, column) {
     if (value) return value;
   }
   return '';
+}
+
+function _qaRowIdentity(sheetName, row) {
+  return _qaNorm(sheetName) === 'contact' ? _qaCell(row, 'Email') : _qaCell(row, 'Name');
 }
 
 function _qaRowsForSheet(sheetName, inScope) {
@@ -177,23 +202,6 @@ function _qaCheckMeta(check, patch) {
   QA_CHECKS[check].ico = patch.ico || QA_CHECKS[check].ico;
 }
 
-function _qaReadXmlSync(paths) {
-  for (const p of paths) {
-    try {
-      const req = new XMLHttpRequest();
-      req.open('GET', p, false);
-      req.send(null);
-      if (req.status === 200 || req.status === 0) {
-        const text = req.responseText || '';
-        if (text.trim()) return text;
-      }
-    } catch (_) {
-      // Try next candidate path.
-    }
-  }
-  return '';
-}
-
 function _qaAttr(node, name) {
   return node?.getAttribute?.(name) || '';
 }
@@ -203,8 +211,11 @@ function _qaSeverity(value, fallback = 'error') {
   return sev === 'error' || sev === 'warning' || sev === 'info' ? sev : fallback;
 }
 
-function _qaNamedCheckSeverity(checkName, explicitSeverity = '') {
+function _qaNamedCheckSeverity(checkName, explicitSeverity = '', schemaObj = null) {
   if (explicitSeverity) return _qaSeverity(explicitSeverity, 'warning');
+  const schema = schemaObj || _qaParseSchema();
+  const criticality = schema?.ruleCriticalities?.[_qaNorm(checkName)] || '';
+  if (criticality) return _qaSeverity(criticality, 'warning');
   if (_qaNorm(checkName) === 'notempty') return 'info';
   return 'warning';
 }
@@ -212,6 +223,37 @@ function _qaNamedCheckSeverity(checkName, explicitSeverity = '') {
 function _qaIssueType(value, fallback = '') {
   const t = _qaNorm(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return t || fallback;
+}
+
+function _qaStages(value) {
+  return String(value || '').split('|').map(_qaNorm).filter(Boolean);
+}
+
+function _qaStage(value, fallback = '') {
+  const stage = _qaNorm(value || fallback);
+  return QA_STAGE_ORDER.includes(stage) ? stage : '';
+}
+
+function _qaStageIncluded(stage, selectedStage = qaSelectedStage) {
+  const ruleIndex = QA_STAGE_ORDER.indexOf(_qaStage(stage, 'design'));
+  const selectedIndex = QA_STAGE_ORDER.indexOf(_qaStage(selectedStage, 'operation'));
+  return ruleIndex >= 0 && ruleIndex <= selectedIndex;
+}
+
+function _qaSheetForStage(sheet, selectedStage = qaSelectedStage) {
+  if (!sheet || !_qaStageIncluded(sheet.stage, selectedStage)) return null;
+  return {
+    ...sheet,
+    columns:(sheet.columns || []).filter(rule => _qaStageIncluded(rule.stage, selectedStage)),
+    references:(sheet.references || []).filter(rule => _qaStageIncluded(rule.stage, selectedStage)),
+    uniqueRules:(sheet.uniqueRules || []).filter(rule => _qaStageIncluded(rule.stage, selectedStage)),
+    relationRules:(sheet.relationRules || []).filter(rule => _qaStageIncluded(rule.stage, selectedStage)),
+  };
+}
+
+function _qaApplyStageFilter() {
+  qaFindings = qaAllFindings.filter(finding => _qaStageIncluded(finding.stage));
+  qaRuleResults = qaAllRuleResults.filter(result => _qaStageIncluded(result.stage));
 }
 
 function _qaIssueLabel(issueType) {
@@ -252,23 +294,34 @@ function _qaSchemaError(message) {
     error: message,
     formats: {},
     sheets: [],
+    ruleDefinitions: Object.create(null),
+    ruleCriticalities: Object.create(null),
     checkSeverities: Object.create(null),
     checkSeverityByField: Object.create(null),
   };
 }
 
+function _qaNamedRuleDescription(ruleName, schemaObj = null) {
+  const schema = schemaObj || _qaParseSchema();
+  const key = _qaNorm(ruleName);
+  return String(schema?.ruleDefinitions?.[key] || '').trim();
+}
+
+function _qaRuleDescriptionForCheck(checkId, schemaObj = null) {
+  const parts = String(checkId || '').split('.').map(part => String(part || '').trim()).filter(Boolean);
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const desc = _qaNamedRuleDescription(parts[index], schemaObj);
+    if (desc) return desc;
+  }
+  return '';
+}
+
 function _qaParseSchema() {
   if (_qaSchemaCache) return _qaSchemaCache;
 
-  const xmlText = _QA_EMBEDDED_SCHEMA || _qaReadXmlSync(_QA_SCHEMA_PATHS);
-  if (!xmlText) {
-    _qaSchemaCache = _qaSchemaError('The current QA XML profile could not be loaded. No fallback rules were applied.');
-    return _qaSchemaCache;
-  }
-
-  const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
-  if (xml.querySelector('parsererror')) {
-    _qaSchemaCache = _qaSchemaError('The current QA XML profile is invalid. No fallback rules were applied.');
+  const xml = _cobieSchemaDocument();
+  if (!xml) {
+    _qaSchemaCache = _qaSchemaError(`${COBIE_SCHEMA_STATUS.error || 'The current QA XML profile could not be loaded.'} No fallback rules were applied.`);
     return _qaSchemaCache;
   }
   const root = xml.documentElement;
@@ -289,6 +342,17 @@ function _qaParseSchema() {
     }
   });
 
+  const ruleDefinitions = Object.create(null);
+  const ruleCriticalities = Object.create(null);
+  xml.querySelectorAll('ruleDefinitions > rule').forEach(rule => {
+    const name = _qaNorm(_qaAttr(rule, 'name'));
+    const text = String(rule.textContent || '').trim();
+    if (!name || !text) return;
+    ruleDefinitions[name] = text;
+    const sev = _qaSeverity(_qaAttr(rule, 'criticality') || _qaAttr(rule, 'criticallity') || _qaAttr(rule, 'severity'), '');
+    if (sev) ruleCriticalities[name] = sev;
+  });
+
   const sheets = [];
   const checkSeverities = Object.create(null);
   const checkSeverityByField = Object.create(null);
@@ -305,8 +369,12 @@ function _qaParseSchema() {
   });
 
   xml.querySelectorAll('sheets > sheet').forEach(sheetNode => {
+    const sheetStages = _qaStages(_qaAttr(sheetNode, 'stage'));
+    const inheritedStage = sheetStages.length === 1 ? _qaStage(sheetStages[0], 'design') : '';
     const sheet = {
       name: _qaAttr(sheetNode, 'name'),
+      stages:sheetStages,
+      stage:inheritedStage || _qaStage(sheetStages[0], 'design'),
       required: _qaNorm(_qaAttr(sheetNode, 'required')) === 'true',
       requiredSeverity: _qaSeverity(_qaAttr(sheetNode, 'requiredSeverity') || _qaAttr(sheetNode, 'severity'), 'error'),
       requiredIssueType: _qaIssueType(_qaAttr(sheetNode, 'requiredIssueType'), 'scope'),
@@ -341,6 +409,7 @@ function _qaParseSchema() {
         allowAlternateFormatRef: _qaAttr(col, 'allowAlternateFormatRef'),
         aliases: _qaAttr(col, 'aliases').split('|').map(value => value.trim()).filter(Boolean),
         checks: _qaAttr(col, 'checks').split('|').map(value => value.trim()).filter(Boolean),
+        stage:_qaStage(_qaAttr(col, 'stage'), inheritedStage || 'design'),
       });
     });
 
@@ -355,6 +424,7 @@ function _qaParseSchema() {
         icon: _qaAttr(ref, 'icon'),
         multiValueDelimiter: _qaAttr(ref, 'multiValueDelimiter') || ';',
         ruleId: _qaAttr(ref, 'ruleId'),
+        stage:_qaStage(_qaAttr(ref, 'stage'), inheritedStage || 'design'),
       });
     });
 
@@ -363,6 +433,7 @@ function _qaParseSchema() {
         ruleId: _qaAttr(rule, 'ruleId'),
         keys: _qaAttr(rule, 'keys').split('|').map(value => value.trim()).filter(Boolean),
         severity: _qaSeverity(_qaAttr(rule, 'severity'), 'error'),
+        stage:_qaStage(_qaAttr(rule, 'stage'), inheritedStage || 'design'),
       });
     });
 
@@ -373,26 +444,39 @@ function _qaParseSchema() {
         targetSheet: _qaAttr(rule, 'targetSheet'),
         targetColumn: _qaAttr(rule, 'targetColumn'),
         severity: _qaSeverity(_qaAttr(rule, 'severity'), 'error'),
+        stage:_qaStage(_qaAttr(rule, 'stage'), inheritedStage || 'design'),
       });
     });
 
     sheets.push(sheet);
   });
 
-  _qaSchemaCache = { error: '', formats, sheets, checkSeverities, checkSeverityByField };
+  const unsupportedChecks = [...new Set(sheets.flatMap(sheet =>
+    sheet.columns.flatMap(column => column.checks || [])
+  ).filter(check => !QA_NAMED_CHECK_HANDLERS[check]))];
+  const unsupportedRelations = [...new Set(sheets.flatMap(sheet =>
+    sheet.relationRules.map(rule => rule.type)
+  ).filter(type => !QA_RELATION_RULE_HANDLERS[type]))];
+  const invalidStages = [...new Set(sheets.flatMap(sheet => [
+    ...sheet.stages.filter(stage => !QA_STAGE_ORDER.includes(stage)),
+    ...sheet.columns.map(rule => rule.stage),
+    ...sheet.references.map(rule => rule.stage),
+    ...sheet.uniqueRules.map(rule => rule.stage),
+    ...sheet.relationRules.map(rule => rule.stage),
+  ].filter(stage => !QA_STAGE_ORDER.includes(stage))))];
+  if (unsupportedChecks.length || unsupportedRelations.length || invalidStages.length) {
+    const details = [
+      unsupportedChecks.length ? `checks: ${unsupportedChecks.join(', ')}` : '',
+      unsupportedRelations.length ? `relation types: ${unsupportedRelations.join(', ')}` : '',
+      invalidStages.length ? `stages: ${invalidStages.join(', ')}` : '',
+    ].filter(Boolean).join('; ');
+    _qaSchemaCache = _qaSchemaError(`The current QA XML profile uses unsupported ${details}. No rules were applied.`);
+    return _qaSchemaCache;
+  }
+
+  _qaSchemaCache = { error: '', formats, sheets, ruleDefinitions, ruleCriticalities, checkSeverities, checkSeverityByField };
   return _qaSchemaCache;
 }
-
-const QA_NAMED_CHECK_WORDING = Object.freeze({
-  NotNull: 'Must contain a text value other than "n/a".',
-  NotEmpty: 'Must contain a text value; "n/a" is acceptable.',
-  Format: 'Must contain a valid email address.',
-  Valid: 'Must contain a valid ISO date or date-time.',
-  ValidNumber: 'Must contain a valid number; "n/a" is not acceptable.',
-  ValidNumberOrNA: 'When populated, must contain a valid number or "n/a".',
-  ZeroOrGreaterOrNA: 'When populated, must contain zero or a positive number, or "n/a".',
-  ZeroOrGreater: 'When populated, must contain zero or a positive number.',
-});
 
 function _qaNamedCheckResult(checkName, value, schema) {
   const text = String(value ?? '').trim();
@@ -400,23 +484,11 @@ function _qaNamedCheckResult(checkName, value, schema) {
   const isNA = normalized === 'n/a';
   const isNumber = text !== '' && Number.isFinite(Number(text.replace(/,/g, '')));
   const number = isNumber ? Number(text.replace(/,/g, '')) : NaN;
-  if (checkName === 'NotNull') return !!text && !isNA;
-  if (checkName === 'NotEmpty') return !!text;
-  if (checkName === 'Format') return !!text && !isNA && !!schema.formats.email?.test(text);
-  if (checkName === 'Valid') {
-    if (!text || isNA) return false;
-    schema.formats.isoDate.lastIndex = 0;
-    schema.formats.isoDateTime.lastIndex = 0;
-    return schema.formats.isoDate.test(text) || schema.formats.isoDateTime.test(text);
-  }
-  if (checkName === 'ValidNumber') return isNumber;
-  if (checkName === 'ValidNumberOrNA') return !text || isNA || isNumber;
-  if (checkName === 'ZeroOrGreaterOrNA') return !text || isNA || (isNumber && number >= 0);
-  if (checkName === 'ZeroOrGreater') return !text || (isNumber && number >= 0);
-  return true;
+  const handler = QA_NAMED_CHECK_HANDLERS[checkName];
+  return handler ? handler({ text, normalized, isNA, isNumber, number, schema }) : false;
 }
 
-function* _qaRunSteps() {
+function* _qaRunSteps(selectedStage = qaSelectedStage) {
   _qaCellCache = new WeakMap();
   const facSel = sel.facility;
   const inScope = r => !facSel.size || facSel.has((r._facility || '').toLowerCase());
@@ -432,17 +504,20 @@ function* _qaRunSteps() {
   };
 
   const schema = _qaParseSchema();
-  const totalSteps = (schema.sheets || []).reduce((total, sheet) => total
+  const stageSheets = (schema.sheets || []).map(sheet => _qaSheetForStage(sheet, selectedStage)).filter(Boolean);
+  const totalSteps = stageSheets.reduce((total, sheet) => total
     + 1
     + (sheet.columns || []).length
     + ((sheet.uniqueRules || []).length ? 1 : 0)
     + ((sheet.references || []).length ? 1 : 0)
     + ((sheet.relationRules || []).length ? 1 : 0), 0);
   let completedSteps = 0;
+  let activeRuleStage = 'design';
   const ruleCounts = new Map();
-  const recordRule = (check, passed, sheet = 'Workbook', column = 'Sheet') => {
-    const key = `${_qaNorm(sheet)}|${_qaNormKey(column)}|${check}`;
-    if (!ruleCounts.has(key)) ruleCounts.set(key, { check, sheet, column, pass:0, fail:0 });
+  const recordRule = (check, passed, sheet = 'Workbook', column = 'Sheet', stage = activeRuleStage) => {
+    const normalizedStage = _qaStage(stage, 'design');
+    const key = `${_qaNorm(sheet)}|${_qaNormKey(column)}|${check}|${normalizedStage}`;
+    if (!ruleCounts.has(key)) ruleCounts.set(key, { check, sheet, column, stage:normalizedStage, pass:0, fail:0 });
     ruleCounts.get(key)[passed ? 'pass' : 'fail']++;
   };
   const publishRuleResults = () => {
@@ -471,6 +546,7 @@ function* _qaRunSteps() {
       detail: cfg.detail || '',
       fields: Array.isArray(cfg.fields) ? cfg.fields.filter(Boolean) : [],
       issueType: _qaIssueType(cfg.issueType),
+      stage: _qaStage(cfg.stage, activeRuleStage || 'design'),
     });
   };
 
@@ -516,7 +592,8 @@ function* _qaRunSteps() {
     return _qaNorm(row._facility) === _qaNorm(scope.facility);
   });
 
-  for (const sheetRule of schema.sheets) {
+  for (const sheetRule of stageSheets) {
+    activeRuleStage = _qaStage(sheetRule.stage, 'design');
     yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, status:`Preparing ${sheetRule.name} worksheet` };
     const sheetRows = _qaRowsForSheet(sheetRule.name, inScope);
     const rows = _qaRowsForSheet(sheetRule.name, row => inScope(row) && _qaRowMatchesFilterScope(sheetRule.name, row));
@@ -528,6 +605,7 @@ function* _qaRunSteps() {
         const passed = rowsInWorkbook(sheetRows, scope).length > 0;
         recordRule(sheetRule.presenceRule, passed, sheetRule.name, 'Sheet');
         if (passed) return;
+        const ruleDescription = _qaRuleDescriptionForCheck(sheetRule.presenceRule, schema);
         add({
           check: sheetRule.presenceRule,
           sev: 'error',
@@ -536,8 +614,8 @@ function* _qaRunSteps() {
           entityType: 'sheet',
           entityName: `${sheetRule.name} sheet`,
           facility: scope.facility,
-          detail: `${sheetRule.name} must contain at least one data row in ${scope.label}.`,
-          label: `${sheetRule.name}: at least one row must be present`,
+          detail: `${sheetRule.name}: ${ruleDescription || sheetRule.presenceRule} Scope: ${scope.label}.`,
+          label: `${sheetRule.name}.${sheetRule.presenceRule.split('.').pop()}`,
         });
       });
     }
@@ -549,6 +627,7 @@ function* _qaRunSteps() {
         const passed = count === 1;
         recordRule(sheetRule.singleRowRule, passed, sheetRule.name, 'Sheet');
         if (passed) return;
+        const ruleDescription = _qaRuleDescriptionForCheck(sheetRule.singleRowRule, schema);
         add({
           check: sheetRule.singleRowRule,
           sev: 'error',
@@ -557,8 +636,8 @@ function* _qaRunSteps() {
           entityType: 'sheet',
           entityName: `${sheetRule.name} sheet`,
           facility: scope.facility,
-          detail: `Exactly one Facility row is required in ${scope.label}; ${count} were found.`,
-          label: 'Facility: exactly one row must be present',
+          detail: `${sheetRule.name}: ${ruleDescription || sheetRule.singleRowRule} Scope: ${scope.label}; found ${count}.`,
+          label: `${sheetRule.name}.${sheetRule.singleRowRule.split('.').pop()}`,
         });
       });
     }
@@ -580,6 +659,7 @@ function* _qaRunSteps() {
     completedSteps++;
 
     for (const col of sheetRule.columns) {
+      activeRuleStage = _qaStage(col.stage, sheetRule.stage || 'design');
       yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, column:col.name, status:`Checking ${sheetRule.name}.${col.name}` };
       if (!col.name) {
         completedSteps++;
@@ -594,15 +674,16 @@ function* _qaRunSteps() {
             const passed = _qaNamedCheckResult(checkName, value, schema);
             recordRule(ruleId, passed, sheetRule.name, col.name);
             if (passed) return;
+            const ruleWording = _qaNamedRuleDescription(checkName, schema);
             add({
               check: ruleId,
-              sev: _qaNamedCheckSeverity(checkName, col.severity),
+              sev: _qaNamedCheckSeverity(checkName, col.severity, schema),
               sheet: sheetRule.name,
               issueType: checkName === 'Format' || checkName === 'Valid' ? 'format' : 'completeness',
               entityType: _qaNorm(sheetRule.name),
-              entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+              entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
               facility: row._facility || '',
-              detail: `${col.name}: ${QA_NAMED_CHECK_WORDING[checkName] || `Failed ${checkName}.`} Value was ${value ? `"${value}"` : 'empty'}.`,
+              detail: `${col.name}: ${ruleWording || checkName}. Value was ${value ? `"${value}"` : 'empty'}.`,
               fields: [col.name],
               label: `${sheetRule.name}.${col.name}.${checkName}`,
             });
@@ -624,7 +705,7 @@ function* _qaRunSteps() {
             issueType: col.issueType || 'completeness',
             icon: col.icon,
             entityType: _qaNorm(sheetRule.name),
-            entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+            entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Required column ${col.name} is blank.`,
             fields: [col.name],
@@ -651,7 +732,7 @@ function* _qaRunSteps() {
             issueType: col.issueType || sheetRule.formatIssueType || 'format',
             icon: col.icon || sheetRule.formatIcon,
             entityType: _qaNorm(sheetRule.name),
-            entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+            entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Column ${col.name} value "${v}" does not match ${col.formatRef}${altRx ? ` or ${col.allowAlternateFormatRef}` : ''}.`,
             fields: [col.name],
@@ -666,6 +747,7 @@ function* _qaRunSteps() {
       yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, status:`Checking ${sheetRule.name} uniqueness` };
     }
     (sheetRule.uniqueRules || []).forEach(rule => {
+      activeRuleStage = _qaStage(rule.stage, sheetRule.stage || 'design');
       const seen = new Map();
       rows.forEach(row => {
         const values = rule.keys.map(key => _qaCell(row, key));
@@ -680,17 +762,18 @@ function* _qaRunSteps() {
         const passed = entry.count === 1;
         recordRule(rule.ruleId, passed, sheetRule.name, rule.keys.join(' + '));
         if (passed) return;
+        const ruleDescription = _qaRuleDescriptionForCheck(rule.ruleId, schema);
         add({
           check: rule.ruleId,
           sev: rule.severity,
           sheet: sheetRule.name,
           issueType: 'uniqueness',
           entityType: _qaNorm(sheetRule.name),
-          entityName: _qaCell(entry.row, 'Name') || '(Unnamed row)',
+          entityName: _qaRowIdentity(sheetRule.name, entry.row) || '(Unnamed row)',
           facility: entry.row._facility || '',
           detail: `${entry.count} rows share worksheet key [${rule.keys.join(', ')}] = "${entry.values.join(' | ')}".`,
           fields: rule.keys,
-          label: `${rule.ruleId}: must be unique within the worksheet`,
+          label: ruleDescription || rule.ruleId,
         });
       });
     });
@@ -705,6 +788,7 @@ function* _qaRunSteps() {
     }
 
     if (!sheetRule.uniqueRules?.length && uniqueKeys.length) {
+      activeRuleStage = _qaStage(sheetRule.stage, 'design');
       const seen = new Map();
       rows.forEach(row => {
         const fac = (row._facility || '').toLowerCase();
@@ -728,7 +812,7 @@ function* _qaRunSteps() {
           issueType: sheetRule.uniqueIssueType || 'uniqueness',
           icon: sheetRule.uniqueIcon,
           entityType: _qaNorm(sheetRule.name),
-          entityName: _qaCell(rec.row, 'Name') || '(Unnamed row)',
+          entityName: _qaRowIdentity(sheetRule.name, rec.row) || '(Unnamed row)',
           facility: rec.row._facility || '',
           detail: `${sheetRule.name} has ${rec.count} rows with same key [${uniqueKeys.join(', ')}] = "${rec.vals.join(' | ')}".`,
           fields: uniqueKeys,
@@ -741,6 +825,7 @@ function* _qaRunSteps() {
       yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, status:`Resolving ${sheetRule.name} cross-references` };
     }
     sheetRule.references.forEach(ref => {
+      activeRuleStage = _qaStage(ref.stage, sheetRule.stage || 'design');
       if (!ref.column || !ref.targetSheet || !ref.targetColumn) return;
 
       rows.forEach(row => {
@@ -758,7 +843,7 @@ function* _qaRunSteps() {
             issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
             icon: ref.icon || sheetRule.referenceIcon,
             entityType: _qaNorm(sheetRule.name),
-            entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+            entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Reference column ${ref.column} is blank but required to resolve ${ref.targetSheet}.${ref.targetColumn}.`,
             fields: [ref.column],
@@ -780,7 +865,7 @@ function* _qaRunSteps() {
             issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
             icon: ref.icon || sheetRule.referenceIcon,
             entityType: _qaNorm(sheetRule.name),
-            entityName: _qaCell(row, 'Name') || '(Unnamed row)',
+            entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `${ref.column} value "${v}" does not resolve to ${ref.targetSheet}.${ref.targetColumn}.`,
             fields: [ref.column],
@@ -795,7 +880,8 @@ function* _qaRunSteps() {
       yield { completed:completedSteps, total:totalSteps, sheet:sheetRule.name, status:`Checking ${sheetRule.name} relationships` };
     }
     (sheetRule.relationRules || []).forEach(rule => {
-      if (rule.type !== 'atLeastOneTargetPerRow') return;
+      activeRuleStage = _qaStage(rule.stage, sheetRule.stage || 'design');
+      if (!QA_RELATION_RULE_HANDLERS[rule.type]) return;
       const targets = _qaRowsForSheet(rule.targetSheet, inScope);
       rows.forEach(row => {
         const name = _qaCell(row, 'Name');
@@ -839,15 +925,40 @@ function qaIsRunning() {
   return !!(_qaRunToken && !_qaRunToken.done && !_qaRunToken.cancelled);
 }
 
+function qaRevalidateAfterEntityCreate() {
+  if (!qaHasRun || qaIsRunning()) return;
+  const list = document.getElementById('comp-list');
+  if (list) startQaRun(list);
+}
+
 function resetQaAudit() {
   cancelQaRun(true);
   qaFindings = [];
+  qaAllFindings = [];
   qaRuleResults = [];
+  qaAllRuleResults = [];
   qaScopeCounts = { comps:0, spaces:0, types:0, docs:0 };
   qaHasRun = false;
   _qaResultsSelectedSheet = '';
   _qaResultsSelectedCheck = '';
   _qaCellCache = new WeakMap();
+}
+
+function setQaStage(stage) {
+  const nextStage = _qaStage(stage, 'operation');
+  if (nextStage === qaSelectedStage) return;
+  qaSelectedStage = nextStage;
+  _qaApplyStageFilter();
+  _qaResultsSelectedCheck = '';
+  const context = typeof _projectActiveEntityContext === 'function' ? _projectActiveEntityContext() : null;
+  if (context?.row && typeof _projectRefreshFieldIssueBadges === 'function') {
+    _projectRefreshFieldIssueBadges(context.entityType, context.entityName, context.facility);
+  }
+  if (viewMode === 'qa') {
+    const list = document.getElementById('comp-list');
+    if (list) renderQAMode(list, false);
+  }
+  if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
 }
 
 function showQAMode(list = document.getElementById('comp-list')) {
@@ -932,7 +1043,7 @@ async function startQaRun(list = document.getElementById('comp-list')) {
   _qaUpdateProgressSurfaces(initial);
   if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
 
-  const steps = _qaRunSteps();
+  const steps = _qaRunSteps('operation');
   let result = steps.next();
   while (!result.done) {
     if (token !== _qaRunToken || token.cancelled) break;
@@ -959,19 +1070,26 @@ async function startQaRun(list = document.getElementById('comp-list')) {
     return;
   }
 
-  qaFindings = result.value || [];
+  qaAllFindings = result.value || [];
+  qaAllRuleResults = qaRuleResults;
+  _qaApplyStageFilter();
   qaHasRun = true;
   token.done = true;
   _qaRunToken = null;
   _qaRunProgress = null;
+  const modalContext = typeof _projectActiveEntityContext === 'function' ? _projectActiveEntityContext() : null;
+  if (modalContext?.row && typeof _projectRefreshFieldIssueBadges === 'function') {
+    _projectRefreshFieldIssueBadges(modalContext.entityType, modalContext.entityName, modalContext.facility);
+  }
   if (viewMode !== 'qa') return;
   renderQAMode(list, false);
   if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
 }
 
-function _qaSheetRuleForEntity(schema, entityType) {
+function _qaSheetRuleForEntity(schema, entityType, selectedStage = qaSelectedStage) {
   const type = _qaNorm(entityType);
-  return (schema?.sheets || []).find(sheet => _qaNorm(sheet.name) === type) || null;
+  const sheet = (schema?.sheets || []).find(candidate => _qaNorm(candidate.name) === type) || null;
+  return _qaSheetForStage(sheet, selectedStage);
 }
 
 function _qaFindingMatchesEntityFields(issue, entityType, entityName, facility, fieldKeys = [], previousEntityName = '') {
@@ -990,17 +1108,17 @@ function _qaFindingMatchesEntityFields(issue, entityType, entityName, facility, 
   return issueFields.some(field => fieldKeys.includes(field));
 }
 
-function _qaValidateEntityFields(entityType, entityName, facility, fields = []) {
+function _qaValidateEntityFields(entityType, entityName, facility, fields = [], selectedStage = 'operation') {
   _qaCellCache = new WeakMap();
   const schema = _qaParseSchema();
-  const sheetRule = _qaSheetRuleForEntity(schema, entityType);
+  const sheetRule = _qaSheetRuleForEntity(schema, entityType, selectedStage);
   if (!sheetRule) return [];
 
   const nameKey = _qaNorm(entityName);
   const facKey = _qaNorm(facility);
   const fieldKeys = [...new Set(fields.map(_qaNormKey).filter(Boolean))];
   const rows = _qaRowsForSheet(sheetRule.name, row =>
-    _qaNorm(_qaCell(row, 'Name')) === nameKey && (!facKey || _qaNorm(row?._facility) === facKey)
+    _qaNorm(_qaRowIdentity(sheetRule.name, row)) === nameKey && (!facKey || _qaNorm(row?._facility) === facKey)
   );
   if (!rows.length) return [];
 
@@ -1023,6 +1141,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
       detail: cfg.detail,
       fields: cfg.fields || [],
       issueType: _qaIssueType(cfg.issueType),
+      stage: _qaStage(cfg.stage, sheetRule.stage || 'design'),
     });
   };
 
@@ -1038,11 +1157,13 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         col.checks.forEach(checkName => {
           if (_qaNamedCheckResult(checkName, v, schema)) return;
           const ruleId = `${sheetRule.name}.${col.name}.${checkName}`;
+          const ruleWording = _qaNamedRuleDescription(checkName, schema);
           push({
             check: ruleId,
+            stage: col.stage,
             sev: _qaNamedCheckSeverity(checkName, col.severity),
             issueType: checkName === 'Format' || checkName === 'Valid' ? 'format' : 'completeness',
-            detail: `${col.name}: ${QA_NAMED_CHECK_WORDING[checkName] || `Failed ${checkName}.`} Value was ${v ? `"${v}"` : 'empty'}.`,
+            detail: `${col.name}: ${ruleWording || checkName}. Value was ${v ? `"${v}"` : 'empty'}.`,
             fields: [col.name],
             label: ruleId,
           });
@@ -1053,6 +1174,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
       if (col.required && !v) {
         push({
           check: 'required-missing',
+          stage: col.stage,
           sev: resolveSeverity('required-missing', col.severity || 'warning', col.name),
           sheet: sheetRule.name,
           issueType: col.issueType || 'completeness',
@@ -1069,6 +1191,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (!mainRx.test(v) && !(altRx && altRx.test(v))) {
           push({
             check: 'format-invalid',
+            stage: col.stage,
             sev: resolveSeverity('format-invalid', col.severity || sheetRule.formatSeverity || 'warning', col.name),
             sheet: sheetRule.name,
             issueType: col.issueType || sheetRule.formatIssueType || 'format',
@@ -1106,6 +1229,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (count > 1) {
           push({
             check: rule.ruleId || 'unique-duplicate',
+            stage: rule.stage,
             sev: rule.severity || resolveSeverity('unique-duplicate', sheetRule.uniqueSeverity || 'error', uniqueKeys[0] || ''),
             issueType: 'uniqueness',
             detail: `${sheetRule.name} has ${count} rows with same key [${uniqueKeys.join(', ')}] = "${keyVals.join(' | ')}".`,
@@ -1124,6 +1248,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (!ref.required) return;
         push({
           check: ref.ruleId || 'reference-missing',
+          stage: ref.stage,
           sev: resolveSeverity('reference-missing', ref.severity || sheetRule.referenceSeverity || 'error', ref.column),
           sheet: sheetRule.name,
           issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
@@ -1141,6 +1266,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (targetSet.has(value.toLowerCase())) return;
         push({
           check: ref.ruleId || 'reference-missing',
+          stage: ref.stage,
           sev: resolveSeverity('reference-missing', ref.severity || sheetRule.referenceSeverity || 'error', ref.column),
           sheet: sheetRule.name,
           issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
@@ -1154,7 +1280,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
 
     if (!fieldKeys.length || fieldKeys.includes(_qaNormKey('Name'))) {
       (sheetRule.relationRules || []).forEach(rule => {
-        if (rule.type !== 'atLeastOneTargetPerRow') return;
+        if (!QA_RELATION_RULE_HANDLERS[rule.type]) return;
         const name = _qaCell(row, 'Name');
         const matched = _qaRowsForSheet(rule.targetSheet, target =>
           _qaNorm(_qaCell(target, rule.targetColumn)) === _qaNorm(name)
@@ -1162,6 +1288,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = []) 
         if (matched) return;
         push({
           check:rule.ruleId,
+          stage:rule.stage,
           sev:rule.severity,
           issueType:'consistency',
           detail:`${sheetRule.name} "${name}" has no matching ${rule.targetSheet}.${rule.targetColumn} row.`,
@@ -1179,7 +1306,7 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
   if (!qaHasRun) return;
 
   const schema = _qaParseSchema();
-  const sheetRule = _qaSheetRuleForEntity(schema, entityType);
+  const sheetRule = _qaSheetRuleForEntity(schema, entityType, 'operation');
   const fieldKeys = new Set(fields.map(_qaNormKey).filter(Boolean));
   (sheetRule?.columns || []).forEach(column => {
     const columnKeys = [column.name, ...(column.aliases || [])].map(_qaNormKey).filter(Boolean);
@@ -1187,14 +1314,14 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
     columnKeys.forEach(key => fieldKeys.add(key));
   });
   const affectedFieldKeys = [...fieldKeys];
-  const removed = qaFindings.filter(issue =>
+  const removed = qaAllFindings.filter(issue =>
     _qaFindingMatchesEntityFields(issue, entityType, entityName, facility, affectedFieldKeys, previousEntityName)
   );
-  qaFindings = qaFindings.filter(issue =>
+  qaAllFindings = qaAllFindings.filter(issue =>
     !_qaFindingMatchesEntityFields(issue, entityType, entityName, facility, affectedFieldKeys, previousEntityName)
   );
   if (previousEntityName && _qaNorm(previousEntityName) !== _qaNorm(entityName)) {
-    qaFindings.forEach(issue => {
+    qaAllFindings.forEach(issue => {
       if (_qaNorm(issue.entityType) !== _qaNorm(entityType)) return;
       if (_qaNorm(issue.entityName) !== _qaNorm(previousEntityName)) return;
       if (facility && _qaNorm(issue.facility) !== _qaNorm(facility)) return;
@@ -1202,9 +1329,10 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
     });
   }
 
-  const next = _qaValidateEntityFields(entityType, entityName, facility, fields);
-  if (next.length) qaFindings.push(...next);
-  _qaAdjustRuleResultsForRow(entityType, removed, next);
+  const next = _qaValidateEntityFields(entityType, entityName, facility, fields, 'operation');
+  if (next.length) qaAllFindings.push(...next);
+  _qaAdjustRuleResultsForRow(entityType, removed, next, qaAllRuleResults);
+  _qaApplyStageFilter();
 
   if (viewMode === 'qa') {
     const list = document.getElementById('comp-list');
@@ -1213,7 +1341,7 @@ function qaRevalidateFieldChange(entityType, entityName, facility, fields = [], 
   if (typeof refreshQaGraphPanel === 'function') refreshQaGraphPanel();
 }
 
-function _qaAdjustRuleResultsForRow(entityType, previousFindings, nextFindings) {
+function _qaAdjustRuleResultsForRow(entityType, previousFindings, nextFindings, ruleResults = qaRuleResults) {
   const counts = findings => {
     const map = new Map();
     findings.forEach(finding => {
@@ -1231,7 +1359,7 @@ function _qaAdjustRuleResultsForRow(entityType, previousFindings, nextFindings) 
     const columnKey = key.slice(separator + 1);
     const delta = (after.get(key) || 0) - (before.get(key) || 0);
     if (!delta) return;
-    const result = qaRuleResults.find(item =>
+    const result = ruleResults.find(item =>
       item.check === check && _qaNorm(item.sheet) === _qaNorm(entityType) && _qaNormKey(item.column) === columnKey
     );
     if (!result) return;
@@ -1285,10 +1413,13 @@ function renderQAMode(list) {
     ? 'Auditing: ' + [...facSel].map(k => idx.facilityNames.find(n=>n.toLowerCase()===k)||k).join(', ')
     : 'Auditing all loaded facilities';
   const summary = `<div id="qa-summary">
+    <label class="qa-stage-control"><span>QA stage</span><select onchange="setQaStage(this.value)" aria-label="QA check stage">
+      ${QA_STAGE_ORDER.map(stage => `<option value="${stage}"${qaSelectedStage === stage ? ' selected' : ''}>${stage.charAt(0).toUpperCase() + stage.slice(1)}</option>`).join('')}
+    </select></label>
     <span class="qa-sev qa-sev-error">${bySev.error} error${bySev.error!==1?'s':''}</span>
     <span class="qa-sev qa-sev-warning">${bySev.warning} warning${bySev.warning!==1?'s':''}</span>
     ${bySev.info?`<span class="qa-sev qa-sev-info">${bySev.info} advisor${bySev.info!==1?'ies':'y'}</span>`:''}
-    <span class="qa-scope">${esc(scopeTxt)} — active filters set the row-level scope; worksheet-presence checks remain workbook-wide.</span>
+    <span class="qa-scope">${esc(scopeTxt)} — ${esc(qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1))} includes all preceding stages; active filters set the row-level scope.</span>
     ${_qaResultsSelectedSheet ? `<span class="qa-scope">Sheet: ${esc(_qaResultsSelectedSheet)}</span>` : ''}
     ${_qaResultsSelectedCheck ? `<span class="qa-scope">Rule: ${esc(_qaResultsSelectedCheck)}</span>` : ''}
     ${visibleFindings.length?`<button class="xbtn" onclick="exportQAReport()"><i class="bi bi-download me-1"></i>Download XLSX</button>`:''}
@@ -1404,16 +1535,12 @@ function _qaResolveFindingGroupValue(item, dim) {
 }
 
 function _qaCheckBlocks(items, depth = 0) {
-  const SEV_ORDER = { error:0, warning:1, info:2 };
   const byCheck = new Map();
   items.forEach(item => {
     if (!byCheck.has(item.check)) byCheck.set(item.check, []);
     byCheck.get(item.check).push(item);
   });
-  const checks = [...byCheck.keys()].sort((a,b) =>
-    (SEV_ORDER[QA_CHECKS[a]?.sev] ?? 9) - (SEV_ORDER[QA_CHECKS[b]?.sev] ?? 9)
-    || String(QA_CHECKS[a]?.label || a).localeCompare(String(QA_CHECKS[b]?.label || b))
-  );
+  const checks = [...byCheck.keys()];
 
   return checks.map(check => {
     const cfg = QA_CHECKS[check] || { label:check, sheet:'Multiple', sev:'warning', ico:'bi-list-check' };
@@ -1490,7 +1617,9 @@ function qaGroupBody(items) {
 
 function exportQAReport() {
   if (!qaFindings.length) return;
+  const stageLabel = qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1);
   const rows = qaFindings.map(x => ({
+    Stage: stageLabel,
     Severity: x.sev === 'info' ? 'Advisory' : x.sev.charAt(0).toUpperCase() + x.sev.slice(1),
     Check: (QA_CHECKS[x.check] || {}).label || x.check,
     Sheet: (QA_CHECKS[x.check] || {}).sheet || 'Multiple',
@@ -1503,11 +1632,49 @@ function exportQAReport() {
   XLSX.writeFile(wb, 'QA-Report_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
+function _qaRuleSubtitle(result) {
+  const check = String(result?.check || '').trim();
+  const parts = check.split('.').map(part => String(part || '').trim()).filter(Boolean);
+  if (parts.length < 3) return '';
+
+  const named = _qaRuleDescriptionForCheck(check);
+  return named || '';
+}
+
 function _qaPdfReportHtml(logoMarkup = '') {
   const generated = new Date();
+  const selectedFacilityKeys = sel?.facility?.size
+    ? new Set([...sel.facility].map(key => _qaNorm(key)))
+    : null;
+  const rootStyles = (typeof getComputedStyle === 'function' && document?.documentElement)
+    ? getComputedStyle(document.documentElement)
+    : null;
+  const themeToken = name => String(rootStyles?.getPropertyValue(name) || '').trim();
+  const headerThemeBySheet = {
+    facility:  { bg:themeToken('--pill-fac-bg'), text:themeToken('--pill-fac-text'), border:themeToken('--pill-fac-text') },
+    floor:     { bg:themeToken('--pill-floor-bg'), text:themeToken('--pill-floor-text'), border:themeToken('--pill-floor-text') },
+    space:     { bg:themeToken('--pill-space-bg'), text:themeToken('--pill-space-text'), border:themeToken('--pill-space-text') },
+    type:      { bg:themeToken('--pill-type-bg'), text:themeToken('--pill-type-text'), border:themeToken('--pill-type-text') },
+    system:    { bg:themeToken('--pill-system-bg'), text:themeToken('--pill-system-text'), border:themeToken('--pill-system-text') },
+    component: { bg:themeToken('--pill-component-bg'), text:themeToken('--pill-component-text'), border:themeToken('--pill-component-text') },
+    contact:   { bg:themeToken('--pill-contact-bg'), text:themeToken('--pill-contact-text'), border:themeToken('--pill-contact-text') },
+    document:  { bg:themeToken('--pill-doc-bg'), text:themeToken('--pill-doc-text'), border:themeToken('--pill-doc-text') },
+    doccat:    { bg:themeToken('--pill-doc-bg'), text:themeToken('--pill-doc-text'), border:themeToken('--pill-doc-text') },
+  };
+  const sheetHeaderThemeCss = Object.entries(headerThemeBySheet)
+    .map(([sheetKey, tone]) => {
+      const bg = tone.bg || '#e8f1f5';
+      const text = tone.text || '#16324f';
+      const border = tone.border || text;
+      return `.sheet-section.sheet-${sheetKey} h2 { background:${bg}; color:${text}; border-left-color:${border}; }`;
+    }).join('\n');
   const selectedFacilities = sel?.facility?.size
     ? [...sel.facility].map(key => idx.facilityNames.find(name => name.toLowerCase() === key) || key)
     : [];
+  const workbookFiles = [...new Set((db.facilities || [])
+    .filter(row => !selectedFacilityKeys || selectedFacilityKeys.has(_qaNorm(row._facility)))
+    .map(row => String(row._fileName || '').trim())
+    .filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const facilities = [...new Set((selectedFacilities.length ? selectedFacilities : (db.facilities || [])
     .map(row => String(row._facility || f(row, 'Name') || '').trim()))
     .filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -1526,7 +1693,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
     if (!grouped.has(sheet)) grouped.set(sheet, []);
     grouped.get(sheet).push(result);
   });
-  const sheets = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const sheets = [...grouped.entries()];
   const severityFor = result => {
     const finding = qaFindings.find(item => item.check === result.check && _qaNorm(item.sheet || item.entityType) === _qaNorm(result.sheet));
     return String(finding?.sev || QA_CHECKS[result.check]?.sev || 'warning').toLowerCase();
@@ -1543,22 +1710,23 @@ function _qaPdfReportHtml(logoMarkup = '') {
     return `<tr><td>${esc(sheet)}</td><td>${results.length}</td><td>${pass}</td><td>${fail}</td><td><strong>${score}%</strong></td></tr>`;
   }).join('');
   const sheetSections = sheets.map(([sheet, results]) => {
-    const rows = [...results]
-      .sort((a, b) => String(a.column || '').localeCompare(String(b.column || '')) || String(a.label || a.check).localeCompare(String(b.label || b.check)))
-      .map(result => {
+    const sheetKey = _qaNorm(sheet).replace(/[^a-z0-9]+/g, '-');
+    const rows = results.map(result => {
         const severity = severityFor(result);
         const fail = Number(result.fail || 0);
         const status = fail ? (severity === 'info' ? 'Advisory' : severity.charAt(0).toUpperCase() + severity.slice(1)) : 'Pass';
+        const ruleName = String(result.check || result.label || 'rule');
+        const ruleDescription = _qaRuleSubtitle(result);
         return `<tr>
           <td>${esc(result.column || 'Sheet')}</td>
-          <td><span class="rule-name">${esc(result.label || result.check)}</span><span class="rule-id">${esc(result.check)}</span></td>
+          <td><span class="rule-name">${esc(ruleName)}</span>${ruleDescription ? `<span class="rule-id">${esc(ruleDescription)}</span>` : ''}</td>
           <td class="num">${Number(result.pass || 0)}</td>
           <td class="num">${fail}</td>
           <td class="num">${scoreFor(result)}%</td>
           <td><span class="status status-${fail ? severity : 'pass'}">${esc(status)}</span></td>
         </tr>`;
       }).join('');
-    return `<section class="sheet-section">
+    return `<section class="sheet-section sheet-${esc(sheetKey)}">
       <h2>${esc(sheet)} <span>${results.length} rule${results.length === 1 ? '' : 's'}</span></h2>
       <table class="results-table"><thead><tr><th>Column / Scope</th><th>Rule</th><th>Pass</th><th>Fail</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
     </section>`;
@@ -1568,13 +1736,13 @@ function _qaPdfReportHtml(logoMarkup = '') {
   <style>
     @page { size:A4 portrait; margin:14mm 12mm 19mm; }
     * { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    body { margin:0; color:#17202a; background:#fff; font-family:"Segoe UI",Arial,sans-serif; font-size:9pt; line-height:1.35; }
+    body { margin:0; padding-bottom:16mm; color:#17202a; background:#fff; font-family:"Segoe UI",Arial,sans-serif; font-size:9pt; line-height:1.35; }
     .report-header { display:flex; align-items:center; gap:12px; padding-bottom:10px; border-bottom:3px solid #16324f; }
     .report-logo { width:42px; height:48px; flex:0 0 auto; }
     .report-logo svg { width:100%; height:100%; display:block; }
     h1 { margin:0; color:#16324f; font-size:20pt; letter-spacing:0; }
     .subtitle { margin-top:2px; color:#536273; font-size:9pt; }
-    .meta { display:grid; grid-template-columns:1fr 2fr; gap:6px 14px; margin:12px 0; padding:9px 10px; background:#f1f5f8; border-left:4px solid #00a9a5; }
+    .meta { display:grid; grid-template-columns:1fr 1.5fr 1.5fr; gap:6px 14px; margin:12px 0; padding:9px 10px; background:#f1f5f8; border-left:4px solid #00a9a5; }
     .meta-label { color:#607080; font-weight:700; }
     .summary { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; margin:0 0 12px; }
     .summary-card { padding:8px; border:1px solid #d9e1e8; border-radius:4px; }
@@ -1587,6 +1755,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .sheet-summary { margin-bottom:14px; }
     .sheet-section { margin:0 0 13px; }
     .sheet-section h2 { break-after:avoid; margin:0; padding:6px 8px; color:#16324f; background:#e8f1f5; border-left:4px solid #00a9a5; font-size:12pt; }
+    ${sheetHeaderThemeCss}
     .sheet-section h2 span { float:right; color:#607080; font-size:8pt; font-weight:500; }
     .results-table thead { display:table-header-group; }
     .results-table tr { break-inside:avoid; }
@@ -1597,11 +1766,11 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .status { display:inline-block; padding:2px 5px; border-radius:3px; font-size:7pt; font-weight:800; text-transform:uppercase; }
     .status-pass { color:#17653a; background:#dff3e7; } .status-error { color:#9d1c1c; background:#fbe1e1; }
     .status-warning { color:#7b4a00; background:#fff0c8; } .status-info { color:#075c78; background:#dff3fa; }
-    .report-footer { position:fixed; left:0; right:0; bottom:-13mm; padding-top:4px; border-top:1px solid #bdc8d2; color:#697887; font-size:7pt; text-align:center; }
+    .report-footer { position:fixed; left:12mm; right:12mm; bottom:1mm; color:#697887; font-size:7pt; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     @media screen { body { width:210mm; min-height:297mm; margin:10mm auto; padding:14mm 12mm 19mm; box-shadow:0 2px 18px #0002; } .report-footer { position:static; margin-top:16px; } }
   </style></head><body>
     <header class="report-header"><div class="report-logo">${logoMarkup}</div><div><h1>COBie QA Report</h1><div class="subtitle">Guerrilla Ops workbook quality assessment</div></div></header>
-    <div class="meta"><div><span class="meta-label">Generated</span><br>${esc(generated.toLocaleString())}</div><div><span class="meta-label">Facilities</span><br>${esc(facilities.join(', ') || 'No facility names available')}</div></div>
+    <div class="meta"><div><span class="meta-label">Generated</span><br>${esc(generated.toLocaleString())}<br><span class="meta-label">QA stage</span><br>${esc(qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1))}</div><div><span class="meta-label">Facilities</span><br>${esc(facilities.join(', ') || 'No facility names available')}</div><div><span class="meta-label">Workbooks</span><br>${esc(workbookFiles.join(', ') || 'No source file names available')}</div></div>
     <div class="summary">
       <div class="summary-card"><span class="summary-value">${overallScore}%</span><span class="summary-label">Overall score</span></div>
       <div class="summary-card"><span class="summary-value">${qaRuleResults.length}</span><span class="summary-label">Rules assessed</span></div>
@@ -1611,7 +1780,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
     </div>
     <table class="sheet-summary"><thead><tr><th>Sheet</th><th>Rules</th><th>Pass</th><th>Fail</th><th>Score</th></tr></thead><tbody>${sheetSummaryRows}</tbody></table>
     ${sheetSections || '<p>No QA rule results are available.</p>'}
-    <footer class="report-footer">Generated by Guerrilla Ops. This report and software are provided without guarantee of accuracy. Verify results against source information and applicable requirements.</footer>
+    <footer class="report-footer">Generated by Guerrilla Ops and provided without guarantee of accuracy. Verify results against source information and applicable requirements.</footer>
   </body></html>`;
 }
 
