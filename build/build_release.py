@@ -101,6 +101,10 @@ CSS_URL_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 HTML_COMMENT_PATTERN = re.compile(r"<!--([\s\S]*?)-->")
+XLSX_BRIDGE_PATTERN = re.compile(
+    r"<script>\s*globalThis\.XLSX_STYLE\s*=\s*globalThis\.XLSX;\s*globalThis\.XLSX\s*=\s*globalThis\.XLSX_CORE;\s*</script>",
+    flags=re.IGNORECASE,
+)
 
 
 # ============================================================================
@@ -720,6 +724,12 @@ def build_html(
 
     # Remove authoring comments from the HTML template before script injection.
     html = HTML_COMMENT_PATTERN.sub("", html)
+
+    # Keep XLSX bridge safe for environments where XLSX_CORE is not defined.
+    html = XLSX_BRIDGE_PATTERN.sub(
+        "<script>globalThis.XLSX_STYLE = globalThis.XLSX; if (globalThis.XLSX_CORE) { globalThis.XLSX = globalThis.XLSX_CORE; }</script>",
+        html,
+    )
 
     def _style_replacer(match: re.Match[str]) -> str:
         href = extract_href(match.group(0)) or ""
