@@ -42,7 +42,7 @@ systems and documents. No installation. No account. No data upload.
 
 ## Get started
 
-1. **Open Guerrilla Ops.** Use the [live version](https://digital-guerrilla.github.io/Guerrilla-Ops/Guerrilla-Ops.html),
+1. **Open Guerrilla Ops.** Use the [live version](https://digital-guerrilla.github.io/Guerrilla-Ops/),
    or download and double-click `Guerrilla-Ops.html`.
 2. **Choose your data.** Open one COBie workbook, several files, or a folder.
 3. **Start exploring.** Filter, search, group and open records.
