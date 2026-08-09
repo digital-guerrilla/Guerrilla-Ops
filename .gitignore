@@ -2,4 +2,5 @@ excel/
 .venv/
 .vscode/
 node_modules/
-__pycache__
+dev/packages/cache/
+__pycache__/
