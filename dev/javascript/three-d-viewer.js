@@ -391,7 +391,9 @@ function _viewer3dRebuildRoomGeometryCache(floorKey = '') {
       .filter(plan => plan.facility === floorPlan.facility && plan.bounds?.y > floorPlan.bounds.y)
       .sort((a, b) => a.bounds.y - b.bounds.y)[0];
     const storeyHeight = nextFloor ? nextFloor.bounds.y - floorPlan.bounds.y : defaultHeight;
-    const polygons = floorPlan.svgRaw ? _viewer3dSvgRoomPolygons(floorPlan) : new Map();
+    const polygons = floorPlan.svgRaw && _normalizedFloorToSvgAffine(floorPlan.alignment?.floorToSvg)
+      ? _viewer3dSvgRoomPolygons(floorPlan)
+      : new Map();
 
     floorSpaces.forEach(entry => {
       const name = f(entry.row, 'Name').toLowerCase();

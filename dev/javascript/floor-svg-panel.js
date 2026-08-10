@@ -197,7 +197,7 @@ function _floorAlignmentFromRaw(raw) {
       flipVertical: !!(parsed?.flipVertical || parsed?.flipY),
       originXPct: _unitInterval(parsed?.originXPct ?? parsed?.originX),
       originYPct: _unitInterval(parsed?.originYPct ?? parsed?.originY),
-      floorToSvg:parsed?.floorToSvg || null,
+      floorToSvg:_normalizedFloorToSvgAffine(parsed?.floorToSvg),
     };
   } catch (_) {
     return _defaultFloorAlignment();
@@ -215,7 +215,7 @@ function _floorAlignmentToRaw(alignment) {
     flipVertical: !!(alignment?.flipVertical || alignment?.flipY),
     originXPct: _unitInterval(alignment?.originXPct ?? alignment?.originX),
     originYPct: _unitInterval(alignment?.originYPct ?? alignment?.originY),
-    floorToSvg:alignment?.floorToSvg || undefined,
+    floorToSvg:_normalizedFloorToSvgAffine(alignment?.floorToSvg) || undefined,
   });
 }
 
@@ -255,7 +255,7 @@ function _floorAlignmentSave(entry, alignment) {
     flipVertical: !!alignment?.flipVertical,
     originXPct: _unitInterval(alignment?.originXPct ?? alignment?.originX),
     originYPct: _unitInterval(alignment?.originYPct ?? alignment?.originY),
-    floorToSvg:alignment?.floorToSvg || null,
+    floorToSvg:_normalizedFloorToSvgAffine(alignment?.floorToSvg),
   };
   _floorPlanAlignmentFloorKey = entry?.key || '';
   return saved;
@@ -714,29 +714,6 @@ function _svgCanvasSizeForFlip(svgRoot) {
   return null;
 }
 
-function _bakeFlipIntoSvgMarkup(svgMarkup, flipH, flipV) {
-  if (!flipH && !flipV) return svgMarkup;
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(String(svgMarkup || ''), 'image/svg+xml');
-  const svg = doc.documentElement;
-  if (!svg || svg.nodeName.toLowerCase() !== 'svg') return svgMarkup;
-
-  const size = _svgCanvasSizeForFlip(svg);
-  if (!size) return svgMarkup;
-
-  const g = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
-  const sx = flipH ? -1 : 1;
-  const sy = flipV ? -1 : 1;
-  const tx = flipH ? (2 * size.minX + size.width) : 0;
-  const ty = flipV ? (2 * size.minY + size.height) : 0;
-  g.setAttribute('transform', `matrix(${sx} 0 0 ${sy} ${tx} ${ty})`);
-
-  while (svg.firstChild) g.appendChild(svg.firstChild);
-  svg.appendChild(g);
-
-  return new XMLSerializer().serializeToString(svg);
-}
-
 function _handleSvgUpload(file, floorKey) {
   const floorRow = _floorByKey(floorKey);
   if (!floorRow || !file) return;
@@ -1158,59 +1135,39 @@ function _alignmentApplyFillOpacity(svgRoot) {
 function _alignmentFloorToSvgAffine(floorEntry, svgRoot, alignment, stageWidth, stageHeight) {
   if (!floorEntry || !svgRoot || !alignment || stageWidth <= 0 || stageHeight <= 0) return null;
   const roomCanvas = _alignmentModalElements().roomCanvas;
-  const svgLayer = _alignmentModalElements().svgLayer;
   const layoutWidth = roomCanvas?.clientWidth || stageWidth;
   const layoutHeight = roomCanvas?.clientHeight || stageHeight;
-  const layoutOffsetX = (stageWidth - layoutWidth) / 2;
-  const layoutOffsetY = (stageHeight - layoutHeight) / 2;
-  const layerOffsetX = (stageWidth - (svgLayer?.clientWidth || stageWidth)) / 2;
-  const layerOffsetY = (stageHeight - (svgLayer?.clientHeight || stageHeight)) / 2;
   const layout = _alignmentRoomLayout(floorEntry, layoutWidth, layoutHeight);
   const drawing = _svgDrawingBounds(svgRoot);
-  const size = _svgNaturalSize(svgRoot, { clientWidth:stageWidth, clientHeight:stageHeight });
-  if (!layout || !drawing || !size?.w || !size?.h) return null;
+  if (!layout || !drawing) return null;
 
-  const scale = Math.max(0.0001, Number(alignment.scale) || 1);
-  const theta = (Number(alignment.rotation) || 0) * Math.PI / 180;
-  const sx = (alignment.flipHorizontal ? -1 : 1) * scale;
-  const sy = (alignment.flipVertical ? -1 : 1) * scale;
-  const cos = Math.cos(theta);
-  const sin = Math.sin(theta);
-  const matrixA = cos * sx;
-  const matrixB = sin * sx;
-  const matrixC = -sin * sy;
-  const matrixD = cos * sy;
-  const determinant = (matrixA * matrixD) - (matrixB * matrixC);
-  if (Math.abs(determinant) <= 1e-12) return null;
+  const screenCtm = typeof svgRoot.getScreenCTM === 'function' ? svgRoot.getScreenCTM() : null;
+  const roomCanvasRect = roomCanvas?.getBoundingClientRect?.() || null;
+  if (!screenCtm || typeof svgRoot.createSVGPoint !== 'function' || !roomCanvasRect?.width || !roomCanvasRect?.height) return null;
 
-  const positionX = layerOffsetX + (stageWidth * _unitInterval(alignment.xPct));
-  const positionY = layerOffsetY + (stageHeight * _unitInterval(alignment.yPct));
-  const originX = size.w * _unitInterval(alignment.originXPct);
-  const originY = size.h * _unitInterval(alignment.originYPct);
+  let inverse;
+  try {
+    inverse = screenCtm.inverse();
+  } catch (_) {
+    return null;
+  }
   const mapPoint = (u, v) => {
-    const stageX = layoutOffsetX + layout.left + (u * layout.width);
-    const stageY = layoutOffsetY + layout.top + (v * layout.height);
-    const transformedX = stageX - positionX - originX + (size.w / 2);
-    const transformedY = stageY - positionY - originY + (size.h / 2);
-    const localX = originX + (((matrixD * transformedX) - (matrixC * transformedY)) / determinant);
-    const localY = originY + (((-matrixB * transformedX) + (matrixA * transformedY)) / determinant);
+    const canvasX = layout.left + (u * layout.width);
+    const canvasY = layout.top + (v * layout.height);
+    const point = svgRoot.createSVGPoint();
+    point.x = roomCanvasRect.left + ((canvasX / layoutWidth) * roomCanvasRect.width);
+    point.y = roomCanvasRect.top + ((canvasY / layoutHeight) * roomCanvasRect.height);
+    const local = point.matrixTransform(inverse);
     return {
-      u:(localX - drawing.x) / drawing.width,
-      v:(localY - drawing.y) / drawing.height,
+      u:(local.x - drawing.x) / drawing.width,
+      v:(local.y - drawing.y) / drawing.height,
     };
   };
 
   const topLeft = mapPoint(0, 0);
   const topRight = mapPoint(1, 0);
   const bottomLeft = mapPoint(0, 1);
-  return {
-    a:topRight.u - topLeft.u,
-    b:bottomLeft.u - topLeft.u,
-    c:topLeft.u,
-    d:topRight.v - topLeft.v,
-    e:bottomLeft.v - topLeft.v,
-    f:topLeft.v,
-  };
+  return _floorToSvgAffineFromUnitPoints(topLeft, topRight, bottomLeft);
 }
 
 function _alignmentTransformForStage(transform) {
@@ -1345,6 +1302,7 @@ function _alignmentRenderSvg(floorEntry, svgRaw, transform) {
     els.stage.clientWidth,
     els.stage.clientHeight
   );
+  if (_floorPlanAlignmentDraft) _floorPlanAlignmentDraft.floorToSvg = previewAlignment.floorToSvg;
   _applyFilteredDots(cleanSvg, floorEntry, previewAlignment);
 }
 
@@ -1508,6 +1466,7 @@ function _alignmentBindInteractions() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       state.mode = '';
+      render();
       const shellNow = document.getElementById('floor-align-shell');
       if (shellNow) shellNow.style.cursor = 'grab';
     };
@@ -1587,23 +1546,6 @@ function _saveFloorPlanAlignment() {
   const floorEntry = _alignmentModalFloorEntry();
   if (!floorEntry) return;
   const draft = { ...(_floorPlanAlignmentDraft || _floorPlanAlignment || _alignmentDefaultForEntry(floorEntry)) };
-  const flipH = !!draft.flipHorizontal;
-  const flipV = !!draft.flipVertical;
-
-  if (flipH || flipV) {
-    const floorRow = _floorByKey(floorEntry.key);
-    const rawSvg = _collectFloorSvgByKey()[floorEntry.key] || '';
-    const inline = _extractInlineSvgMarkup(rawSvg);
-    if (floorRow && inline) {
-      const baked = _bakeFlipIntoSvgMarkup(inline, flipH, flipV);
-      if (baked && baked !== inline && _upsertFloorSvgAttribute(floorRow, baked)) {
-        _logChange('floor', f(floorRow, 'Name'), floorRow._facility || '');
-      }
-    }
-    draft.flipHorizontal = false;
-    draft.flipVertical = false;
-  }
-
   const els = _alignmentModalElements();
   const svgRoot = document.querySelector('#floor-align-shell svg');
   draft.floorToSvg = _alignmentFloorToSvgAffine(
@@ -1613,6 +1555,10 @@ function _saveFloorPlanAlignment() {
     els.stage?.clientWidth || 0,
     els.stage?.clientHeight || 0
   );
+  if (!draft.floorToSvg) {
+    alert('The displayed floor plan transform could not be measured. Resize the alignment window and try again.');
+    return;
+  }
 
   _floorPlanAlignmentDraft = draft;
   const floorRow = _floorAlignmentSave(floorEntry, draft);

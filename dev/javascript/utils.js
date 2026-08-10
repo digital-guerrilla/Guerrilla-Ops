@@ -497,6 +497,28 @@ function _finiteNumber(value, fallback = 0.5) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function _normalizedFloorToSvgAffine(map) {
+  if (!map) return null;
+  const normalized = Object.fromEntries(
+    ['a', 'b', 'c', 'd', 'e', 'f'].map(key => [key, Number(map[key])])
+  );
+  if (!Object.values(normalized).every(Number.isFinite)) return null;
+  const determinant = (normalized.a * normalized.e) - (normalized.b * normalized.d);
+  return Math.abs(determinant) > 1e-12 ? normalized : null;
+}
+
+function _floorToSvgAffineFromUnitPoints(topLeft, topRight, bottomLeft) {
+  if (![topLeft, topRight, bottomLeft].every(point => point && Number.isFinite(point.u) && Number.isFinite(point.v))) return null;
+  return _normalizedFloorToSvgAffine({
+    a:topRight.u - topLeft.u,
+    b:bottomLeft.u - topLeft.u,
+    c:topLeft.u,
+    d:topRight.v - topLeft.v,
+    e:bottomLeft.v - topLeft.v,
+    f:topLeft.v,
+  });
+}
+
 function _applyFloorAlignmentToUv(u, v, alignment) {
   const uu = _finiteNumber(u);
   const vv = _finiteNumber(v);
@@ -548,8 +570,8 @@ function _invertFloorAlignmentFromUv(u, v, alignment) {
 }
 
 function _floorUvToSvgUv(u, v, alignment) {
-  const map = alignment?.floorToSvg;
-  if (map && [map.a, map.b, map.c, map.d, map.e, map.f].every(Number.isFinite)) {
+  const map = _normalizedFloorToSvgAffine(alignment?.floorToSvg);
+  if (map) {
     return {
       u:(map.a * u) + (map.b * v) + map.c,
       v:(map.d * u) + (map.e * v) + map.f,
@@ -559,8 +581,8 @@ function _floorUvToSvgUv(u, v, alignment) {
 }
 
 function _svgUvToFloorUv(u, v, alignment) {
-  const map = alignment?.floorToSvg;
-  if (map && [map.a, map.b, map.c, map.d, map.e, map.f].every(Number.isFinite)) {
+  const map = _normalizedFloorToSvgAffine(alignment?.floorToSvg);
+  if (map) {
     const determinant = (map.a * map.e) - (map.b * map.d);
     if (Math.abs(determinant) > 1e-12) {
       const x = u - map.c;

@@ -963,12 +963,28 @@ const svgUv = context._floorUvToSvgUv(0.3, 0.7, affineAlignment);
 const restoredFloorUv = context._svgUvToFloorUv(svgUv.u, svgUv.v, affineAlignment);
 assert(Math.abs(restoredFloorUv.u - 0.3) < 1e-10);
 assert(Math.abs(restoredFloorUv.v - 0.7) < 1e-10);
+assert.deepStrictEqual(
+  { ...context._normalizedFloorToSvgAffine({ a:'1', b:'0', c:'0.25', d:'0', e:'1', f:'-0.5' }) },
+  { a:1, b:0, c:0.25, d:0, e:1, f:-0.5 },
+  'loaded affine values must be normalized to finite numbers'
+);
+assert.strictEqual(context._normalizedFloorToSvgAffine({ a:1, b:2, c:0, d:2, e:4, f:0 }), null, 'singular affine mappings must be rejected');
+assert.deepStrictEqual({ ...context._floorToSvgAffineFromUnitPoints(
+  { u:1, v:0 }, { u:0, v:0 }, { u:1, v:1 }
+) }, { a:-1, b:0, c:1, d:0, e:1, f:0 }, 'the saved affine must preserve the reflected UI correspondence');
 
 loadModule('floor-svg-panel.js');
 const legacyAlignment = context._floorAlignmentFromRaw('{"scale":0.25}');
 assert.strictEqual(legacyAlignment.scale, 0.25, 'legacy uniform alignment scale must remain unchanged');
 const nonUniformAlignment = context._floorAlignmentFromRaw('{"scale":1,"scaleX":0.3,"scaleY":0.5}');
 assert.strictEqual(nonUniformAlignment.scale, 0.3, 'nonuniform saved alignment must migrate to the contained uniform scale');
+const persistedAlignment = context._floorAlignmentFromRaw('{"floorToSvg":{"a":"1","b":"0","c":"0.2","d":"0","e":"1","f":"0.3"}}');
+assert.deepStrictEqual({ ...persistedAlignment.floorToSvg }, { a:1, b:0, c:0.2, d:0, e:1, f:0.3 });
+const roundTripAlignment = context._floorAlignmentFromRaw(context._floorAlignmentToRaw(affineAlignment));
+assert.deepStrictEqual({ ...roundTripAlignment.floorToSvg }, affineAlignment.floorToSvg, 'saved affine alignment must load without coordinate drift');
+const flippedRoundTrip = context._floorAlignmentFromRaw(context._floorAlignmentToRaw({ ...affineAlignment, flipHorizontal:true, flipVertical:true }));
+assert.strictEqual(flippedRoundTrip.flipHorizontal, true, 'horizontal UI reflection must remain set after load');
+assert.strictEqual(flippedRoundTrip.flipVertical, true, 'vertical UI reflection must remain set after load');
 const rotatedViewBounds = context._svgRotatedBounds(100, 50, 90);
 assert(Math.abs(rotatedViewBounds.width - 50) < 1e-10);
 assert(Math.abs(rotatedViewBounds.height - 100) < 1e-10);
@@ -981,6 +997,13 @@ assert.strictEqual(stored[context._rowKey(floor, 'Level 01')], svg);
 loadModule('component-placement.js');
 assert.strictEqual(context._componentPlacementMarkerCoordinate(undefined, 862), 862, 'missing saved marker coordinates must use the recovered UV position');
 assert.strictEqual(context._componentPlacementMarkerCoordinate(0, 862), 0, 'valid SVG origin coordinates must be preserved');
+const originalResolvedFloorAlignmentForEntry = context._resolvedFloorAlignmentForEntry;
+context._resolvedFloorAlignmentForEntry = () => ({ floorToSvg:{ a:1, b:0, c:0, d:0, e:1, f:0 } });
+const placementSceneKeyBeforeAlignment = context._componentPlacementPreviewSceneKey({ spaceName:'Room 101' }, { key:'level 01' });
+context._resolvedFloorAlignmentForEntry = () => ({ floorToSvg:{ a:1, b:0, c:0.2, d:0, e:1, f:0 } });
+const placementSceneKeyAfterAlignment = context._componentPlacementPreviewSceneKey({ spaceName:'Room 101' }, { key:'level 01' });
+assert.notStrictEqual(placementSceneKeyAfterAlignment, placementSceneKeyBeforeAlignment, 'affine alignment changes must invalidate the placement preview cache');
+context._resolvedFloorAlignmentForEntry = originalResolvedFloorAlignmentForEntry;
 context.db.spaces = [
   { Name:'Room 101', FloorName:'Level 01', _facility:'Facility A' },
   { Name:'Room 102', FloorName:'Level 01', _facility:'Facility A' },
@@ -1002,6 +1025,12 @@ context._viewer3dSvgRoomPolygons = () => new Map([
   ['room 101', cachedPolygon],
   ['room 102', cachedPolygon],
 ]);
+floorPlans[0].alignment = null;
+context._viewer3dRebuildRoomGeometryCache();
+assert(context._viewer3dSceneData([], {}).objects.filter(object => object.kind === 'space').every(object => !object.polygon), 'SVG rooms must not extrude before a valid alignment is saved');
+floorPlans[0].alignment = affineAlignment;
+const originalFloorAlignmentAttrValueForRow = context._floorAlignmentAttrValueForRow;
+context._floorAlignmentAttrValueForRow = () => context._floorAlignmentToRaw(affineAlignment);
 context._viewer3dRebuildRoomGeometryCache();
 const roomScene = context._viewer3dSceneData([], {});
 const cachedRooms = roomScene.objects.filter(object => object.kind === 'space');
@@ -1009,6 +1038,7 @@ assert.strictEqual(cachedRooms.length, 2, 'SVG polygons should create rooms with
 assert(cachedRooms.every(object => object.polygon), 'cached SVG polygons must take precedence over coordinate cubes');
 assert.strictEqual(cachedRooms.find(object => object.spaceKey === 'room 101').sizeY, 3000, 'SVG rooms should retain coordinate height when available');
 assert.strictEqual(cachedRooms.find(object => object.spaceKey === 'room 102').sizeY, 3000, 'SVG-only rooms should use the floor default height');
+context._floorAlignmentAttrValueForRow = originalFloorAlignmentAttrValueForRow;
 context._viewer3dSvgRoomPolygons = originalSvgRoomPolygons;
 context.db.spaces = [context.db.spaces[0]];
 assert.strictEqual(context._viewer3dRoomOpacity({ kind:'space', floorKey:'level 01' }, 'level 00'), 0.04);

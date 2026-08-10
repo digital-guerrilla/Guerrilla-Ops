@@ -1,0 +1,8 @@
+- CRITICAL: Never read or request entire files if you only need a specific function or block. 
+- Do not read, grep, or index build directories (e.g., `dist/`, `build/`), `node_modules`, or log files.
+- If you need file structure information, always use the skeleton or directory tree first rather than reading full source files.
+- Stop reading git history or extensive `git log` outputs unless explicitly commanded.
+- Be extremely concise. Avoid conversational filler, pleasantries, or explanations of what your code does unless explicitly asked.
+- Provide ONLY the modified code snippet or diff. Never print the entire file to show a 3-line change.
+- Do not repeat instructions, comments, or boilerplate code that already exists in the file.
+- Use explicit markdown code blocks with only the relevant language syntax highlighting.

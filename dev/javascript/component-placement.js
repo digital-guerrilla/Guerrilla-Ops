@@ -238,6 +238,7 @@ function _componentPlacementFloorBounds(floorEntry, coordIndex = null) {
 function _componentPlacementPreviewSceneKey(placement, floorEntry) {
   if (!placement?.spaceName || !floorEntry) return '';
   const alignment = _resolvedFloorAlignmentForEntry(floorEntry);
+  const floorToSvg = _normalizedFloorToSvgAffine(alignment.floorToSvg);
   return [
     placement.facility || '',
     floorEntry.key || '',
@@ -250,6 +251,7 @@ function _componentPlacementPreviewSceneKey(placement, floorEntry) {
     alignment.flipVertical ? '1' : '0',
     String(alignment.originXPct ?? 0.5),
     String(alignment.originYPct ?? 0.5),
+    ...['a', 'b', 'c', 'd', 'e', 'f'].map(key => String(floorToSvg?.[key] ?? '')),
   ].join('|');
 }
 
