@@ -8,9 +8,9 @@
   </meta>
 
   <formats>
-    <format id="email" regex="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"/>
-    <format id="isoDate" regex="^\d{4}-\d{2}-\d{2}$"/>
-    <format id="isoDateTime" regex="^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:?\d{2})?$"/>
+    <format name="email" criticality="warning" regex="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$">Must have a valid email address.</format>
+    <format name="isoDate" criticality="warning" regex="^\d{4}-\d{2}-\d{2}$">Must use ISO date format YYYY-MM-DD.</format>
+    <format name="isoDateTime" criticality="warning" regex="^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:?\d{2})?$">Must use an ISO date and time with an optional timezone.</format>
   </formats>
 
   <stages>
@@ -30,8 +30,6 @@
     <rule name="AtLeastOneRowPresent" criticality="error">The worksheet must contain at least one row.</rule>
     <rule name="ZeroOrGreaterOrNA" criticality="warning">If text is provided, it must represent zero or a positive number, or "n/a".</rule>
     <rule name="ZeroOrGreater" criticality="warning">If text is provided, it must represent zero or a positive number.</rule>
-    <rule name="Format" criticality="warning">Must have a valid email address.</rule>
-    <rule name="Valid" criticality="warning">Must have a valid ISO date or date-time.</rule>
   </ruleDefinitions>
 
   <sheets>
@@ -41,9 +39,9 @@
       <ui label="Contact" pluralLabel="Contacts" icon="bi-person-fill" colorToken="contact" modalTitle="Contact Information"/>
       <validation presenceRule="Contact.AtLeastOneRowPresent" stage="Design"/>
       <columns>
-        <column name="Email" checks="NotNull|Format|Unique" groupTitle="Identification"><unique ruleId="Contact.Email.Unique" severity="error"/></column>
-        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit"><reference ruleId="Contact.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
-        <column name="CreatedOn" checks="NotNull" groupTitle="Audit"/>
+        <column name="Email" checks="NotNull|Unique" groupTitle="Identification"><format name="email"/><unique ruleId="Contact.Email.Unique" severity="error"/></column>
+        <column name="CreatedBy" checks="NotNull" groupTitle="Audit"><format name="email"/><reference ruleId="Contact.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="CreatedOn" checks="NotNull" groupTitle="Audit"><format name="isoDateTime"/></column>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalIdentifier" aliases="ExtIdentifier" checks="NotEmpty" groupTitle="External References"/>
@@ -71,8 +69,8 @@
       <validation singleRowRule="Facility.OneAndOnlyOneFacilityFound" stage="Design"/>
       <columns>
         <column name="Name" checks="NotNull|Unique" groupTitle="Identification"><unique ruleId="Facility.Name.Unique" severity="error"/></column>
-        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Identification"><reference ruleId="Facility.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
-        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>
+        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"><format name="email"/><reference ruleId="Facility.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"><format name="isoDateTime"/></column>
         <column name="Category" checks="NotNull" groupTitle="Identification"/>
         <column name="Description" checks="NotEmpty" groupTitle="Identification"/>
         <column name="ProjectName" checks="NotNull" groupTitle="Context"/>
@@ -100,8 +98,8 @@
       <validation presenceRule="Floor.AtLeastOneRowPresent" stage="Design"/>
       <columns>
         <column name="Name" checks="NotNull|Unique" groupTitle="Identification"><unique ruleId="Floor.Name.Unique" severity="error"/></column>
-        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Identification"><reference ruleId="Floor.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
-        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>
+        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"><format name="email"/><reference ruleId="Floor.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"><format name="isoDateTime"/></column>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References"/>
@@ -119,13 +117,13 @@
       <validation presenceRule="Space.AtLeastOneRowPresent" stage="Design"/>
       <columns>
         <column name="Name" checks="NotNull|Unique" groupTitle="Identification"><unique ruleId="Space.PrimaryKey.Unique.Error" severity="error"/></column>
-        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Identification"><reference ruleId="Space.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
-        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"/>
+        <column name="CreatedBy" checks="NotNull" groupTitle="Identification"><format name="email"/><reference ruleId="Space.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Identification"><format name="isoDateTime"/></column>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References"/>
         <column name="Category" checks="NotNull" groupTitle="Identification"/>
-        <column name="FloorName" aliases="Floor Name|Floor" checks="NotNull|CrossReference" groupTitle="Identification">
+        <column name="FloorName" aliases="Floor Name|Floor" checks="NotNull" groupTitle="Identification">
           <ui label="Floor"/>
           <reference ruleId="Space.FloorName.CrossReference" targetSheet="Floor" targetColumn="Name" required="true" forwardIndex="spFloor" indexMode="scalar" documentContext="true">
             <association ownerSheet="Floor" key="spaces" label="Spaces" cardinality="many"/>
@@ -145,11 +143,11 @@
       <ui label="Zone" pluralLabel="Zones" icon="bi-bounding-box-circles" colorToken="space" modalTitle="Zone Information"/>
       <columns>
         <column name="Name" checks="NotNull|Unique" groupTitle="Identification"><unique ruleId="Zone.PrimaryKey.Unique" keys="Name|SpaceNames" severity="error"/></column>
-        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit"><reference ruleId="Zone.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
-        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit"/>
+        <column name="CreatedBy" checks="NotNull" groupTitle="Audit"><format name="email"/><reference ruleId="Zone.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit"><format name="isoDateTime"/></column>
         <column name="Category" checks="NotNull" groupTitle="Identification"/>
         <column name="Description" checks="NotEmpty" groupTitle="Identification"/>
-        <column name="SpaceNames" checks="NotNull|CrossReference" groupTitle="Identification"><reference ruleId="Zone.SpaceNames.CrossReference" targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter=";"/></column>
+        <column name="SpaceNames" checks="NotNull" groupTitle="Identification"><reference ruleId="Zone.SpaceNames.CrossReference" targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter=";"/></column>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References"/>
@@ -165,18 +163,18 @@
       <columns>
         <column name="Name" checks="NotNull|Unique" groupTitle="Identification" stage="Design"><unique ruleId="Type.Name.Unique" severity="error"/></column>
         <column name="Description" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit" stage="Design"><reference ruleId="Type.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
-        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>
+        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"><format name="email"/><reference ruleId="Type.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"><format name="isoDateTime"/></column>
         <column name="Category" checks="NotNull" groupTitle="Identification" stage="Design"/>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="AssetType" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="Manufacturer" checks="NotNull|CrossReference" groupTitle="Manufacturer" stage="Construction"><reference ruleId="Type.Manufacturer.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="Manufacturer" checks="NotNull" groupTitle="Manufacturer" stage="Construction"><format name="email"/><reference ruleId="Type.Manufacturer.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="ModelNumber" checks="NotNull" groupTitle="Manufacturer" stage="Construction"/>
-        <column name="WarrantyGuarantorParts" checks="NotNull|CrossReference" groupTitle="Warranty" stage="Construction"><ui label="Parts Guarantor"/><reference ruleId="Type.WarrantyGuarantorParts.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="WarrantyGuarantorParts" checks="NotNull" groupTitle="Warranty" stage="Construction"><ui label="Parts Guarantor"/><format name="email"/><reference ruleId="Type.WarrantyGuarantorParts.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="WarrantyDurationParts" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"><ui label="Parts Duration"/></column>
-        <column name="WarrantyGuarantorLabor" checks="NotNull|CrossReference" groupTitle="Warranty" stage="Construction"><ui label="Labour Guarantor"/><reference ruleId="Type.WarrantyGuarantorLabor.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="WarrantyGuarantorLabor" checks="NotNull" groupTitle="Warranty" stage="Construction"><ui label="Labour Guarantor"/><format name="email"/><reference ruleId="Type.WarrantyGuarantorLabor.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
         <column name="WarrantyDurationLabor" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"><ui label="Labour Duration"/></column>
         <column name="WarrantyDurationUnit" aliases="DurationUnit" checks="NotNull" groupTitle="Warranty" stage="Construction"/>
         <column name="ReplacementCost" checks="ZeroOrGreaterOrNA" groupTitle="Warranty" stage="Construction"/>
@@ -211,19 +209,19 @@
       <validation presenceRule="Component.AtLeastOneRowPresent" stage="Design|Construction"/>
       <columns>
         <column name="Name" checks="NotNull|Unique" groupTitle="Identification" stage="Design" search="true"><unique ruleId="Component.PrimaryKey.Unique.Error" severity="error"/></column>
-        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit" stage="Design"><reference ruleId="Component.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
-        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>
+        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"><format name="email"/><reference ruleId="Component.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"><format name="isoDateTime"/></column>
         <column name="ExternalSystem" aliases="ExtSystem" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExternalObject" aliases="ExtObject" checks="NotEmpty" groupTitle="External References" stage="Design"/>
         <column name="ExtIdentifier" aliases="ExternalIdentifier" checks="NotEmpty" groupTitle="External References" stage="Design"/>
-        <column name="TypeName" aliases="Type Name" checks="NotNull|CrossReference" groupTitle="Identification" stage="Design" search="true">
+        <column name="TypeName" aliases="Type Name" checks="NotNull" groupTitle="Identification" stage="Design" search="true">
           <ui label="Type"/>
           <reference ruleId="Component.TypeName.CrossReference" targetSheet="Type" targetColumn="Name" required="true" forwardIndex="byType" indexMode="targetSources" searchFields="Category|Manufacturer|ModelNumber|Description" searchAttributes="true">
             <association ownerSheet="Type" key="components" label="Components" cardinality="many"/>
             <association ownerSheet="Component" key="type" label="Type" cardinality="one"/>
           </reference>
         </column>
-        <column name="Space" checks="NotNull|CrossReference" groupTitle="Identification" stage="Design" search="true">
+        <column name="Space" checks="NotNull" groupTitle="Identification" stage="Design" search="true">
           <reference ruleId="Component.Space.CrossReference" targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter="," forwardIndex="bySpace" indexMode="targetSources" searchFields="Description|Category|FloorName" searchAttributes="true">
             <association ownerSheet="Space" key="components" label="Components" cardinality="many"/>
             <association ownerSheet="Component" key="space" label="Spaces" cardinality="many"/>
@@ -231,8 +229,8 @@
         </column>
         <column name="Description" checks="NotNull" groupTitle="Identification" stage="Design" search="true"/>
         <column name="SerialNumber" checks="NotNull" groupTitle="Asset" stage="Construction" search="true"/>
-        <column name="InstallationDate" checks="NotNull" groupTitle="Asset" stage="Construction"/>
-        <column name="WarrantyStartDate" checks="NotNull" groupTitle="Asset" stage="Construction"/>
+        <column name="InstallationDate" checks="NotNull" groupTitle="Asset" stage="Construction"><format name="isoDate"/></column>
+        <column name="WarrantyStartDate" checks="NotNull" groupTitle="Asset" stage="Construction"><format name="isoDate"/></column>
         <column name="TagNumber" checks="NotEmpty" groupTitle="Asset" stage="Construction" search="true"/>
         <column name="BarCode" checks="NotEmpty" groupTitle="Asset" stage="Construction" search="true"/>
         <column name="AssetIdentifier" checks="NotEmpty" groupTitle="Asset" stage="Construction" search="true"/>
@@ -247,10 +245,10 @@
       <validation stage="Design|Construction"/>
       <columns>
         <column name="Name" checks="NotNull|Unique" groupTitle="Identification" stage="Design"><unique ruleId="System.PrimaryKey.Unique" keys="Name|ComponentNames" severity="error"/></column>
-        <column name="CreatedBy" checks="NotNull|CrossReference" groupTitle="Audit" stage="Design"><reference ruleId="System.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
-        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"/>
+        <column name="CreatedBy" checks="NotNull" groupTitle="Audit" stage="Design"><format name="email"/><reference ruleId="System.CreatedBy.CrossReference" targetSheet="Contact" targetColumn="Email" required="true"/></column>
+        <column name="CreatedOn" checks="NotNull|Valid" groupTitle="Audit" stage="Design"><format name="isoDateTime"/></column>
         <column name="Category" checks="NotNull" groupTitle="Identification" stage="Design"/>
-        <column name="ComponentNames" checks="NotNull|CrossReference" stage="Design">
+        <column name="ComponentNames" checks="NotNull" stage="Design">
           <reference ruleId="System.ComponentNames.CrossReference" targetSheet="Component" targetColumn="Name" required="true" multiValueDelimiter=";" runtimeDelimiter="," forwardIndex="bySys" reverseIndex="compSys" indexMode="sourceTargets">
             <association ownerSheet="System" key="components" label="Components" cardinality="many"/>
             <association ownerSheet="Component" key="systems" label="Systems" cardinality="many"/>
@@ -272,8 +270,8 @@
         <column name="Name" checks="NotNull|Unique" groupTitle="Identification">
           <unique ruleId="Document.PrimaryKey.Unique" keys="Name|SheetName|RowName" severity="error"/>
         </column>
-        <column name="CreatedBy" groupTitle="Audit" lookupSource="Contact"/>
-        <column name="CreatedOn" groupTitle="Audit"/>
+        <column name="CreatedBy" groupTitle="Audit" lookupSource="Contact"><format name="email"/></column>
+        <column name="CreatedOn" groupTitle="Audit"><format name="isoDateTime"/></column>
         <column name="Category" groupTitle="Identification" checks="NotNull"/>
         <column name="Description" groupTitle="Identification"/>
         <column name="ApprovalBy" groupTitle="Audit"/>
@@ -296,8 +294,8 @@
         <column name="Name" checks="NotNull|Unique">
           <unique ruleId="Attribute.PrimaryKey.Unique" keys="Name|SheetName|RowName" severity="error"/>
         </column>
-        <column name="CreatedBy" checks="NotEmpty"/>
-        <column name="CreatedOn" checks="NotEmpty"/>
+        <column name="CreatedBy" checks="NotEmpty"><format name="email"/></column>
+        <column name="CreatedOn" checks="NotEmpty"><format name="isoDateTime"/></column>
         <column name="Category" checks="NotEmpty"/>
         <column name="SheetName" aliases="Sheet Name" checks="NotNull"/>
         <column name="RowName" aliases="Row Name" checks="NotNull"/>
@@ -314,8 +312,8 @@
       <ui label="Coordinate" pluralLabel="Coordinates" icon="bi-crosshair" colorToken="coordinate"/>
       <columns>
         <column name="Name"/>
-        <column name="CreatedBy"/>
-        <column name="CreatedOn"/>
+        <column name="CreatedBy"><format name="email"/></column>
+        <column name="CreatedOn"><format name="isoDateTime"/></column>
         <column name="Category"/>
         <column name="SheetName" aliases="Sheet Name"/>
         <column name="RowName" aliases="Row Name"/>

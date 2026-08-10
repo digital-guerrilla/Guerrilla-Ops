@@ -24,7 +24,12 @@ const QA_CHECK_ICON_BY_ISSUE_TYPE = {
 const QA_NAMED_CHECK_HANDLERS = Object.freeze({
   NotNull: ({ text, isNA }) => !!text && !isNA,
   NotEmpty: ({ text }) => !!text && !text.startsWith('svg'),
-  Format: ({ text, isNA, schema }) => !!text && !isNA && !!schema.formats.email?.test(text),
+  Format: ({ text, isNA, schema, formatName }) => {
+    const regex = schema.formats[formatName];
+    if (!text || isNA || !regex) return false;
+    regex.lastIndex = 0;
+    return regex.test(text);
+  },
   Valid: ({ text, isNA, schema }) => {
     if (!text || isNA) return false;
     schema.formats.isoDate.lastIndex = 0;
@@ -202,9 +207,13 @@ function _qaSeverity(value, fallback = 'error') {
   return sev === 'error' || sev === 'warning' || sev === 'info' ? sev : fallback;
 }
 
-function _qaNamedCheckSeverity(checkName, explicitSeverity = '', schemaObj = null) {
+function _qaNamedCheckSeverity(checkName, explicitSeverity = '', schemaObj = null, column = null) {
   if (explicitSeverity) return _qaSeverity(explicitSeverity, 'warning');
   const schema = schemaObj || _qaParseSchema();
+  if (_qaNorm(checkName) === 'format' && column?.formatName) {
+    const formatCriticality = schema?.formatCriticalities?.[column.formatName] || '';
+    if (formatCriticality) return _qaSeverity(formatCriticality, 'warning');
+  }
   const criticality = schema?.ruleCriticalities?.[_qaNorm(checkName)] || '';
   if (criticality) return _qaSeverity(criticality, 'warning');
   if (_qaNorm(checkName) === 'notempty') return 'info';
@@ -286,6 +295,8 @@ function _qaSchemaError(message) {
   return {
     error: message,
     formats: {},
+    formatDescriptions: {},
+    formatCriticalities: {},
     sheets: [],
     ruleDefinitions: Object.create(null),
     ruleCriticalities: Object.create(null),
@@ -300,10 +311,26 @@ function _qaNamedRuleDescription(ruleName, schemaObj = null) {
   return String(schema?.ruleDefinitions?.[key] || '').trim();
 }
 
+function _qaColumnCheckDescription(checkName, column, schemaObj = null) {
+  const schema = schemaObj || _qaParseSchema();
+  if (checkName === 'Format' && column?.formatName) {
+    const description = String(schema?.formatDescriptions?.[column.formatName] || '').trim();
+    if (description) return description;
+  }
+  return _qaNamedRuleDescription(checkName, schema);
+}
+
 function _qaRuleDescriptionForCheck(checkId, schemaObj = null) {
+  const schema = schemaObj || _qaParseSchema();
   const parts = String(checkId || '').split('.').map(part => String(part || '').trim()).filter(Boolean);
+  if (_qaNorm(parts.at(-1)) === 'format' && parts.length >= 3) {
+    const sheet = (schema?.sheets || []).find(item => _qaNorm(item.name) === _qaNorm(parts[0]));
+    const column = (sheet?.columns || []).find(item => _qaNorm(item.name) === _qaNorm(parts.slice(1, -1).join('.')));
+    const description = String(schema?.formatDescriptions?.[column?.formatName] || '').trim();
+    if (description) return description;
+  }
   for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const desc = _qaNamedRuleDescription(parts[index], schemaObj);
+    const desc = _qaNamedRuleDescription(parts[index], schema);
     if (desc) return desc;
   }
   return '';
@@ -324,12 +351,17 @@ function _qaParseSchema() {
   }
 
   const formats = {};
+  const formatDescriptions = {};
+  const formatCriticalities = {};
   xml.querySelectorAll('formats > format').forEach(fx => {
-    const id = _qaAttr(fx, 'id');
+    const name = _qaAttr(fx, 'name');
     const regex = _qaAttr(fx, 'regex');
-    if (!id || !regex) return;
+    if (!name || !regex) return;
     try {
-      formats[id] = new RegExp(regex);
+      formats[name] = new RegExp(regex);
+      formatDescriptions[name] = String(fx.textContent || '').trim();
+      const criticality = _qaSeverity(_qaAttr(fx, 'criticality') || _qaAttr(fx, 'criticallity'), '');
+      if (criticality) formatCriticalities[name] = criticality;
     } catch (_) {
       // Ignore invalid regex definitions.
     }
@@ -395,6 +427,11 @@ function _qaParseSchema() {
 
     sheetNode.querySelectorAll(':scope > columns > column').forEach(col => {
       const allChecks = _qaAttr(col, 'checks').split('|').map(value => value.trim()).filter(Boolean);
+      const format = _qaDirectChild(col, 'format');
+      const reference = _qaDirectChild(col, 'reference');
+      if (reference && !allChecks.includes('CrossReference')) allChecks.push('CrossReference');
+      const scalarChecks = allChecks.filter(check => check !== 'Unique' && check !== 'CrossReference');
+      if (format && !scalarChecks.includes('Format')) scalarChecks.push('Format');
       const stage = _qaStage(_qaAttr(col, 'stage'), inheritedStage || 'design');
       const column = {
         name: _qaAttr(col, 'name'),
@@ -403,10 +440,11 @@ function _qaParseSchema() {
         severity: _qaSeverity(_qaAttr(col, 'severity'), ''),
         issueType: _qaIssueType(_qaAttr(col, 'issueType'), ''),
         icon: _qaAttr(col, 'icon'),
+        formatName: _qaAttr(format, 'name'),
         formatRef: _qaAttr(col, 'formatRef'),
         allowAlternateFormatRef: _qaAttr(col, 'allowAlternateFormatRef'),
         aliases: _qaAttr(col, 'aliases').split('|').map(value => value.trim()).filter(Boolean),
-        checks:allChecks.filter(check => check !== 'Unique' && check !== 'CrossReference'),
+        checks:scalarChecks,
         stage,
       };
       sheet.columns.push(column);
@@ -420,7 +458,6 @@ function _qaParseSchema() {
         });
       }
       if (allChecks.includes('CrossReference')) {
-        const reference = _qaDirectChild(col, 'reference');
         sheet.references.push({
           column:column.name,
           targetSheet:_qaAttr(reference, 'targetSheet'),
@@ -456,6 +493,9 @@ function _qaParseSchema() {
   const unsupportedRelations = [...new Set(sheets.flatMap(sheet =>
     sheet.relationRules.map(rule => rule.type)
   ).filter(type => !QA_RELATION_RULE_HANDLERS[type]))];
+  const invalidFormats = sheets.flatMap(sheet => sheet.columns
+    .filter(column => column.checks.includes('Format') && !formats[column.formatName])
+    .map(column => `${sheet.name}.${column.name}:${column.formatName || '(missing)'}`));
   const invalidStages = [...new Set(sheets.flatMap(sheet => [
     ...sheet.stages.filter(stage => !QA_STAGE_ORDER.includes(stage)),
     ...sheet.columns.map(rule => rule.stage),
@@ -463,28 +503,29 @@ function _qaParseSchema() {
     ...sheet.uniqueRules.map(rule => rule.stage),
     ...sheet.relationRules.map(rule => rule.stage),
   ].filter(stage => !QA_STAGE_ORDER.includes(stage))))];
-  if (unsupportedChecks.length || unsupportedRelations.length || invalidStages.length) {
+  if (unsupportedChecks.length || unsupportedRelations.length || invalidFormats.length || invalidStages.length) {
     const details = [
       unsupportedChecks.length ? `checks: ${unsupportedChecks.join(', ')}` : '',
       unsupportedRelations.length ? `relation types: ${unsupportedRelations.join(', ')}` : '',
+      invalidFormats.length ? `formats: ${invalidFormats.join(', ')}` : '',
       invalidStages.length ? `stages: ${invalidStages.join(', ')}` : '',
     ].filter(Boolean).join('; ');
     _qaSchemaCache = _qaSchemaError(`The current QA XML profile uses unsupported ${details}. No rules were applied.`);
     return _qaSchemaCache;
   }
 
-  _qaSchemaCache = { error: '', formats, sheets, ruleDefinitions, ruleCriticalities, checkSeverities, checkSeverityByField };
+  _qaSchemaCache = { error: '', formats, formatDescriptions, formatCriticalities, sheets, ruleDefinitions, ruleCriticalities, checkSeverities, checkSeverityByField };
   return _qaSchemaCache;
 }
 
-function _qaNamedCheckResult(checkName, value, schema) {
+function _qaNamedCheckResult(checkName, value, schema, column = null) {
   const text = String(value ?? '').trim();
   const normalized = text.toLowerCase();
   const isNA = normalized === 'n/a';
   const isNumber = text !== '' && Number.isFinite(Number(text.replace(/,/g, '')));
   const number = isNumber ? Number(text.replace(/,/g, '')) : NaN;
   const handler = QA_NAMED_CHECK_HANDLERS[checkName];
-  return handler ? handler({ text, normalized, isNA, isNumber, number, schema }) : false;
+  return handler ? handler({ text, normalized, isNA, isNumber, number, schema, formatName:column?.formatName || '' }) : false;
 }
 
 function _qaLogicalFacilityRows() {
@@ -677,13 +718,13 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           const value = _qaColumnCell(row, col);
           col.checks.forEach(checkName => {
             const ruleId = `${sheetRule.name}.${col.name}.${checkName}`;
-            const passed = _qaNamedCheckResult(checkName, value, schema);
+            const passed = _qaNamedCheckResult(checkName, value, schema, col);
             recordRule(ruleId, passed, sheetRule.name, col.name);
             if (passed) return;
-            const ruleWording = _qaNamedRuleDescription(checkName, schema);
+            const ruleWording = _qaColumnCheckDescription(checkName, col, schema);
             add({
               check: ruleId,
-              sev: _qaNamedCheckSeverity(checkName, col.severity, schema),
+              sev: _qaNamedCheckSeverity(checkName, col.severity, schema, col),
               sheet: sheetRule.name,
               issueType: checkName === 'Format' || checkName === 'Valid' ? 'format' : 'completeness',
               entityType: _qaNorm(sheetRule.name),
@@ -1213,13 +1254,13 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
 
       if (col.checks?.length) {
         col.checks.forEach(checkName => {
-          if (_qaNamedCheckResult(checkName, v, schema)) return;
+          if (_qaNamedCheckResult(checkName, v, schema, col)) return;
           const ruleId = `${sheetRule.name}.${col.name}.${checkName}`;
-          const ruleWording = _qaNamedRuleDescription(checkName, schema);
+          const ruleWording = _qaColumnCheckDescription(checkName, col, schema);
           push({
             check: ruleId,
             stage: col.stage,
-            sev: _qaNamedCheckSeverity(checkName, col.severity),
+            sev: _qaNamedCheckSeverity(checkName, col.severity, schema, col),
             issueType: checkName === 'Format' || checkName === 'Valid' ? 'format' : 'completeness',
             detail: `${col.name}: ${ruleWording || checkName}. Value was ${v ? `"${v}"` : 'empty'}.`,
             fields: [col.name],

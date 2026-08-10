@@ -168,6 +168,9 @@ const categorizedSchema = new DOMParser().parseFromString(qaSchemaSource, 'appli
 assert([...categorizedSchema.querySelectorAll('unique, reference')]
   .every(rule => String(rule.parentNode?.localName || rule.parentNode?.nodeName).toLowerCase() === 'column'),
   'every unique and reference parameter node must be owned directly by a column');
+assert([...categorizedSchema.querySelectorAll('column:has(> reference)')]
+  .every(column => !String(column.getAttribute('checks') || '').split('|').includes('CrossReference')),
+  'reference tags must infer cross-reference checks without redundant checks tokens');
 ['Document', 'Attribute', 'Coordinate', 'Picklist'].forEach(sheetName => {
   assert(qaSchemaSource.includes(`<sheet name="${sheetName}"`),
     `${sheetName} must use the shared sheet descriptor structure even before validation rules are enabled`);
@@ -208,7 +211,7 @@ const unsupportedSchemaContext = {
   console,
   DOMParser,
   XMLHttpRequest:xmlRequestFor(qaSchemaSource
-    .replace('checks="NotNull|Format|Unique"', 'checks="UnsupportedCheck|Unique"')
+    .replace('checks="NotNull|Unique"', 'checks="UnsupportedCheck|Unique"')
     .replace('type="atLeastOneTargetPerRow"', 'type="unsupportedRelation"')),
 };
 vm.createContext(unsupportedSchemaContext);
@@ -217,6 +220,18 @@ vm.runInContext(qaSource, unsupportedSchemaContext);
 const unsupportedSchemaError = vm.runInContext('_qaParseSchema().error', unsupportedSchemaContext);
 assert(unsupportedSchemaError.includes('UnsupportedCheck') && unsupportedSchemaError.includes('unsupportedRelation'),
   'QA schema parsing must reject unsupported named checks and relation types');
+
+const unknownFormatContext = {
+  console,
+  DOMParser,
+  XMLHttpRequest:xmlRequestFor(qaSchemaSource.replace('<format name="email"/>', '<format name="unknown"/>')),
+};
+vm.createContext(unknownFormatContext);
+vm.runInContext(fs.readFileSync(path.join(javascriptDir, 'utils.js'), 'utf8'), unknownFormatContext);
+vm.runInContext(qaSource, unknownFormatContext);
+const unknownFormatError = vm.runInContext('_qaParseSchema().error', unknownFormatContext);
+assert(unknownFormatError.includes('Contact.Email:unknown'),
+  'QA schema parsing must reject Format checks that reference an unknown regex');
 
 const columnSchemaContext = {
   console,
@@ -236,10 +251,21 @@ vm.runInContext(qaSource, columnSchemaContext);
 const normalizedColumnRules = JSON.parse(vm.runInContext(`JSON.stringify((() => {
   const schema = _qaParseSchema();
   const contact = schema.sheets.find(sheet => sheet.name === 'Contact');
+  const type = schema.sheets.find(sheet => sheet.name === 'Type');
+  const component = schema.sheets.find(sheet => sheet.name === 'Component');
   const system = schema.sheets.find(sheet => sheet.name === 'System');
   return {
     error:schema.error,
     contactChecks:contact.columns.find(column => column.name === 'Email').checks,
+    contactFormat:contact.columns.find(column => column.name === 'Email').formatName,
+    emailFormatDescription:schema.formatDescriptions.email,
+    emailFormatCriticality:schema.formatCriticalities.email,
+    isoDateFormatDescription:schema.formatDescriptions.isoDate,
+    manufacturerFormat:type.columns.find(column => column.name === 'Manufacturer').formatName,
+    partsGuarantorFormat:type.columns.find(column => column.name === 'WarrantyGuarantorParts').formatName,
+    laborGuarantorFormat:type.columns.find(column => column.name === 'WarrantyGuarantorLabor').formatName,
+    installationDateFormat:component.columns.find(column => column.name === 'InstallationDate').formatName,
+    warrantyStartDateFormat:component.columns.find(column => column.name === 'WarrantyStartDate').formatName,
     contactUnique:contact.uniqueRules,
     contactReference:contact.references.find(reference => reference.column === 'CreatedBy'),
     systemUnique:system.uniqueRules,
@@ -249,10 +275,37 @@ const normalizedColumnRules = JSON.parse(vm.runInContext(`JSON.stringify((() => 
 assert.strictEqual(normalizedColumnRules.error, '', 'column-level relational checks must parse without schema errors');
 assert.deepStrictEqual(normalizedColumnRules.contactChecks, ['NotNull', 'Format'],
   'Unique must be normalized separately from scalar Contact Email checks');
+assert.strictEqual(normalizedColumnRules.contactFormat, 'email',
+  'Contact Email must reference the shared email regex');
+assert.strictEqual(normalizedColumnRules.emailFormatDescription, 'Must have a valid email address.',
+  'the email format must expose its XML description');
+assert.strictEqual(normalizedColumnRules.emailFormatCriticality, 'warning',
+  'the email format must expose its XML criticality');
+assert.strictEqual(normalizedColumnRules.isoDateFormatDescription, 'Must use ISO date format YYYY-MM-DD.',
+  'the ISO date format must expose its XML description');
+assert.strictEqual(vm.runInContext("_qaRuleDescriptionForCheck('Contact.Email.Format')", columnSchemaContext),
+  'Must have a valid email address.',
+  'format check IDs must resolve their XML description for QA summaries and printable reports');
+assert.strictEqual(vm.runInContext("_qaRuleDescriptionForCheck('Component.InstallationDate.Format')", columnSchemaContext),
+  'Must use ISO date format YYYY-MM-DD.',
+  'format check IDs must resolve the description selected by their column');
+assert.strictEqual(normalizedColumnRules.manufacturerFormat, 'email',
+  'Type Manufacturer must reference the shared email regex');
+assert.strictEqual(normalizedColumnRules.partsGuarantorFormat, 'email',
+  'the parts warranty guarantor must reference the shared email regex');
+assert.strictEqual(normalizedColumnRules.laborGuarantorFormat, 'email',
+  'the labour warranty guarantor must reference the shared email regex');
+assert.strictEqual(normalizedColumnRules.installationDateFormat, 'isoDate',
+  'Component InstallationDate must reference the shared ISO date regex');
+assert.strictEqual(normalizedColumnRules.warrantyStartDateFormat, 'isoDate',
+  'Component WarrantyStartDate must reference the shared ISO date regex');
 assert.deepStrictEqual(normalizedColumnRules.contactUnique[0].keys, ['Email'],
   'Contact Email must normalize into a single-column uniqueness rule');
 assert.strictEqual(normalizedColumnRules.contactReference.targetColumn, 'Email',
-  'Contact CreatedBy must normalize its cross-reference target from the column');
+  'a reference tag must normalize its cross-reference target without a CrossReference checks token');
+assert.strictEqual(vm.runInContext("_qaRuleDescriptionForCheck('Contact.CreatedBy.CrossReference')", columnSchemaContext),
+  'Must match the referenced Name or key column in another worksheet.',
+  'inferred cross-reference checks must retain the shared XML rule description');
 assert.deepStrictEqual(normalizedColumnRules.systemUnique[0].keys, ['Name', 'ComponentNames'],
   'System compound uniqueness must normalize from uniqueKeys');
 assert.strictEqual(normalizedColumnRules.systemReference.targetSheet, 'Component',
@@ -260,13 +313,17 @@ assert.strictEqual(normalizedColumnRules.systemReference.targetSheet, 'Component
 vm.runInContext(`
   db.contacts.push(
     { Email:'duplicate@example.com', CreatedBy:'missing@example.com', _facility:'Facility A' },
-    { Email:'duplicate@example.com', CreatedBy:'missing@example.com', _facility:'Facility A' }
+    { Email:'duplicate@example.com', CreatedBy:'missing@example.com', _facility:'Facility A' },
+    { Email:'invalid-email', CreatedBy:'missing@example.com', _facility:'Facility A' }
   );
   db.components.push({ Name:'AHU-01', CreatedBy:'duplicate@example.com', TypeName:'Missing Type', Space:'Missing Space', _facility:'Facility A' });
 `, columnSchemaContext);
 const columnRuleFindings = JSON.parse(vm.runInContext('JSON.stringify(runQA())', columnSchemaContext));
 assert.strictEqual(columnRuleFindings.filter(finding => finding.check === 'Contact.Email.Unique').length, 1,
   'a duplicate Contact Email must produce one consolidated uniqueness finding');
+assert(columnRuleFindings.some(finding => finding.check === 'Contact.Email.Format' &&
+  finding.detail.includes('Must have a valid email address.') && finding.sev === 'warning'),
+  'a format finding must use the selected format definition description and criticality');
 assert(columnRuleFindings.some(finding => finding.check === 'Contact.CreatedBy.CrossReference'),
   'an unresolved Contact CreatedBy must be reported from its column-level cross-reference');
 assert(columnRuleFindings.some(finding => finding.check === 'Component.TypeName.CrossReference'),
@@ -325,6 +382,12 @@ assert.strictEqual(vm.runInContext("_qaNamedCheckResult('ValidNumberOrNA', 'n/a'
   'ValidNumberOrNA must accept n/a');
 assert.strictEqual(vm.runInContext("_qaNamedCheckResult('ZeroOrGreaterOrNA', '-1', _qaSchemaCache)", qaContext), false,
   'ZeroOrGreaterOrNA must reject negative values');
+assert.strictEqual(vm.runInContext("_qaNamedCheckResult('Format', 'person@example.com', _qaSchemaCache, { formatName:'email' })", qaContext), true,
+  'Format must dispatch to the regex named by the column tag');
+assert.strictEqual(vm.runInContext("_qaNamedCheckResult('Format', 'not-an-email', _qaSchemaCache, { formatName:'email' })", qaContext), false,
+  'Format must reject values that do not match the named regex');
+assert.strictEqual(vm.runInContext("_qaNamedCheckResult('Format', 'person@example.com', _qaSchemaCache, { formatName:'missing' })", qaContext), false,
+  'Format must never pass when its named regex is unavailable');
 assert.strictEqual(vm.runInContext("_qaNamedCheckResult('UnsupportedCheck', 'value', _qaSchemaCache)", qaContext), false,
   'unknown XML checks must never silently pass');
 assert.strictEqual(vm.runInContext("_qaNamedCheckSeverity('NotNull')", qaContext), 'warning',
