@@ -974,6 +974,16 @@ assert.deepStrictEqual({ ...context._floorToSvgAffineFromUnitPoints(
 ) }, { a:-1, b:0, c:1, d:0, e:1, f:0 }, 'the saved affine must preserve the reflected UI correspondence');
 
 loadModule('floor-svg-panel.js');
+const namespacedRoomSvg = new DOMParser().parseFromString(
+  '<svg xmlns="http://www.w3.org/2000/svg" xmlns:serif="http://www.serif.com/">' +
+    '<g id="rooms"><path id="_00-019" serif:id="00-019" d="M0 0h10v10H0Z"/></g></svg>',
+  'image/svg+xml'
+);
+const namespacedRoom = namespacedRoomSvg.querySelector('path');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(context._svgNodeIdentifiers(namespacedRoom))), ['00-019', '_00-019'],
+  'SVG room lookup must prefer a namespaced source identifier and retain the XML-safe id as fallback');
+assert.strictEqual(context._svgNodeMatchedIdentifier(namespacedRoom, new Set(['00-019'])), '00-019',
+  'SVG room lookup must match COBie spaces through serif:id');
 const legacyAlignment = context._floorAlignmentFromRaw('{"scale":0.25}');
 assert.strictEqual(legacyAlignment.scale, 0.25, 'legacy uniform alignment scale must remain unchanged');
 const nonUniformAlignment = context._floorAlignmentFromRaw('{"scale":1,"scaleX":0.3,"scaleY":0.5}');
@@ -988,8 +998,19 @@ assert.strictEqual(flippedRoundTrip.flipVertical, true, 'vertical UI reflection 
 const rotatedViewBounds = context._svgRotatedBounds(100, 50, 90);
 assert(Math.abs(rotatedViewBounds.width - 50) < 1e-10);
 assert(Math.abs(rotatedViewBounds.height - 100) < 1e-10);
+const horizontallyFlippedBounds = context._svgRotatedBounds(100, 50, 0, { x:-1, y:1 });
+assert.deepStrictEqual({ ...horizontallyFlippedBounds }, { minX:-100, minY:0, width:100, height:50 },
+  'horizontal display reflection must retain the SVG dimensions and expose its translated origin');
+const rotatedFlippedBounds = context._svgRotatedBounds(100, 50, 90, { x:-1, y:-1 });
+assert(Math.abs(rotatedFlippedBounds.width - 50) < 1e-10);
+assert(Math.abs(rotatedFlippedBounds.height - 100) < 1e-10);
 const floor = context.db.floors[0];
 const svg = '<svg>' + 'x'.repeat(70000) + '</svg>';
+const declaredSvg = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>' +
+  '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
+  '<svg width="100%" height="100%" viewBox="0 0 1200 1324" version="1.1" xmlns="http://www.w3.org/2000/svg"></svg>';
+assert.strictEqual(context._extractInlineSvgMarkup(declaredSvg), declaredSvg,
+  'SVG loading must accept an XML declaration and SVG 1.1 DOCTYPE');
 assert(context._writeChunkedFloorAttribute(floor, svg, 'svg', /^svg(?:[^\d]*(\d+))?$/i, 30000));
 const stored = context._collectChunkedFloorAttributes(/^svg(?:[^\d]*(\d+))?$/i);
 assert.strictEqual(stored[context._rowKey(floor, 'Level 01')], svg);

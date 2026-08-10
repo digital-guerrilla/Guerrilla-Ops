@@ -305,11 +305,15 @@ function _decodeSvgDataUri(value) {
 }
 
 function _extractInlineSvgMarkup(value) {
-  const text = String(value || '').trim();
+  let text = String(value || '').trim();
   if (!text) return '';
-  if (/^<svg\b[\s\S]*<\/svg>$/i.test(text)) return text;
-  if (/^data:image\/svg\+xml/i.test(text)) return _decodeSvgDataUri(text);
-  return '';
+  if (/^data:image\/svg\+xml/i.test(text)) text = _decodeSvgDataUri(text).trim();
+  if (!text) return '';
+
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (!root || root.nodeName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) return '';
+  return text;
 }
 
 function _sanitizeInlineSvg(markup) {
@@ -357,14 +361,31 @@ function _roomIdsToHighlight(counts) {
   return inferred;
 }
 
+function _svgNodeIdentifiers(node) {
+  if (!node) return [];
+  const namespaced = [];
+  let standard = '';
+  [...(node.attributes || [])].forEach(attr => {
+    const name = String(attr.name || '').toLowerCase();
+    const value = String(attr.value || '').trim().toLowerCase();
+    if (!value) return;
+    if (name === 'id') standard = value;
+    else if (name.endsWith(':id')) namespaced.push(value);
+  });
+  return [...new Set([...namespaced, standard].filter(Boolean))];
+}
+
+function _svgNodeMatchedIdentifier(node, identifiers) {
+  return _svgNodeIdentifiers(node).find(identifier => identifiers.has(identifier)) || '';
+}
+
 function _highlightSvgRooms(svgRoot) {
   const selectedIds = _highlightRoomIds;
   svgRoot.querySelectorAll('.svg-room-hit').forEach(node => node.classList.remove('svg-room-hit'));
   if (!selectedIds.size) return;
 
   svgRoot.querySelectorAll('[id]').forEach(node => {
-    const id = String(node.id || '').trim().toLowerCase();
-    if (selectedIds.has(id)) {
+    if (_svgNodeMatchedIdentifier(node, selectedIds)) {
       node.classList.add('svg-room-hit');
       node.setAttribute('pointer-events', 'all');
       if (!node.style.cursor) node.style.cursor = 'pointer';
@@ -532,10 +553,8 @@ function _svgRoomKeyFromEventTarget(target) {
   if (!_activeInlineSvg || !target) return '';
   const roomNode = target.closest('[id]');
   if (!roomNode || !_activeInlineSvg.contains(roomNode)) return '';
-  const id = String(roomNode.id || '').trim().toLowerCase();
-  if (!id) return '';
-  if (!idx?.spaces?.some(name => name.toLowerCase() === id)) return '';
-  return id;
+  const spaceIds = new Set((idx?.spaces || []).map(name => name.toLowerCase()));
+  return _svgNodeMatchedIdentifier(roomNode, spaceIds);
 }
 
 function _spaceRoomNumber(spaceRow) {
@@ -617,9 +636,8 @@ function _applySvgRoomTooltips(svgRoot, floorEntry) {
   });
 
   svgRoot.querySelectorAll('[id]').forEach(node => {
-    const key = String(node.id || '').trim().toLowerCase();
-    if (!key) return;
-    const space = spacesByName.get(key);
+    const key = _svgNodeMatchedIdentifier(node, spacesByName);
+    const space = key ? spacesByName.get(key) : null;
     if (!space) return;
     const tooltip = _spaceTooltipText(space);
     if (!tooltip) return;
@@ -720,8 +738,8 @@ function _handleSvgUpload(file, floorKey) {
 
   const reader = new FileReader();
   reader.onload = () => {
-    const svgMarkup = String(reader.result || '').trim();
-    if (!/^<svg\b[\s\S]*<\/svg>$/i.test(svgMarkup)) {
+    const svgMarkup = _extractInlineSvgMarkup(reader.result);
+    if (!svgMarkup) {
       alert('The selected file does not contain valid SVG markup.');
       return;
     }
@@ -761,15 +779,28 @@ function _svgViewRotation(floorKey = _activeFloorKey) {
   return _svgViewRotationByFloor.get(floorKey || '') || 0;
 }
 
-function _svgRotatedBounds(width, height, angle = _svgViewRotation()) {
+function _svgViewReflection(floorKey = _activeFloorKey) {
+  const floorRow = _floorByKey(floorKey || '');
+  if (!floorRow) return { x:1, y:1 };
+  const entry = _allFloorEntries().find(candidate => candidate.key === floorKey);
+  const alignment = _resolvedFloorAlignmentForEntry(entry);
+  return {
+    x:alignment.flipHorizontal ? -1 : 1,
+    y:alignment.flipVertical ? -1 : 1,
+  };
+}
+
+function _svgRotatedBounds(width, height, angle = _svgViewRotation(), reflection = { x:1, y:1 }) {
   const radians = (Number(angle) || 0) * Math.PI / 180;
   const cos = Math.cos(radians);
   const sin = Math.sin(radians);
+  const reflectedWidth = width * (reflection?.x === -1 ? -1 : 1);
+  const reflectedHeight = height * (reflection?.y === -1 ? -1 : 1);
   const corners = [
     { x:0, y:0 },
-    { x:width * cos, y:width * sin },
-    { x:-height * sin, y:height * cos },
-    { x:(width * cos) - (height * sin), y:(width * sin) + (height * cos) },
+    { x:reflectedWidth * cos, y:reflectedWidth * sin },
+    { x:-reflectedHeight * sin, y:reflectedHeight * cos },
+    { x:(reflectedWidth * cos) - (reflectedHeight * sin), y:(reflectedWidth * sin) + (reflectedHeight * cos) },
   ];
   const xs = corners.map(point => point.x);
   const ys = corners.map(point => point.y);
@@ -796,15 +827,16 @@ function _setSvgZoom(nextZoom, viewport, svgNode = _activeInlineSvg) {
   svgNode.style.height = Math.max(60, Math.round(_svgBaseHeight)) + 'px';
   svgNode.style.transformOrigin = '0 0';
   const angle = _svgViewRotation();
-  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight, angle);
+  const reflection = _svgViewReflection();
+  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight, angle, reflection);
   const translateX = _svgPanX - (rotated.minX * _svgZoom);
   const translateY = _svgPanY - (rotated.minY * _svgZoom);
-  svgNode.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${angle}deg) scale(${_svgZoom})`;
+  svgNode.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${angle}deg) scale(${_svgZoom * reflection.x}, ${_svgZoom * reflection.y})`;
 }
 
 function _centerSvgViewport(viewport) {
   if (!viewport || !_activeInlineSvg) return;
-  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight);
+  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight, _svgViewRotation(), _svgViewReflection());
   const scaledW = rotated.width * _svgZoom;
   const scaledH = rotated.height * _svgZoom;
   _svgPanX = Math.round((viewport.clientWidth - scaledW) / 2);
@@ -824,7 +856,7 @@ function _fitSvgToViewport(viewport, svgNode = _activeInlineSvg) {
 
   const availW = Math.max(80, viewport.clientWidth * (1 - (_SVG_FIT_PADDING_RATIO * 2)));
   const availH = Math.max(80, viewport.clientHeight * (1 - (_SVG_FIT_PADDING_RATIO * 2)));
-  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight);
+  const rotated = _svgRotatedBounds(_svgBaseWidth, _svgBaseHeight, _svgViewRotation(), _svgViewReflection());
   const fitZoom = Math.min(availW / rotated.width, availH / rotated.height);
   _svgZoom = Math.max(_SVG_MIN_ZOOM, Math.min(8, fitZoom || 1));
 

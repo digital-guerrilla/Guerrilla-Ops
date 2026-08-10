@@ -950,7 +950,7 @@ function _viewer3dSvgRoomPolygons(floorPlan) {
 
   const rootMatrix = typeof svgRoot.getCTM === 'function' ? svgRoot.getCTM() : null;
   svgRoot.querySelectorAll('[id]').forEach(node => {
-    const identifier = String(node.id || '').trim().toLowerCase();
+    const identifier = _svgNodeMatchedIdentifier(node, spacesByIdentifier);
     const room = spacesByIdentifier.get(identifier);
     if (!room) return;
     const points = _viewer3dClosedSvgPoints(node);
