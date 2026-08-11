@@ -2,7 +2,9 @@
   "name": "guerrilla-ops",
   "private": true,
   "scripts": {
-    "test": "node tests/regression-checks.js",
+    "test": "node tests/regression-checks.js && node tests/schema-modularity-check.js && node tests/system-floor-filter-check.js",
+    "test:filters": "node tests/system-floor-filter-check.js",
+    "test:schema": "node tests/schema-modularity-check.js",
     "build": "python build/build_release.py"
   },
   "devDependencies": {

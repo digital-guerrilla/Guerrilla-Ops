@@ -13,6 +13,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,7 +60,7 @@ CACHE_DIR = PACKAGES_DIR / "cache"
 MANIFEST_PATH = PACKAGES_DIR / "manifest.csv"
 TEMPLATE_PATH = DEV_DIR / "index.html"
 SVG_SOURCE = DEV_DIR / Path('svgs', 'Guerrilla-Ops.svg')
-QA_SCHEMA_SOURCE = SPECIFICATION_DIR / "ids_cobie.xml"
+QA_SCHEMA_SOURCE = SPECIFICATION_DIR / "guerrilla-ops-schema.xml"
 
 RELEASE_DIR = ROOT_DIR / "release"
 RELEASE_LOCAL_PATH = RELEASE_DIR / "Guerrilla-Ops.html"
@@ -132,6 +133,13 @@ def validate_file(path: Path) -> None:
         fail(f"Missing file: {path}")
     if path.stat().st_size == 0:
         fail(f"Empty file: {path}")
+
+
+def validate_xml(path: Path) -> None:
+    try:
+        ET.parse(path)
+    except ET.ParseError as exc:
+        fail(f"Invalid XML in {path}: {exc}")
 
 
 def read_text(path: Path) -> str:
@@ -789,6 +797,7 @@ def minify_html_document(html: str) -> str:
 def run_build(refresh: bool, offline: bool) -> None:
     validate_file(TEMPLATE_PATH)
     validate_file(QA_SCHEMA_SOURCE)
+    validate_xml(QA_SCHEMA_SOURCE)
     validate_file(MANIFEST_PATH)
 
     template_html = read_text(TEMPLATE_PATH)

@@ -25,7 +25,7 @@ function _modalConfigChildren(parent, localName) {
 function _modalConfigAliases(column) {
   const names = [
     column.getAttribute('name') || '',
-    ...String(column.getAttribute('aliases') || '').split('|'),
+    ..._cobieColumnAttribute(column, 'runtime', 'aliases').split('|'),
   ].map(value => value.trim()).filter(Boolean);
   const merged = [];
   const seen = new Set();
@@ -40,12 +40,15 @@ function _modalConfigAliases(column) {
 
 function _modalConfigReferenceMap(sheetNode) {
   const columns = _modalConfigChildren(_modalConfigChildren(sheetNode, 'columns')[0], 'column');
-  return new Map(columns.filter(column => String(column.getAttribute('checks') || '').split('|').includes('CrossReference'))
-    .map(column => [column, _modalConfigChildren(column, 'reference')[0]])
+  return new Map(columns
+    .map(column => [column, _cobieColumnChild(column, 'qa', 'reference')])
     .filter(([, reference]) => reference)
     .map(([column, reference]) => [
         _modalConfigNorm(column.getAttribute('name')),
-        _modalConfigNorm(reference.getAttribute('targetSheet')),
+        {
+          targetType:_modalConfigNorm(reference.getAttribute('targetSheet')),
+          targetColumn:String(reference.getAttribute('targetColumn') || '').trim(),
+        },
       ]));
 }
 
@@ -53,9 +56,13 @@ function _modalConfigField(entityType, column, references) {
   const name = String(column.getAttribute('name') || '').trim();
   const key = _modalConfigNorm(name);
   const ui = _modalConfigChildren(column, 'ui')[0];
-  const targetType = _modalConfigNorm(column.getAttribute('lookupSource')) || references.get(key) || '';
+  const configuredSource = _modalConfigNorm(_cobieColumnAttribute(column, 'runtime', 'lookupSource'));
+  const reference = references.get(key);
+  const targetType = configuredSource || reference?.targetType || '';
   const categoryLookup = key === 'category' && entityType !== 'contact';
-  const lookupSource = categoryLookup ? 'category' : targetType;
+  const lookupSource = categoryLookup
+    ? 'category'
+    : (targetType === 'picklist' && reference?.targetColumn ? `picklist:${reference.targetColumn}` : targetType);
   return {
     label:String(ui?.getAttribute('label') || '').trim() || _modalConfigLabel(name),
     aliases:_modalConfigAliases(column),
@@ -102,7 +109,7 @@ function _buildModelModalConfig() {
     const columnsNode = _modalConfigChildren(sheetNode, 'columns')[0];
     const cards = {};
     _modalConfigChildren(columnsNode, 'column').forEach(column => {
-      const groupTitle = String(column.getAttribute('groupTitle') || '').trim();
+      const groupTitle = _cobieColumnAttribute(column, 'ui', 'groupTitle');
       if (!groupTitle) return;
       const cardKey = _modalConfigNorm(groupTitle) || 'information';
       if (!cards[cardKey]) {

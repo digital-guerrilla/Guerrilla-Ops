@@ -69,7 +69,7 @@ const modelConfigSource = fs.readFileSync(path.join(javascriptDir, 'model-config
 const qaGraphSource = fs.readFileSync(path.join(javascriptDir, 'qa-graph.js'), 'utf8');
 const qaResultsSource = fs.readFileSync(path.join(javascriptDir, 'results.js'), 'utf8');
 const appLifecycleSource = fs.readFileSync(path.join(javascriptDir, 'app-lifecycle.js'), 'utf8');
-const qaSchemaSource = fs.readFileSync(path.join(root, 'dev', 'specification', 'ids_cobie.xml'), 'utf8');
+const qaSchemaSource = fs.readFileSync(path.join(root, 'dev', 'specification', 'guerrilla-ops-schema.xml'), 'utf8');
 const resultsCssSource = fs.readFileSync(path.join(javascriptDir, '..', 'css', 'results.css'), 'utf8');
 const currentJavascriptSource = fs.readdirSync(javascriptDir)
   .filter(filename => filename.endsWith('.js'))
@@ -158,31 +158,37 @@ assert(qaGraphSource.includes('_qaGraphDesiredWidth') && qaGraphSource.includes(
   'the QA graph must bind desktop drag resizing and click collapse behavior');
 assert(qaSchemaSource.includes('profile="NBIMS-US-V3-current-rules"'),
   'QA must use the current named NBIMS rule profile');
-assert(/<column name="Name"[^>]*checks="NotNull\|Unique"[^>]*>\s*<unique ruleId="System.PrimaryKey.Unique" keys="Name\|ComponentNames"/.test(qaSchemaSource),
+const categorizedSchema = new DOMParser().parseFromString(qaSchemaSource, 'application/xml');
+const schemaColumn = (sheetName, columnName) => [...categorizedSchema.querySelectorAll('sheets > sheet')]
+  .find(sheet => sheet.getAttribute('name') === sheetName)
+  ?.querySelector(`:scope > columns > column[name="${columnName}"]`);
+assert(schemaColumn('System', 'Name')?.querySelector(':scope > qa > unique')?.getAttribute('keys') === 'Name|ComponentNames',
   'System uniqueness must use Name and ComponentNames as its compound key');
-assert(/<column name="Name"[^>]*checks="NotNull\|Unique"[^>]*>\s*<unique ruleId="Zone.PrimaryKey.Unique" keys="Name\|SpaceNames"/.test(qaSchemaSource),
+assert(schemaColumn('Zone', 'Name')?.querySelector(':scope > qa > unique')?.getAttribute('keys') === 'Name|SpaceNames',
   'Zone uniqueness must use Name and SpaceNames as its compound key');
 assert(!/<uniqueRules>|<references>/.test(qaSchemaSource),
   'legacy sheet-level uniqueness and cross-reference containers must not return');
-const categorizedSchema = new DOMParser().parseFromString(qaSchemaSource, 'application/xml');
 assert([...categorizedSchema.querySelectorAll('unique, reference')]
-  .every(rule => String(rule.parentNode?.localName || rule.parentNode?.nodeName).toLowerCase() === 'column'),
-  'every unique and reference parameter node must be owned directly by a column');
-assert([...categorizedSchema.querySelectorAll('column:has(> reference)')]
-  .every(column => !String(column.getAttribute('checks') || '').split('|').includes('CrossReference')),
-  'reference tags must infer cross-reference checks without redundant checks tokens');
+  .every(rule => String(rule.parentNode?.localName || rule.parentNode?.nodeName).toLowerCase() === 'qa' &&
+    String(rule.parentNode?.parentNode?.localName || rule.parentNode?.parentNode?.nodeName).toLowerCase() === 'column'),
+  'every unique and reference parameter node must be owned by its column QA section');
+assert([...categorizedSchema.querySelectorAll('column > qa > reference')]
+  .every(reference => !reference.hasAttribute('ruleId')),
+  'reference tags must derive rule IDs from their sheet and column');
+assert([...categorizedSchema.querySelectorAll('column > qa > unique')]
+  .every(unique => !unique.hasAttribute('ruleId')),
+  'unique tags must derive rule IDs from their sheet and column');
 ['Document', 'Attribute', 'Coordinate', 'Picklist'].forEach(sheetName => {
   assert(qaSchemaSource.includes(`<sheet name="${sheetName}"`),
     `${sheetName} must use the shared sheet descriptor structure even before validation rules are enabled`);
 });
 [
   'Contact.AtLeastOneRowPresent', 'Facility.OneAndOnlyOneFacilityFound',
-  'Zone.SpaceNames.CrossReference', 'Type.Type.Component.AComponentForEachType',
-  'Component.PrimaryKey.Unique.Error', 'System.ComponentNames.CrossReference',
+  'Type.Type.Component.AComponentForEachType',
 ].forEach(ruleId => assert(qaSchemaSource.includes(ruleId), `missing named QA rule ${ruleId}`));
-assert(/<column\s+name="Height"[^>]*checks="ZeroOrGreaterOrNA"[^>]*\/>/.test(qaSchemaSource),
+assert(schemaColumn('Floor', 'Height')?.querySelector(':scope > qa > rule')?.getAttribute('name') === 'ZeroOrGreaterOrNA',
   'Floor Height must use ZeroOrGreaterOrNA');
-assert(/<sheet name="Type"[\s\S]*?<column\s+name="Description"[^>]*checks="NotNull"[^>]*\/>[\s\S]*?<\/sheet>/.test(qaSchemaSource),
+assert(schemaColumn('Type', 'Description')?.querySelector(':scope > qa > rule')?.getAttribute('name') === 'NotNull',
   'Type Description must be checked by QA');
 assert(releaseBuilderSource.includes("module == 'utils.js'") && releaseBuilderSource.includes('QA_SCHEMA_SOURCE'),
   'standalone builds must embed the active COBie XML profile once through the shared schema loader');
@@ -198,7 +204,7 @@ assert(!qaSource.includes('_qaDefaultSchema') && !qaSource.includes('fallbackUse
     `standalone output ${index + 1} must embed the exact current QA XML source`);
   assert(!standaloneSource.includes('_qaDefaultSchema') && !standaloneSource.includes('fallbackUsed'),
     `standalone output ${index + 1} must not contain legacy QA fallback code`);
-  assert(!standaloneSource.includes('specification/ids_cobie.xml'),
+  assert(!standaloneSource.includes('specification/guerrilla-ops-schema.xml'),
     `standalone output ${index + 1} must not reference an external QA XML file`);
   assert(/const _COBIE_SCHEMA_PATHS\s*=\s*Object\.freeze\(\[\]\);/.test(standaloneSource),
     `standalone output ${index + 1} must disable external COBie schema loading`);
@@ -211,7 +217,7 @@ const unsupportedSchemaContext = {
   console,
   DOMParser,
   XMLHttpRequest:xmlRequestFor(qaSchemaSource
-    .replace('checks="NotNull|Unique"', 'checks="UnsupportedCheck|Unique"')
+    .replace('<rule name="NotNull"/>', '<rule name="UnsupportedCheck"/>')
     .replace('type="atLeastOneTargetPerRow"', 'type="unsupportedRelation"')),
 };
 vm.createContext(unsupportedSchemaContext);
@@ -301,9 +307,11 @@ assert.strictEqual(normalizedColumnRules.warrantyStartDateFormat, 'isoDate',
   'Component WarrantyStartDate must reference the shared ISO date regex');
 assert.deepStrictEqual(normalizedColumnRules.contactUnique[0].keys, ['Email'],
   'Contact Email must normalize into a single-column uniqueness rule');
+assert.strictEqual(normalizedColumnRules.contactUnique[0].ruleId, 'Contact.Email.Unique',
+  'a unique tag must derive its rule ID from its sheet and column');
 assert.strictEqual(normalizedColumnRules.contactReference.targetColumn, 'Email',
   'a reference tag must normalize its cross-reference target without a CrossReference checks token');
-assert.strictEqual(vm.runInContext("_qaRuleDescriptionForCheck('Contact.CreatedBy.CrossReference')", columnSchemaContext),
+assert.strictEqual(vm.runInContext("_qaRuleDescriptionForCheck('Contact.CreatedBy.Reference')", columnSchemaContext),
   'Must match the referenced Name or key column in another worksheet.',
   'inferred cross-reference checks must retain the shared XML rule description');
 assert.deepStrictEqual(normalizedColumnRules.systemUnique[0].keys, ['Name', 'ComponentNames'],
@@ -324,9 +332,9 @@ assert.strictEqual(columnRuleFindings.filter(finding => finding.check === 'Conta
 assert(columnRuleFindings.some(finding => finding.check === 'Contact.Email.Format' &&
   finding.detail.includes('Must have a valid email address.') && finding.sev === 'warning'),
   'a format finding must use the selected format definition description and criticality');
-assert(columnRuleFindings.some(finding => finding.check === 'Contact.CreatedBy.CrossReference'),
+assert(columnRuleFindings.some(finding => finding.check === 'Contact.CreatedBy.Reference'),
   'an unresolved Contact CreatedBy must be reported from its column-level cross-reference');
-assert(columnRuleFindings.some(finding => finding.check === 'Component.TypeName.CrossReference'),
+assert(columnRuleFindings.some(finding => finding.check === 'Component.TypeName.Reference'),
   'an unresolved Component TypeName must be reported from its column-level cross-reference');
 
 const qaContext = {
@@ -367,8 +375,8 @@ vm.runInContext(`
       ],
       uniqueRules:[{ ruleId:'System.PrimaryKey.Unique', keys:['Name','ComponentNames'], severity:'error' }],
       references:[
-        { ruleId:'System.CreatedBy.CrossReference', column:'CreatedBy', targetSheet:'Contact', targetColumn:'Email', required:true, severity:'error', multiValueDelimiter:';' },
-        { ruleId:'System.ComponentNames.CrossReference', column:'ComponentNames', targetSheet:'Component', targetColumn:'Name', required:true, severity:'error', multiValueDelimiter:';' },
+        { ruleId:'System.CreatedBy.Reference', column:'CreatedBy', targetSheet:'Contact', targetColumn:'Email', required:true, severity:'error', multiValueDelimiter:';' },
+        { ruleId:'System.ComponentNames.Reference', column:'ComponentNames', targetSheet:'Component', targetColumn:'Name', required:true, severity:'error', multiValueDelimiter:';' },
       ],
       relationRules:[],
     }],
@@ -417,6 +425,14 @@ assert.deepStrictEqual(
   JSON.parse(vm.runInContext("JSON.stringify(qaRuleResults.slice(0, 6).map(result => result.column))", qaContext)),
   ['CreatedBy', 'Category', 'ExternalSystem', 'Description', 'Name', 'ComponentNames'],
   'QA rule scores must retain the column order supplied by the XML schema');
+const explicitSchemaOrdering = JSON.parse(vm.runInContext(`JSON.stringify((() => {
+  const sheet = _qaParseSchema().sheets.find(candidate => candidate.columns.length >= 3);
+  const expected = sheet.columns.slice(0, 3).map(column => column.name);
+  const scrambled = [...expected].reverse().map(column => ({ sheet:sheet.name, column }));
+  return { expected, actual:scrambled.sort(_qaSchemaOrderComparator()).map(result => result.column) };
+})())`, qaContext));
+assert.deepStrictEqual(explicitSchemaOrdering.actual, explicitSchemaOrdering.expected,
+  'QA result ordering must be restored from XML even when incremental results arrive out of order');
 vm.runInContext(`
   _qaSchemaCache.sheets[0].columns[0].stage = 'design';
   _qaSchemaCache.sheets[0].columns[1].stage = 'construction';
@@ -609,7 +625,7 @@ assert(modalsSource.includes("Name:type === 'contact' ? '' : String(prefillName 
   'Contact email prefills must not populate a phantom Name field');
 assert.strictEqual(vm.runInContext("_qaRowIdentity('Contact', { Email:'person@example.com', Name:'' })", qaContext), 'person@example.com',
   'QA must identify Contact rows by Email');
-assert(qaSource.includes("if (col.checks?.length)") && qaSource.includes('_qaNamedCheckResult(checkName, v, schema)'),
+assert(qaSource.includes("if (col.checks?.length)") && qaSource.includes('_qaNamedCheckResult(checkName, v, schema, col)'),
   'row revalidation must evaluate named XML column checks');
 assert(modalsSource.includes('return qaHasRun && Array.isArray(qaFindings) ? qaFindings : [];'),
   'opening a project modal must not trigger QA before the first audit');
@@ -679,10 +695,16 @@ loadModule('three-d-viewer.js');
 
 const runtimeFilterContract = JSON.parse(vm.runInContext(`JSON.stringify(COBIE_FILTER_DIMENSIONS.map(filter => ({
   dimension:filter.dimension, order:filter.order, valueField:filter.valueField,
-  valueIndex:filter.valueIndex, throughIndex:filter.throughIndex, defaultActive:filter.defaultActive,
+  valueIndex:filter.valueIndex, throughIndex:filter.throughIndex,
+  contextProperty:filter.contextProperty, defaultActive:filter.defaultActive,
 })))`, context));
+const schemaFilterOrder = [...categorizedSchema.querySelectorAll('sheets > sheet')]
+  .map(sheet => ({ sheet, filter:sheet.querySelector(':scope > filter') }))
+  .filter(entry => entry.filter)
+  .sort((left, right) => Number(left.filter.getAttribute('order')) - Number(right.filter.getAttribute('order')))
+  .map(entry => (entry.filter.getAttribute('dimension') || entry.sheet.getAttribute('name')).toLowerCase());
 assert.deepStrictEqual(runtimeFilterContract.map(filter => filter.dimension),
-  ['facility', 'type', 'system', 'space', 'floor', 'doccat'],
+  schemaFilterOrder,
   'filter and group order must come from XML filter metadata');
 assert.strictEqual(runtimeFilterContract.find(filter => filter.dimension === 'floor').throughIndex, 'spFloor',
   'Floor filtering must declare its component relationship traversal in XML');
@@ -773,7 +795,7 @@ const genericDocumentEntry = JSON.parse(vm.runInContext(`JSON.stringify(_documen
   spaces:new Set(['meeting room']), floors:new Set(['level 01']), categories:new Set(['pm_70_15_07']),
 }))`, context));
 assert.deepStrictEqual(Object.keys(genericDocumentEntry.valuesByDimension),
-  ['facility', 'type', 'system', 'space', 'floor', 'doccat'],
+  runtimeFilterContract.filter(filter => filter.contextProperty).map(filter => filter.dimension),
   'document entries must project every XML filter context through valuesByDimension');
 assert(!Object.prototype.hasOwnProperty.call(genericDocumentEntry, 'facilityNames'),
   'document entries must not retain statically named dimension properties');
@@ -927,6 +949,22 @@ assert(!devHtml.includes('id="create-modal"'), 'the legacy Create Item modal mus
 assert(!createSource.includes('saveCreate'), 'the legacy Create Item form engine must not be present');
 
 loadModule('panels.js');
+const filterBarHost = { innerHTML:'' };
+const groupListHost = { innerHTML:'' };
+const previousGetElementById = context.document.getElementById;
+context.document.getElementById = id => ({ 'filter-bar':filterBarHost, 'group-sortable':groupListHost }[id] || null);
+context.hydrateFilterControls();
+context.document.getElementById = previousGetElementById;
+const hydratedFilterControls = runtimeFilterContract.map(filter => ({
+  dimension:filter.dimension,
+  badge:filterBarHost.innerHTML.includes(`id="fb-${filter.dimension}"`),
+  list:filterBarHost.innerHTML.includes(`id="fpl-${filter.dimension}"`),
+  group:groupListHost.innerHTML.includes(`data-dim="${filter.dimension}"`),
+}));
+assert(hydratedFilterControls.every(control => control.badge && control.list && control.group),
+  'every XML filter dimension must generate its panel controls and result-group chip');
+assert(hydratedFilterControls.some(control => control.dimension === 'zone'),
+  'Zone must be available as an XML-driven filter and result grouping control');
 context.collapsedFilterCategories.clear();
 context.stepFilterTreeDepth('doccat', 'collapse', false);
 assert(context.collapsedFilterCategories.has('doccat::pm_70_15'), 'first collapse should close the deepest parent level');
@@ -1242,7 +1280,10 @@ loadModule('model-config.js');
 loadModule('modals.js');
 assert.strictEqual(vm.runInContext('MODEL_CONFIG_SCHEMA_STATUS.loaded', context), true,
   'modal configuration must hydrate from the shared COBie XML document');
-assert.strictEqual(vm.runInContext('MODEL_MODAL_CONFIG.facility.title', context), 'Project Information',
+const facilityModalTitle = [...categorizedSchema.querySelectorAll('sheets > sheet')]
+  .find(sheet => sheet.getAttribute('name') === 'Facility')
+  ?.querySelector(':scope > ui')?.getAttribute('modalTitle');
+assert.strictEqual(vm.runInContext('MODEL_MODAL_CONFIG.facility.title', context), facilityModalTitle,
   'modal titles must come from sheet UI metadata');
 assert.strictEqual(vm.runInContext("MODEL_MODAL_CONFIG.type.cards.warranty.fields.find(field => field.aliases.includes('WarrantyGuarantorParts')).label", context), 'Parts Guarantor',
   'exceptional field labels must come from column UI metadata');
@@ -1281,6 +1322,24 @@ Object.values(contactFieldConfig).forEach(field => {
   assert.strictEqual(field.edit, 'lookup');
   assert.strictEqual(field.lookupSource, 'contact');
 });
+const assetTypeFieldConfig = JSON.parse(vm.runInContext(`JSON.stringify(
+  MODEL_MODAL_CONFIG.type.cards.identification.fields.find(field => field.aliases.includes('AssetType'))
+)`, context));
+assert.strictEqual(assetTypeFieldConfig.edit, 'lookup');
+assert.strictEqual(assetTypeFieldConfig.lookupSource, 'picklist:AssetType');
+const assetTypeLookupOptions = JSON.parse(vm.runInContext(`JSON.stringify((() => {
+  db.picklists.push(
+    { AssetType:'Fixed' },
+    { AssetType:'Moveable' },
+    { AssetType:'fixed' },
+    { AssetType:'' }
+  );
+  return _projectLookupOptions('picklist:AssetType');
+})())`, context));
+assert.deepStrictEqual(assetTypeLookupOptions.map(option => option.value), ['Fixed', 'Moveable'],
+  'Picklist references must expose unique sorted values from their target column');
+assert(assetTypeLookupOptions.every(option => option.search === option.value.toLowerCase()),
+  'Picklist reference options must provide searchable text');
 const createdByCoverage = JSON.parse(vm.runInContext(`JSON.stringify(
   Object.entries(MODEL_MODAL_CONFIG).map(([type, config]) => ({
     type,
@@ -1291,12 +1350,13 @@ createdByCoverage.forEach(({ type, field }) => {
   assert(field, `${type} must expose CreatedBy`);
   assert.strictEqual(field.lookupSource, 'contact');
 });
-const checkedColumnsByType = Object.fromEntries([...qaSchemaSource.matchAll(
-  /<sheet name="([^"]+)"[^>]*>[\s\S]*?<columns>([\s\S]*?)<\/columns>/g,
-)].map(match => [
-  match[1].toLowerCase(),
-  [...match[2].matchAll(/<column name="([^"]+)"[^>]*\bchecks="[^"]+"/g)].map(column => column[1]).sort(),
-]).filter(([, columns]) => columns.length));
+const checkedColumnsByType = Object.fromEntries([...categorizedSchema.querySelectorAll('sheets > sheet')]
+  .map(sheet => [
+    sheet.getAttribute('name').toLowerCase(),
+    [...sheet.querySelectorAll(':scope > columns > column')]
+      .filter(column => column.querySelector(':scope > qa > rule'))
+      .map(column => column.getAttribute('name')).sort(),
+  ]).filter(([, columns]) => columns.length));
 const modalColumnsByType = JSON.parse(vm.runInContext(`JSON.stringify(Object.fromEntries(
   Object.entries(MODEL_MODAL_CONFIG)
     .filter(([type]) => type !== 'document')
@@ -1305,7 +1365,11 @@ const modalColumnsByType = JSON.parse(vm.runInContext(`JSON.stringify(Object.fro
       .map(field => field.aliases[0])])
 ))`, context));
 modalColumnsByType.system.push('ComponentNames');
-Object.entries(checkedColumnsByType).forEach(([type, checkedColumns]) => {
+const ordinaryModalTypes = new Set([...categorizedSchema.querySelectorAll('sheets > sheet')]
+  .filter(sheet => sheet.querySelector(':scope > runtime')?.getAttribute('modal') === 'true')
+  .map(sheet => sheet.getAttribute('name').toLowerCase())
+  .filter(type => type !== 'document'));
+Object.entries(checkedColumnsByType).filter(([type]) => ordinaryModalTypes.has(type)).forEach(([type, checkedColumns]) => {
   assert(modalColumnsByType[type], `${type} must have an information modal configuration`);
   assert.deepStrictEqual([...modalColumnsByType[type]].sort(), checkedColumns,
     `${type} information modal fields must exactly match its checked XML columns`);
@@ -1337,7 +1401,9 @@ const checkedEntityAssociations = JSON.parse(vm.runInContext(`JSON.stringify(
 assert.deepStrictEqual(checkedEntityAssociations.sort((left, right) => `${left.type}.${left.key}`.localeCompare(`${right.type}.${right.key}`)), [
   { type:'floor', key:'spaces' },
   { type:'space', key:'floor' },
+  { type:'space', key:'zones' },
   { type:'space', key:'components' },
+  { type:'zone', key:'spaces' },
   { type:'type', key:'components' },
   { type:'system', key:'components' },
   { type:'component', key:'type' },

@@ -1,4 +1,35 @@
 // ── Filter panel rendering ────────────────────────────────────
+function hydrateFilterControls() {
+  const filterBar = document.getElementById('filter-bar');
+  const groupList = document.getElementById('group-sortable');
+  const documentCategoryDimension = _cobieDocumentCategoryDimension();
+  const labelFor = filter => filter.dimension === documentCategoryDimension
+    ? 'Document Category'
+    : (filter.label || filter.dimension);
+
+  if (filterBar) filterBar.innerHTML = COBIE_FILTER_DIMENSIONS.map(filter => {
+    const label = labelFor(filter);
+    const treeActions = filter.category
+      ? `<span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="${esc(filter.dimension)}" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="${esc(filter.dimension)}" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-${esc(filter.dimension)}"></span></span>`
+      : `<span class="fp-badge d-none" id="fb-${esc(filter.dimension)}"></span>`;
+    const collapsedLabel = filter.dimension === documentCategoryDimension ? 'Doc Cat.' : label;
+    return `<div class="fp fp-${esc(filter.dimension)}">
+      <div class="fp-inner">
+        <div class="fp-hd-top"><span>${esc(label)}</span>${treeActions}</div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-body" id="fpl-${esc(filter.dimension)}"></div>
+      </div>
+      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">${esc(collapsedLabel)}</span></div>
+    </div>`;
+  }).join('');
+
+  if (groupList) groupList.innerHTML = COBIE_FILTER_DIMENSIONS.map(filter => {
+    const label = filter.dimension === documentCategoryDimension ? 'Doc Category' : labelFor(filter);
+    const id = filter.dimension === documentCategoryDimension ? ' id="chip-doccat"' : '';
+    return `<li class="group-chip" data-dim="${esc(filter.dimension)}"${id}><i class="bi bi-grip-vertical gchip-grip"></i>${esc(label)}</li>`;
+  }).join('');
+}
+
 function renderPanels(counts) {
   COBIE_FILTER_DIMENSIONS.forEach(filter => {
     const args = [`fpl-${filter.dimension}`, `fb-${filter.dimension}`, filter.dimension, counts[filter.dimension] || {}];

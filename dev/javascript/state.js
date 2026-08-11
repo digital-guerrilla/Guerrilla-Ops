@@ -1,5 +1,28 @@
 // ── Application state and shared constants ───────────────────
-const db  = { types:[], components:[], spaces:[], floors:[], zones:[], systems:[], documents:[], facilities:[], contacts:[], attributes:[], coordinates:[], picklists:[] };
+function _createRecordStore() {
+	const collections = Object.create(null);
+	return new Proxy(collections, {
+		get(target, key) {
+			if (typeof key === 'string' && !Object.prototype.hasOwnProperty.call(target, key)) target[key] = [];
+			return target[key];
+		},
+	});
+}
+
+function _createLazyStateStore(createValue) {
+	const values = Object.create(null);
+	return new Proxy(values, {
+		get(target, key) {
+			if (typeof key === 'string' && !Object.prototype.hasOwnProperty.call(target, key)) target[key] = createValue();
+			return target[key];
+		},
+	});
+}
+
+function _createSelectionStore() { return _createLazyStateStore(() => new Set()); }
+function _createFilterCountStore() { return _createLazyStateStore(() => ({})); }
+
+const db  = _createRecordStore();
 const idx = {};
 let docStore = [];
 let cardCtr  = 0;
@@ -8,10 +31,10 @@ let cardCtr  = 0;
 const _GRP_ICONS  = {};
 const _GRP_LABELS = {};
 
-const sel = {};
-const selectedCategoryLevels = {};
+const sel = _createSelectionStore();
+const selectedCategoryLevels = _createSelectionStore();
 const collapsedFilterCategories = new Set();
-let lastCounts = {};
+let lastCounts = _createFilterCountStore();
 let searchQuery = '';
 let viewMode = 'asset';
 let _loadMode = null;

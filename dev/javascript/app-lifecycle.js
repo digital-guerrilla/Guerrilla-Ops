@@ -66,6 +66,10 @@ async function openEditableFiles() {
 }
 
 async function loadFiles(fileList, handleMap = new Map()) {
+  if (!COBIE_SCHEMA_STATUS.loaded || !COBIE_RUNTIME_MODEL.entities.size) {
+    alert(`The workbook cannot be loaded because the XML schema is unavailable or invalid.\n\n${COBIE_SCHEMA_STATUS.error || 'No schema sheets were found.'}`);
+    return;
+  }
   const files = [...fileList].filter(f => _excelRe.test(f.name));
   if (!files.length) { alert('No COBie Excel files found (.xlsx / .xls / .xlsm).'); return; }
   const incomingMode = handleMap.size ? 'editable' : 'standard';
@@ -115,15 +119,27 @@ async function loadFiles(fileList, handleMap = new Map()) {
   const appending = db.facilities.length > 0;
   if (typeof resetQaAudit === 'function') resetQaAudit();
   const previousLengths = {};
-  ['types','components','spaces','floors','zones','systems','documents','facilities','contacts','attributes','coordinates'].forEach(key => {
-    previousLengths[key] = db[key].length;
+  COBIE_RUNTIME_MODEL.entities.forEach(descriptor => {
+    previousLengths[descriptor.bucket] = (db[descriptor.bucket] || []).length;
   });
   if (!appending) resetDb();
   for (let index = 0; index < parsedFiles.length; index++) {
     const { file, workbook, buffer } = parsedFiles[index];
     updateLoadProgress(65 + (index / parsedFiles.length) * 17, 'Merging COBie rows', `${file.name} · workbook ${index + 1} of ${parsedFiles.length}`);
     await _yieldForFileProgress();
-    parseCOBieInto(workbook, file.name, buffer, handleMap.get(file) || null);
+    try {
+      parseCOBieInto(workbook, file.name, buffer, handleMap.get(file) || null);
+    } catch (err) {
+      console.warn('Skipped', file.name, err?.message || err);
+      failures.push(`${file.name}: ${err?.message || err}`);
+    }
+  }
+
+  if (!db.facilities.length) {
+    _fileOperationProgress({ title:'Load failed', status:'No workbooks could be merged', detail:failures[0] || '', percent:100, icon:'bi-exclamation-triangle' });
+    _clearFileOperationProgress(2400);
+    alert('No workbooks could be loaded.\n\n' + failures.join('\n'));
+    return;
   }
   canonicalizeLoadedFacilities();
   updateLoadProgress(82, 'Rebuilding workbook indexes', 'Linking facilities, floors, spaces, types, components, and systems');
@@ -179,7 +195,8 @@ function closeWorkbooks() {
   resetDb();
   Object.keys(idx).forEach(key => delete idx[key]);
   Object.values(sel).forEach(values => values.clear());
-  lastCounts = Object.fromEntries(COBIE_FILTER_DIMENSIONS.map(filter => [filter.dimension, {}]));
+  lastCounts = _createFilterCountStore();
+  COBIE_FILTER_DIMENSIONS.forEach(filter => { lastCounts[filter.dimension] = {}; });
   searchQuery = '';
   viewMode = 'asset';
   docStore = [];
@@ -258,7 +275,8 @@ function _captureDbState() {
 function _appendDbState(previousLengths) {
   if (!_originalDbState) { _captureDbState(); return; }
   [...COBIE_RUNTIME_MODEL.entities.values()].map(descriptor => descriptor.bucket).forEach(key => {
-    db[key].slice(previousLengths[key]).forEach(row => _originalDbState[key].push(_cloneRecord(row)));
+    const baseline = _originalDbState[key] ||= [];
+    (db[key] || []).slice(previousLengths[key] || 0).forEach(row => baseline.push(_cloneRecord(row)));
   });
 }
 
@@ -266,7 +284,7 @@ function _restoreDbState() {
   if (!_originalDbState) return;
   if (typeof resetQaAudit === 'function') resetQaAudit();
   [...COBIE_RUNTIME_MODEL.entities.values()].map(descriptor => descriptor.bucket).forEach(key => {
-    db[key] = _originalDbState[key].map(_cloneRecord);
+    db[key] = (_originalDbState[key] || []).map(_cloneRecord);
   });
   _justCreated.clear();
 }
@@ -306,6 +324,7 @@ function _updateLoaderControls() {
 
 function _renderSummary() {
   const logicalFacilities = _logicalFacilityRows();
+  const systemCount = Array.isArray(idx.systems) ? idx.systems.length : db.systems.length;
   if (logicalFacilities.length === 1) {
     document.getElementById('fac-name').textContent = logicalFacilities[0]._facility || f(logicalFacilities[0], 'Name') || 'Facility';
     document.getElementById('fac-desc').textContent = f(logicalFacilities[0], 'Description');
@@ -318,7 +337,7 @@ function _renderSummary() {
   document.getElementById('st-types') .textContent = db.types.length;
   document.getElementById('st-comps') .textContent = db.components.length;
   document.getElementById('st-spaces').textContent = db.spaces.length;
-  document.getElementById('st-sys')   .textContent = idx.systems.length;
+  document.getElementById('st-sys')   .textContent = systemCount;
   document.getElementById('st-docs')  .textContent = db.documents.length;
 }
 

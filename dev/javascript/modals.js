@@ -1142,6 +1142,18 @@ function _projectLookupOptionsFromFacilities(aliases) {
 }
 
 function _projectLookupOptions(type) {
+  if (type.startsWith('picklist:')) {
+    const column = type.slice('picklist:'.length).trim();
+    const values = new Map();
+    (db.picklists || []).forEach(row => {
+      const value = f(row, ..._cobieFieldAliasesFor(column)).trim();
+      if (value && !values.has(value.toLowerCase())) values.set(value.toLowerCase(), value);
+    });
+    return [...values.values()]
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric:true }))
+      .map(value => ({ value, label:value, depth:0, search:value.toLowerCase() }));
+  }
+
   if (type === 'contact') {
     const options = new Map();
     db.contacts.forEach(contact => {

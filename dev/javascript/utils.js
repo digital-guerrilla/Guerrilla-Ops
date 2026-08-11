@@ -8,13 +8,24 @@ function f(row, ...names) {
   return '';
 }
 
-const _COBIE_SCHEMA_PATHS = Object.freeze(['dev/specification/ids_cobie.xml', 'specification/ids_cobie.xml']);
+const _COBIE_SCHEMA_PATHS = Object.freeze(['dev/specification/guerrilla-ops-schema.xml', 'specification/guerrilla-ops-schema.xml']);
 const _COBIE_EMBEDDED_SCHEMA = '';
 let _COBIE_SCHEMA_DOCUMENT_CACHE;
 let COBIE_SCHEMA_STATUS = { loaded:false, error:'' };
 
 function _cobieNormKey(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function _cobieElementChildren(node) {
+  return Array.from(node?.childNodes || []).filter(child => child?.nodeType === 1);
+}
+
+function _cobieChildren(node, name) {
+  const key = _cobieNormKey(name);
+  return _cobieElementChildren(node).filter(child =>
+    _cobieNormKey(child.localName || child.nodeName) === key
+  );
 }
 
 function _cobieReadXmlSync(paths) {
@@ -43,7 +54,9 @@ function _cobieSchemaDocument() {
     return null;
   }
   const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
-  if (xml.querySelector('parsererror')) {
+  const hasParserError = xml.documentElement?.localName === 'parsererror'
+    || xml.getElementsByTagName('parsererror').length > 0;
+  if (hasParserError) {
     COBIE_SCHEMA_STATUS = { loaded:false, error:'COBie XML is invalid.' };
     _COBIE_SCHEMA_DOCUMENT_CACHE = null;
     return null;
@@ -57,18 +70,49 @@ function _cobieEntityType(value) {
   return _cobieNormKey(value);
 }
 
+function _cobieDefaultBucket(entityType) {
+  const type = _cobieEntityType(entityType);
+  if (!type) return '';
+  return type.endsWith('y') ? `${type.slice(0, -1)}ies` : `${type}s`;
+}
+
 function _cobieRuntimeList(value) {
   return String(value || '').split('|').map(item => item.trim()).filter(Boolean);
 }
 
 function _cobieDirectChild(node, name) {
-  return [...(node?.children || [])].find(child => _cobieNormKey(child.localName || child.nodeName) === _cobieNormKey(name)) || null;
+  return _cobieChildren(node, name)[0] || null;
+}
+
+function _cobieSheetNodes(xml) {
+  const sheetsNode = _cobieDirectChild(xml?.documentElement, 'sheets');
+  return _cobieChildren(sheetsNode, 'sheet');
+}
+
+function _cobieColumnNodes(sheetNode) {
+  return _cobieChildren(_cobieDirectChild(sheetNode, 'columns'), 'column');
+}
+
+function _cobieColumnSection(column, name) {
+  return _cobieDirectChild(column, name);
+}
+
+function _cobieColumnAttribute(column, section, name) {
+  return String(_cobieColumnSection(column, section)?.getAttribute(name) || column?.getAttribute(name) || '').trim();
+}
+
+function _cobieColumnChild(column, section, name) {
+  return _cobieDirectChild(_cobieColumnSection(column, section), name) || _cobieDirectChild(column, name);
+}
+
+function _cobieReferenceAttribute(reference, name) {
+  return String(_cobieDirectChild(reference, 'runtime')?.getAttribute(name) || reference?.getAttribute(name) || '').trim();
 }
 
 function _buildCobieRuntimeModel() {
   const xml = _cobieSchemaDocument();
   const entities = new Map();
-  const sheetNodes = [...(xml?.querySelectorAll('sheets > sheet') || [])];
+  const sheetNodes = _cobieSheetNodes(xml);
   sheetNodes.forEach(node => {
     const type = _cobieEntityType(node.getAttribute('name'));
     if (!type) return;
@@ -79,7 +123,7 @@ function _buildCobieRuntimeModel() {
     entities.set(type, {
       type,
       sheet:String(node.getAttribute('name') || '').trim(),
-      bucket:String(node.getAttribute('bucket') || '').trim(),
+      bucket:String(node.getAttribute('bucket') || '').trim() || _cobieDefaultBucket(type),
       identityField:String(node.getAttribute('identityField') || 'Name').trim(),
       mergeRows:runtime.getAttribute('mergeRows') === 'true',
       scopeIdentity:runtime.getAttribute('scopeIdentity') === 'true',
@@ -132,45 +176,47 @@ function _buildCobieRuntimeModel() {
       colorToken:entity?.ui.colorToken || source,
     };
   }).filter(Boolean).sort((left, right) => left.order - right.order);
-  const references = sheetNodes.flatMap(sheet => [...sheet.querySelectorAll(':scope > columns > column')]
-    .filter(column => _cobieRuntimeList(column.getAttribute('checks')).includes('CrossReference'))
+  const references = sheetNodes.flatMap(sheet => _cobieColumnNodes(sheet)
     .map(column => ({
-      node:_cobieDirectChild(column, 'reference'),
+      node:_cobieColumnChild(column, 'qa', 'reference'),
       source:_cobieEntityType(sheet.getAttribute('name')),
       field:String(column.getAttribute('name') || '').trim(),
     })).filter(reference => reference.node));
-  const indexReferences = references.filter(({ node }) => node.getAttribute('forwardIndex') || node.getAttribute('reverseIndex'))
+  const indexReferences = references.filter(({ node }) =>
+    _cobieReferenceAttribute(node, 'forwardIndex') || _cobieReferenceAttribute(node, 'reverseIndex'))
       .map(({ node, source, field }) => ({
-    name:String(node.getAttribute('ruleId') || '').trim(),
+    name:String(node.getAttribute('ruleId') || `${entities.get(source)?.sheet || source}.${field}.Reference`).trim(),
     source,
     field,
     target:_cobieEntityType(node.getAttribute('targetSheet')),
-    mode:String(node.getAttribute('indexMode') || 'targetSources').trim(),
-    delimiter:String(node.getAttribute('runtimeDelimiter') || node.getAttribute('multiValueDelimiter') || '').trim(),
-    forwardIndex:String(node.getAttribute('forwardIndex') || '').trim(),
-    reverseIndex:String(node.getAttribute('reverseIndex') || '').trim(),
+    mode:_cobieReferenceAttribute(node, 'indexMode') || 'targetSources',
+    delimiter:_cobieReferenceAttribute(node, 'runtimeDelimiter') || String(node.getAttribute('multiValueDelimiter') || '').trim(),
+    forwardIndex:_cobieReferenceAttribute(node, 'forwardIndex'),
+    reverseIndex:_cobieReferenceAttribute(node, 'reverseIndex'),
   }));
   const searches = sheetNodes.filter(node => entities.get(_cobieEntityType(node.getAttribute('name')))?.searchIndex).map(sheet => {
     const source = _cobieEntityType(sheet.getAttribute('name'));
     return {
       source,
       index:entities.get(source).searchIndex,
-      fields:[...sheet.querySelectorAll(':scope > columns > column[search="true"]')]
+      fields:_cobieColumnNodes(sheet)
+        .filter(column => _cobieColumnAttribute(column, 'runtime', 'search') === 'true')
         .map(column => String(column.getAttribute('name') || '').trim()).filter(Boolean),
       includeAttributes:entities.get(source)?.attributes === true,
-      joins:references.filter(reference => reference.source === source && reference.node.getAttribute('searchFields'))
+      joins:references.filter(reference =>
+        reference.source === source && _cobieReferenceAttribute(reference.node, 'searchFields'))
         .map(reference => ({
           field:reference.field,
           target:_cobieEntityType(reference.node.getAttribute('targetSheet')),
-          fields:_cobieRuntimeList(reference.node.getAttribute('searchFields')),
-          includeAttributes:reference.node.getAttribute('searchAttributes') === 'true',
+          fields:_cobieRuntimeList(_cobieReferenceAttribute(reference.node, 'searchFields')),
+          includeAttributes:_cobieReferenceAttribute(reference.node, 'searchAttributes') === 'true',
         })),
     };
   });
   const associations = references.flatMap(({ node, source, field }) => {
     const target = _cobieEntityType(node.getAttribute('targetSheet'));
-    const delimiter = String(node.getAttribute('runtimeDelimiter') || node.getAttribute('multiValueDelimiter') || '').trim();
-    return [...node.querySelectorAll(':scope > association')].map(association => {
+    const delimiter = _cobieReferenceAttribute(node, 'runtimeDelimiter') || String(node.getAttribute('multiValueDelimiter') || '').trim();
+    return _cobieChildren(node, 'association').map(association => {
       const owner = _cobieEntityType(association.getAttribute('ownerSheet'));
       return {
         source,
@@ -195,7 +241,8 @@ function _buildCobieRuntimeModel() {
       if (dimension) documentContexts.push({
         source:search.source, field:join.field, sourceIndex:'', target:'', targetField:'', dimension,
       });
-      references.filter(reference => reference.source === join.target && reference.node.getAttribute('documentContext') === 'true')
+      references.filter(reference =>
+        reference.source === join.target && _cobieReferenceAttribute(reference.node, 'documentContext') === 'true')
         .forEach(reference => documentContexts.push({
           source:search.source,
           field:join.field,
@@ -222,6 +269,13 @@ function _buildCobieRuntimeModel() {
 
 const COBIE_RUNTIME_MODEL = _buildCobieRuntimeModel();
 const COBIE_FILTER_DIMENSIONS = Object.freeze(COBIE_RUNTIME_MODEL.filters);
+const _COBIE_FILTER_BY_DIMENSION = new Map(COBIE_FILTER_DIMENSIONS
+  .map(filter => [filter.dimension, filter]));
+if (typeof db !== 'undefined') {
+  COBIE_RUNTIME_MODEL.entities.forEach(descriptor => {
+    if (!Array.isArray(db[descriptor.bucket])) db[descriptor.bucket] = [];
+  });
+}
 if (typeof sel !== 'undefined' && typeof lastCounts !== 'undefined' && typeof selectedCategoryLevels !== 'undefined') {
   COBIE_FILTER_DIMENSIONS.forEach(filter => {
     if (!sel[filter.dimension]) sel[filter.dimension] = new Set();
@@ -245,8 +299,7 @@ function _cobieEntityDescriptor(entityType) {
 }
 
 function _cobieFilterDescriptor(dimension) {
-  const key = _cobieEntityType(dimension);
-  return COBIE_FILTER_DIMENSIONS.find(filter => filter.dimension === key) || null;
+  return _COBIE_FILTER_BY_DIMENSION.get(_cobieEntityType(dimension)) || null;
 }
 
 function _cobieDocumentCategoryDimension() {
@@ -264,7 +317,7 @@ function _cobieEntityUi(entityType) {
 function _cobieEntityBucket(entityType) {
   const type = _cobieEntityType(entityType);
   if (!type) return '';
-  return _cobieEntityDescriptor(type)?.bucket || (type.endsWith('y') ? `${type.slice(0, -1)}ies` : `${type}s`);
+  return _cobieEntityDescriptor(type)?.bucket || _cobieDefaultBucket(type);
 }
 
 function _cobieSheetName(entityType) {
@@ -286,11 +339,10 @@ function _cobieDocumentTargetTypes() {
 function _cobieSchemaRelationships() {
   const xml = _cobieSchemaDocument();
   if (!xml) return [];
-  return [...xml.querySelectorAll('sheets > sheet')].flatMap(sheet => {
+  return _cobieSheetNodes(xml).flatMap(sheet => {
     const source = _cobieEntityType(sheet.getAttribute('name'));
-    return [...sheet.querySelectorAll(':scope > columns > column')]
-      .filter(column => _cobieRuntimeList(column.getAttribute('checks')).includes('CrossReference'))
-      .map(column => ({ column, reference:_cobieDirectChild(column, 'reference') }))
+    return _cobieColumnNodes(sheet)
+      .map(column => ({ column, reference:_cobieColumnChild(column, 'qa', 'reference') }))
       .filter(({ reference }) => reference)
       .map(({ column, reference }) => ({
       source,
@@ -338,11 +390,13 @@ function _buildCobieSchemaAliasMap() {
     merged.forEach(name => map.set(_cobieNormKey(name), merged));
   };
 
-  xml.querySelectorAll('sheets > sheet > columns > column').forEach(column => {
-    const primary = column.getAttribute('name') || '';
-    const aliases = String(column.getAttribute('aliases') || '')
-      .split('|').map(value => value.trim()).filter(Boolean);
-    upsert([primary, ...aliases]);
+  _cobieSheetNodes(xml).forEach(sheet => {
+    _cobieColumnNodes(sheet).forEach(column => {
+      const primary = column.getAttribute('name') || '';
+      const aliases = _cobieColumnAttribute(column, 'runtime', 'aliases')
+        .split('|').map(value => value.trim()).filter(Boolean);
+      upsert([primary, ...aliases]);
+    });
   });
 
   return map;

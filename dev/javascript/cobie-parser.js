@@ -1,10 +1,16 @@
 // ── COBie parsing and identity helpers ───────────────────────
 function readSheet(wb, name) {
-  const k = Object.keys(wb.Sheets).find(k => k.toLowerCase() === name.toLowerCase());
-  if (!k) return [];
-  return XLSX.utils.sheet_to_json(wb.Sheets[k], { defval:'', raw:false }).filter(row =>
-    Object.values(row).some(value => value !== null && value !== undefined && String(value).trim() !== '')
-  );
+  if (!wb || !wb.Sheets || !name) return [];
+  const k = Object.keys(wb.Sheets).find(key => key.toLowerCase() === String(name).toLowerCase());
+  if (!k || !wb.Sheets[k]) return [];
+  try {
+    return XLSX.utils.sheet_to_json(wb.Sheets[k], { defval:'', raw:false }).filter(row =>
+      Object.values(row).some(value => value !== null && value !== undefined && String(value).trim() !== '')
+    );
+  } catch (err) {
+    console.warn('Skipped unreadable sheet', String(name), err?.message || err);
+    return [];
+  }
 }
 
 function classificationParts(value) {

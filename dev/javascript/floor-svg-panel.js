@@ -804,8 +804,8 @@ function _svgRotatedBounds(width, height, angle = _svgViewRotation(), reflection
   ];
   const xs = corners.map(point => point.x);
   const ys = corners.map(point => point.y);
-  const minX = Math.min(...xs);
-  const minY = Math.min(...ys);
+  const minX = Math.min(...xs) || 0;
+  const minY = Math.min(...ys) || 0;
   return {
     minX,
     minY,

@@ -1,6 +1,13 @@
 // ── Filter model and cross-counts ────────────────────────────
 // Returns true if Set a and Set b share at least one element
 function _setHasAny(a, b) { for (const x of a) if (b.has(x)) return true; return false; }
+function _filterMatchState(dimensions, matchesDimension) {
+  const matches = dimensions.map(matchesDimension);
+  return {
+    matches,
+    failedCount:matches.reduce((count, matchesCurrentDimension) => count + Number(!matchesCurrentDimension), 0),
+  };
+}
 const _SUPPORTED_DOC_SHEETS = _cobieDocumentTargetTypes();
 const _DOC_CONTEXT_DIMENSIONS = Object.fromEntries(COBIE_FILTER_DIMENSIONS
   .filter(filter => filter.contextProperty).map(filter => [filter.dimension, filter.contextProperty]));
@@ -13,8 +20,10 @@ function _componentFilterValues(component, filter) {
     const indexed = idx[filter.valueIndex]?.[componentKey];
     values = indexed instanceof Set ? [...indexed] : (Array.isArray(indexed) ? indexed : [indexed]);
   } else if (filter.throughField && filter.throughIndex) {
-    const throughValue = f(component, ..._cobieFieldAliasesFor(filter.throughField));
-    values = [idx[filter.throughIndex]?.[_rowKey(component, throughValue)]];
+    values = _cobieReferenceValues('component', component, filter.throughField).flatMap(throughValue => {
+      const indexed = idx[filter.throughIndex]?.[_rowKey(component, throughValue)];
+      return indexed instanceof Set ? [...indexed] : (Array.isArray(indexed) ? indexed : [indexed]);
+    });
   } else if (filter.valueField === '_facility') {
     values = [component._facility];
   } else if (filter.valueField) {
@@ -39,19 +48,17 @@ function _filterDocumentContexts(contexts, counts, replaceAssetCounts) {
   const dimensions = Object.keys(_DOC_CONTEXT_DIMENSIONS);
   const countSets = Object.fromEntries(dimensions.map(dimension => [dimension, Object.create(null)]));
   const filtered = [];
-  const ALL = (1 << dimensions.length) - 1;
 
   contexts.forEach(context => {
     if (!_documentContextSearchMatches(context)) return;
-    let bits = 0;
-    dimensions.forEach((dimension, index) => {
+    const { matches, failedCount } = _filterMatchState(dimensions, dimension => {
       const property = _DOC_CONTEXT_DIMENSIONS[dimension];
-      if (!sel[dimension].size || _setHasAny(sel[dimension], context[property])) bits |= 1 << index;
+      return !sel[dimension].size || _setHasAny(sel[dimension], context[property]);
     });
-    if (bits === ALL) filtered.push(context);
+    if (!failedCount) filtered.push(context);
 
     dimensions.forEach((dimension, index) => {
-      if ((bits | (1 << index)) !== ALL) return;
+      if (failedCount > Number(!matches[index])) return;
       const property = _DOC_CONTEXT_DIMENSIONS[dimension];
       context[property].forEach(value => {
         if (!countSets[dimension][value]) countSets[dimension][value] = new Set();
@@ -85,12 +92,10 @@ function _documentContextEntry(context) {
 
 // ── Filter application and user actions ──────────────────────
 // Single-pass: builds filtered component list + cross-counts simultaneously.
-// Uses a 6-bit mask (one bit per dimension) so each component is visited once.
 function applyFilters() {
   const dimensions = COBIE_FILTER_DIMENSIONS.map(filter => filter.dimension);
   const c = Object.fromEntries(dimensions.map(dimension => [dimension, {}]));
   const comps = [];
-  const ALL = (1 << dimensions.length) - 1;
 
   db.components.forEach(comp => {
     const cn  = f(comp,'Name').toLowerCase();
@@ -100,17 +105,13 @@ function applyFilters() {
 
     const valuesByDimension = Object.fromEntries(COBIE_FILTER_DIMENSIONS
       .map(filter => [filter.dimension, _componentFilterValues(comp, filter)]));
-    let bits = 0;
-    dimensions.forEach((dimension, index) => {
-      if (!sel[dimension].size || valuesByDimension[dimension].some(value => sel[dimension].has(value))) {
-        bits |= 1 << index;
-      }
-    });
+    const { matches, failedCount } = _filterMatchState(dimensions, dimension =>
+      !sel[dimension].size || valuesByDimension[dimension].some(value => sel[dimension].has(value)));
 
-    if (bits === ALL) comps.push(comp);
+    if (!failedCount) comps.push(comp);
 
     dimensions.forEach((dimension, index) => {
-      if ((bits | (1 << index)) !== ALL) return;
+      if (failedCount > Number(!matches[index])) return;
       valuesByDimension[dimension].forEach(value => { c[dimension][value] = (c[dimension][value] || 0) + 1; });
     });
   });
