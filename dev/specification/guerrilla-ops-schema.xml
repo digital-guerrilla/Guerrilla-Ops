@@ -256,7 +256,6 @@
             <rule name="NotEmpty"/>
           </qa>
           <ui groupTitle="External References"/>
-          <format name="GUID"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExternalProjectObject">
@@ -347,6 +346,7 @@
         <column name="ExtIdentifier">
           <qa>
             <rule name="NotEmpty"/>
+            <format name="GUID"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExternalIdentifier"/>
@@ -354,7 +354,7 @@
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
-            <refrence targetSheet="Picklist" targetColumn="FloorType" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="FloorType" required="true"/>
           </qa>
           <ui groupTitle="Identification"/>
         </column>
@@ -417,6 +417,7 @@
         <column name="ExtIdentifier">
           <qa>
             <rule name="NotEmpty"/>
+            <format name="GUID"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExternalIdentifier"/>
@@ -503,6 +504,7 @@
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
+            <reference targetSheet="Picklist" targetColumn="ZoneType" required="true"/>
           </qa>
           <ui groupTitle="Identification"/>
         </column>
@@ -515,7 +517,7 @@
         <column name="SpaceNames">
           <qa>
             <rule name="NotNull"/>
-            <reference targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter=";">
+            <reference targetSheet="Space" targetColumn="Name" required="true" multiValueDelimiter=",">
               <runtime indexMode="sourceTargets" reverseIndex="spZones"/>
               <association ownerSheet="Zone" key="spaces" label="Spaces" cardinality="many"/>
               <association ownerSheet="Space" key="zones" label="Zones" cardinality="many"/>
@@ -540,6 +542,7 @@
         <column name="ExtIdentifier">
           <qa>
             <rule name="NotEmpty"/>
+            <format name="GUID"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExternalIdentifier"/>
@@ -598,13 +601,15 @@
         <column name="ExternalObject">
           <qa stage="Design">
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="obj-ExternalObject" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExtObject"/>
         </column>
         <column name="ExtIdentifier">
           <qa stage="Design">
-            <rule name="NotEmpty"/>
+            <rule name="NotEmpty|Unique"/>
+            <format name="GUID"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExternalIdentifier"/>
@@ -661,6 +666,7 @@
         <column name="WarrantyDurationUnit">
           <qa stage="Construction">
             <rule name="NotNull"/>
+            <reference targetSheet="Picklist" targetColumn="DurationUnit" required="true"/>
           </qa>
           <ui groupTitle="Warranty"/>
           <runtime aliases="DurationUnit"/>
@@ -680,6 +686,7 @@
         <column name="DurationUnit">
           <qa stage="Construction">
             <rule name="NotNull"/>
+            <reference targetSheet="Picklist" targetColumn="DurationUnit" required="true"/>
           </qa>
           <ui groupTitle="Warranty"/>
         </column>
@@ -792,7 +799,7 @@
       <columns>
         <column name="Name">
           <qa stage="Design">
-            <rule name="NotNull"/>
+            <rule name="NotNull|Unique"/>
             <unique severity="error"/>
           </qa>
           <ui groupTitle="Identification"/>
@@ -823,13 +830,15 @@
         <column name="ExternalObject">
           <qa stage="Design">
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="obj-ExternalObject" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExtObject"/>
         </column>
         <column name="ExtIdentifier">
           <qa stage="Design">
-            <rule name="NotEmpty"/>
+            <rule name="NotEmpty|Unique"/>
+            <format name="GUID"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExternalIdentifier"/>
@@ -941,6 +950,7 @@
         <column name="Category">
           <qa stage="Design">
             <rule name="NotNull"/>
+            <reference targetSheet="Picklist" targetColumn="Category-Element" required="true"/>
           </qa>
           <ui groupTitle="Identification"/>
         </column>
@@ -971,6 +981,7 @@
         <column name="ExtIdentifier">
           <qa stage="Design">
             <rule name="NotEmpty"/>
+            <unique keys="Name|ComponentNames|ExtIdentifier" severity="info"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExternalIdentifier"/>
@@ -999,9 +1010,9 @@
         <column name="CreatedBy">
           <qa>
             <format name="email"/>
+            <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
           <ui groupTitle="Audit"/>
-          <runtime lookupSource="Contact"/>
         </column>
         <column name="CreatedOn">
           <qa>
@@ -1012,6 +1023,7 @@
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
+            <reference targetSheet="Picklist" targetColumn="DocumentType" required="true"/>
           </qa>
           <ui groupTitle="Identification"/>
         </column>
@@ -1020,9 +1032,15 @@
         </column>
         <column name="ApprovalBy">
           <ui groupTitle="Audit"/>
+          <qa>
+            <rule name="NotEmpty"/>
+          </qa>
         </column>
         <column name="Stage">
           <ui groupTitle="Identification"/>
+          <qa>
+            <rule name="NotEmpty"/>
+          </qa>
         </column>
         <column name="SheetName">
           <qa>
@@ -1067,6 +1085,7 @@
         <column name="ExternalIdentifier">
           <qa>
             <rule name="NotEmpty"/>
+            <unique keys="Name|ExternalIdentifier" severity="info"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExtIdentifier"/>
@@ -1093,6 +1112,7 @@
           <qa>
             <rule name="NotEmpty"/>
             <format name="email"/>
+            <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
         </column>
         <column name="CreatedOn">
@@ -1162,6 +1182,7 @@
         <column name="CreatedBy">
           <qa>
             <format name="email"/>
+            <reference targetSheet="Contact" targetColumn="Email" required="false"/>
           </qa>
         </column>
         <column name="CreatedOn">
