@@ -67,6 +67,7 @@
         <column name="ExternalObject">
           <qa>
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objContact" required="false"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExtObject"/>
@@ -94,7 +95,7 @@
         </column>
         <column name="Phone">
           <qa>
-            <rule name="NotNull"/>
+            <rule name="NotEmpty"/>
           </qa>
           <ui groupTitle="Communication"/>
         </column>
@@ -236,10 +237,10 @@
           </qa>
           <ui groupTitle="Units"/>
         </column>
-        <column name="Currency">
+        <column name="CurrencyUnit">
           <qa>
             <rule name="NotNull"/>
-            <reference targetSheet="Picklist" targetColumn="CurrencyUnit" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="CostUnit" required="true"/>
           </qa>
           <ui groupTitle="Units"/>
           <runtime aliases="CurrencyUnit|Currency Unit"/>
@@ -247,7 +248,6 @@
         <column name="AreaMeasurement">
           <qa>
             <rule name="NotNull"/>
-            <reference targetSheet="Picklist" targetColumn="AreaUnit" required="true"/>
           </qa>
           <ui groupTitle="Units"/>
         </column>
@@ -261,6 +261,7 @@
         <column name="ExternalProjectObject">
           <qa>
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objProject" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
         </column>
@@ -274,6 +275,7 @@
         <column name="ExternalSiteObject">
           <qa>
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objSite" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
         </column>
@@ -287,6 +289,7 @@
         <column name="ExternalFacilityObject">
           <qa>
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objFacility" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExternalObject|ExtObject"/>
@@ -336,12 +339,13 @@
           <ui groupTitle="External References"/>
           <runtime aliases="ExtSystem"/>
         </column>
-        <column name="ExternalObject">
+        <column name="ExtObject">
           <qa>
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objFloor" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
-          <runtime aliases="ExtObject"/>
+          <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExtIdentifier">
           <qa>
@@ -407,12 +411,13 @@
           <ui groupTitle="External References"/>
           <runtime aliases="ExtSystem"/>
         </column>
-        <column name="ExternalObject">
+        <column name="ExtObject">
           <qa>
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objSpace" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
-          <runtime aliases="ExtObject"/>
+          <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExtIdentifier">
           <qa>
@@ -504,7 +509,7 @@
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
-            <reference targetSheet="Picklist" targetColumn="ZoneType" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="ZoneCategory" required="false"/>
           </qa>
           <ui groupTitle="Identification"/>
         </column>
@@ -532,12 +537,13 @@
           <ui groupTitle="External References"/>
           <runtime aliases="ExtSystem"/>
         </column>
-        <column name="ExternalObject">
+        <column name="ExtObject">
           <qa>
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objZone" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
-          <runtime aliases="ExtObject"/>
+          <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExtIdentifier">
           <qa>
@@ -598,13 +604,13 @@
           <ui groupTitle="External References"/>
           <runtime aliases="ExtSystem"/>
         </column>
-        <column name="ExternalObject">
+        <column name="ExtObject">
           <qa stage="Design">
             <rule name="NotEmpty"/>
-            <reference targetSheet="Picklist" targetColumn="obj-ExternalObject" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="objType" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
-          <runtime aliases="ExtObject"/>
+          <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExtIdentifier">
           <qa stage="Design">
@@ -669,7 +675,6 @@
             <reference targetSheet="Picklist" targetColumn="DurationUnit" required="true"/>
           </qa>
           <ui groupTitle="Warranty"/>
-          <runtime aliases="DurationUnit"/>
         </column>
         <column name="ReplacementCost">
           <qa stage="Construction">
@@ -827,10 +832,10 @@
           <ui groupTitle="External References"/>
           <runtime aliases="ExtSystem"/>
         </column>
-        <column name="ExternalObject">
+        <column name="ExtObject">
           <qa stage="Design">
             <rule name="NotEmpty"/>
-            <reference targetSheet="Picklist" targetColumn="obj-ExternalObject" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="objComponent" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExtObject"/>
@@ -884,14 +889,14 @@
         <column name="InstallationDate">
           <qa stage="Construction">
             <rule name="NotNull"/>
-            <format name="isoDate"/>
+            <format name="isoDateTime"/>
           </qa>
           <ui groupTitle="Asset"/>
         </column>
         <column name="WarrantyStartDate">
           <qa stage="Construction">
             <rule name="NotNull"/>
-            <format name="isoDate"/>
+            <format name="isoDateTime"/>
           </qa>
           <ui groupTitle="Asset"/>
         </column>
@@ -957,7 +962,7 @@
         <column name="ComponentNames">
           <qa stage="Design">
             <rule name="NotNull"/>
-            <reference targetSheet="Component" targetColumn="Name" required="true" multiValueDelimiter=";">
+            <reference targetSheet="Component" targetColumn="Name" required="true" multiValueDelimiter=",">
               <runtime indexMode="sourceTargets" reverseIndex="compSys" forwardIndex="bySys" runtimeDelimiter=","/>
               <association ownerSheet="System" key="components" label="Components" cardinality="many"/>
               <association ownerSheet="Component" key="systems" label="Systems" cardinality="many"/>
@@ -971,9 +976,10 @@
           <ui groupTitle="External References"/>
           <runtime aliases="ExtSystem"/>
         </column>
-        <column name="ExternalObject">
+        <column name="ExtObject">
           <qa stage="Design">
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objSystem" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExtObject"/>
@@ -1030,7 +1036,7 @@
         <column name="Description">
           <ui groupTitle="Identification"/>
         </column>
-        <column name="ApprovalBy">
+        <column name="ApprovedBy">
           <ui groupTitle="Audit"/>
           <qa>
             <rule name="NotEmpty"/>
@@ -1045,6 +1051,7 @@
         <column name="SheetName">
           <qa>
             <rule name="NotNull"/>
+            <reference targetSheet="Picklist" targetColumn="SheetType" required="true"/>
           </qa>
           <ui groupTitle="Association"/>
           <runtime aliases="Sheet Name"/>
@@ -1075,9 +1082,10 @@
           <ui groupTitle="External References"/>
           <runtime aliases="ExtSystem"/>
         </column>
-        <column name="ExternalObject">
+        <column name="ExtObject">
           <qa>
             <rule name="NotEmpty"/>
+            <reference targetSheet="Picklist" targetColumn="objDocument" required="true"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExtObject"/>
@@ -1085,7 +1093,7 @@
         <column name="ExternalIdentifier">
           <qa>
             <rule name="NotEmpty"/>
-            <unique keys="Name|ExternalIdentifier" severity="info"/>
+            <unique keys="Name|SheetName|RowName|ExternalIdentifier" severity="info"/>
           </qa>
           <ui groupTitle="External References"/>
           <runtime aliases="ExtIdentifier"/>
@@ -1161,7 +1169,7 @@
           </qa>
           <runtime aliases="ExtSystem"/>
         </column>
-        <column name="ExternalObject">
+        <column name="ExtObject">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
@@ -1192,9 +1200,16 @@
         </column>
         <column name="Category"/>
         <column name="SheetName">
+          <qa>
+            <rule name="NotNull"/>
+            <reference targetSheet="Picklist" targetColumn="SheetType" required="true"/>
+          </qa>
           <runtime aliases="Sheet Name"/>
         </column>
         <column name="RowName">
+          <qa>
+            <rule name="NotNull"/>
+          </qa>
           <runtime aliases="Row Name"/>
         </column>
         <column name="CoordinateXAxis"/>
@@ -1214,19 +1229,37 @@
     <sheet name="Picklist" bucket="picklists" identityField="Name">
       <ui label="Picklist" pluralLabel="Picklists" icon="bi-card-list" colorToken="picklist"/>
       <columns>
-        <column name="Name"/>
+        <column name="AreaUnit"/>
+        <column name="AssetType"/>
         <column name="Category-Facility"/>
         <column name="Category-Space"/>
-        <column name="Category-Product"/>
         <column name="Category-Element"/>
-        <column name="AssetType"/>
-        <column name="AreaUnit"/>
+        <column name="Category-Product"/>
         <column name="Category-Role"/>
+        <column name="CoordinateSheet"/>
+        <column name="CoordinateType"/>
+        <column name="DocumentType"/>
+        <column name="DurationUnit"/>
+        <column name="FloorType"/>
+        <column name="objAttribute"/>
+        <column name="objComponent"/>
+        <column name="objContact"/>
+        <column name="objDocument"/>
+        <column name="objFacility"/>
+        <column name="objFloor"/>
+        <column name="objProject"/>
+        <column name="objSite"/>
+        <column name="objSpace"/>
+        <column name="objSystem"/>        
+        <column name="objType"/>
+        <column name="objZone"/>
+        <column name="SheetType"/>
+        <column name="ZoneCategory"/>
+        <column name="AreaUnit"/>
         <column name="LinearUnit"/>
         <column name="VolumeUnit"/>
-        <column name="CurrencyUnit"/>
-        <column name="FloorType"/>
-
+        <column name="CostUnit"/>
+        <column name="Category-Phase"/>
       </columns>
     </sheet>
   </sheets>
