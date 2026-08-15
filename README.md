@@ -225,6 +225,36 @@ The development source is under `dev/`. Run the regression checks and rebuild
 the self-contained release files with:
 
 ```powershell
+python dev/setup_dev.py
+```
+
+The setup script verifies Node.js, creates or reuses the repository `.venv`,
+installs the pinned Python and Node dependencies, and runs the regression
+suite. Use `python dev/setup_dev.py --skip-tests` when only installation is
+needed.
+
+After setup, run the checks and rebuild from `dev/`:
+
+```powershell
+Set-Location dev
 npm test
-npm run build
+npm run build -- --offline
+```
+
+The build requires Python and the pinned packages in
+[`dev/requirements-build.txt`](dev/requirements-build.txt). Use
+`npm run build` without `--offline` when the manifest cache needs to be
+refreshed from the pinned CDN URLs.
+
+The build generates these committed application artifacts:
+
+- `index.html` — the local-network release used by GitHub Pages
+- `release/Guerrilla-Ops.html` — the network-enabled release
+- `release/Guerrilla-Ops-Airgapped.html` — the fully embedded release
+
+Start the local development server from `dev/` with:
+
+```powershell
+npm ci
+npm run dev
 ```

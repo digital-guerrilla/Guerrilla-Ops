@@ -6,8 +6,8 @@ const { execFileSync } = require('child_process');
 const { DOMParser } = require('linkedom');
 
 const root = path.resolve(__dirname, '..');
-const javascriptDir = path.join(root, 'dev', 'javascript');
-const schemaPath = path.join(root, 'dev', 'specification', 'guerrilla-ops-schema.xml');
+const javascriptDir = path.join(root, 'javascript');
+const schemaPath = path.join(root, 'specification', 'guerrilla-ops-schema.xml');
 const schemaSource = fs.readFileSync(schemaPath, 'utf8');
 execFileSync(process.env.PYTHON || 'python', [
   '-c',

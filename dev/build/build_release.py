@@ -47,7 +47,7 @@ except ImportError as exc:
 # ============================================================================
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = SCRIPT_DIR.parent
+ROOT_DIR = SCRIPT_DIR.parent.parent
 
 DEV_DIR = ROOT_DIR / "dev"
 CSS_DIR = DEV_DIR / "css"
@@ -117,6 +117,7 @@ class ManifestAsset:
     url: str
     filename: str
     asset_type: str
+    sha256: str
 
 
 # ============================================================================
@@ -313,6 +314,7 @@ def parse_manifest(manifest_path: Path) -> dict[str, ManifestAsset]:
 
             filename = ""
             asset_type = ""
+            sha256 = ""
 
             if len(cells) >= 2:
                 second = cells[1]
@@ -327,6 +329,11 @@ def parse_manifest(manifest_path: Path) -> dict[str, ManifestAsset]:
                     asset_type = third
                 elif not filename:
                     filename = cells[2]
+
+            if len(cells) >= 4:
+                sha256 = cells[3].lower()
+                if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+                    fail(f"Invalid SHA-256 digest in manifest row for URL:\n  {url}")
 
             if not filename:
                 filename = safe_filename(Path(urllib.parse.urlsplit(url).path).name)
@@ -344,6 +351,7 @@ def parse_manifest(manifest_path: Path) -> dict[str, ManifestAsset]:
                 url=url,
                 filename=safe_filename(filename),
                 asset_type=asset_type,
+                sha256=sha256,
             )
 
     if not items:
@@ -379,6 +387,16 @@ def cache_path_for_manifest(asset: ManifestAsset) -> Path:
     return CACHE_DIR / asset.filename
 
 
+def validate_asset_digest(asset: ManifestAsset, data: bytes) -> None:
+    if asset.sha256 and sha256_bytes(data) != asset.sha256:
+        fail(
+            "SHA-256 mismatch for manifest asset:\n"
+            f"  {asset.url}\n"
+            f"  expected: {asset.sha256}\n"
+            f"  actual:   {sha256_bytes(data)}"
+        )
+
+
 def get_manifest_asset_bytes(
     asset: ManifestAsset,
     refresh: bool,
@@ -389,6 +407,7 @@ def get_manifest_asset_bytes(
 
     if path.is_file() and path.stat().st_size > 0 and not refresh:
         data = path.read_bytes()
+        validate_asset_digest(asset, data)
         print(f"  CACHE  {asset.url} -> {path.name}")
         return data
 
@@ -400,6 +419,7 @@ def get_manifest_asset_bytes(
 
     print(f"  FETCH  {asset.url}")
     data = download_bytes(asset.url)
+    validate_asset_digest(asset, data)
     write_bytes_atomic(path, data)
 
     digest = sha256_bytes(data)[:12]
@@ -440,6 +460,7 @@ def get_external_asset_text(
             url=normalised,
             filename=inferred_name,
             asset_type=inferred_type,
+            sha256="",
         )
 
     data = get_manifest_asset_bytes(asset=asset, refresh=refresh, offline=offline)

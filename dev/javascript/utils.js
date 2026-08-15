@@ -8,7 +8,7 @@ function f(row, ...names) {
   return '';
 }
 
-const _COBIE_SCHEMA_PATHS = Object.freeze(['dev/specification/guerrilla-ops-schema.xml', 'specification/guerrilla-ops-schema.xml']);
+const _COBIE_SCHEMA_PATHS = Object.freeze(['specification/guerrilla-ops-schema.xml']);
 const _COBIE_EMBEDDED_SCHEMA = '';
 let _COBIE_SCHEMA_DOCUMENT_CACHE;
 let COBIE_SCHEMA_STATUS = { loaded:false, error:'' };

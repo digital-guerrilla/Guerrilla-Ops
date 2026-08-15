@@ -5,8 +5,8 @@ const vm = require('vm');
 const { DOMParser } = require('linkedom');
 
 const root = path.resolve(__dirname, '..');
-const javascriptDir = path.join(root, 'dev', 'javascript');
-const schemaSource = fs.readFileSync(path.join(root, 'dev', 'specification', 'guerrilla-ops-schema.xml'), 'utf8');
+const javascriptDir = path.join(root, 'javascript');
+const schemaSource = fs.readFileSync(path.join(root, 'specification', 'guerrilla-ops-schema.xml'), 'utf8');
 
 class SchemaRequest {
   open() {}

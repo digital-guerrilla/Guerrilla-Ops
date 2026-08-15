@@ -5,6 +5,10 @@ on:
     branches:
       - main
       - master
+  pull_request:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -28,18 +32,37 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: dev/package-lock.json
+
+      - name: Install Node dependencies
+        run: npm ci
+        working-directory: dev
+
+      - name: Run regression tests
+        run: npm test
+        working-directory: dev
+
       - name: Install build dependencies
-        run: python -m pip install rcssmin rjsmin
+        run: python -m pip install -r dev/requirements-build.txt
 
       - name: Run release script
-        run: python build/build_release.py
+        run: python dev/build/build_release.py
+
+      - name: Stage Pages artifact
+        run: mkdir -p _site && cp index.html _site/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
   deploy:
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

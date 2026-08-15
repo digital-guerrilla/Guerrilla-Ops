@@ -1,89 +1,50 @@
 const assert = require('assert');
 const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-const { execFileSync } = require('child_process');
 const { DOMParser } = require('linkedom');
+const { runLogoThemeRegression } = require('./logo-theme-regression');
+const { runDocumentViewRegression } = require('./document-view-regression');
+const { runPostBuildIndexRegression } = require('./post-build-index-regression');
+const { runReleaseHtmlRegression } = require('./release-html-regression');
+const { runDevChannelRegression } = require('./dev-channel-regression');
+const {
+  javascriptDir,
+  javascriptFiles,
+  loadModule:loadModuleFor,
+  loadModules:loadModulesFor,
+  path,
+  readJavascript,
+  readText,
+  root,
+  vm,
+  workbook,
+  xmlRequestFor,
+  checkJavaScriptSyntax,
+} = require('./test-helpers');
 
-const root = path.resolve(__dirname, '..');
-const javascriptDir = path.join(root, 'dev', 'javascript');
-const context = {
-  console,
-  db: {
-    types:[], components:[], spaces:[], floors:[], zones:[], systems:[], documents:[],
-    facilities:[], contacts:[], attributes:[], coordinates:[], picklists:[], facility:null,
-  },
-  idx:{},
-  sel:{ facility:new Set(), floor:new Set(), space:new Set(), type:new Set(), system:new Set(), doccat:new Set() },
-  collapsedFilterCategories:new Set(),
-  _changeLog:[],
-  XLSX:{ utils:{ sheet_to_json:sheet => sheet } },
-  document:{
-    getElementById:() => null,
-    querySelectorAll:() => [],
-    addEventListener:() => {},
-  },
-  window:{ addEventListener:() => {} },
-  searchQuery:'coordinate-test',
-  collapseCounter:0,
-  pendingGroups:{},
-  _logChange:() => {},
-};
-vm.createContext(context);
+const context = require('./test-helpers').createContext();
+const loadModule = filename => loadModuleFor(context, filename);
+const loadModules = filenames => loadModulesFor(context, filenames);
+checkJavaScriptSyntax();
 
-function loadModule(filename) {
-  const source = fs.readFileSync(path.join(javascriptDir, filename), 'utf8');
-  vm.runInContext(source, context, { filename });
-}
-
-function xmlRequestFor(xmlText) {
-  return class {
-    open() {}
-    send() {
-      this.status = 200;
-      this.responseText = xmlText;
-    }
-  };
-}
-
-function workbook(facility, floor) {
-  return {
-    Sheets:{
-      Facility:[{ Name:facility }],
-      Floor:[floor],
-    },
-  };
-}
-
-fs.readdirSync(javascriptDir)
-  .filter(filename => filename.endsWith('.js'))
-  .forEach(filename => execFileSync(process.execPath, ['--check', path.join(javascriptDir, filename)]));
-
-const logoThemeSource = fs.readFileSync(path.join(javascriptDir, 'logo-theme.js'), 'utf8');
-const logoSvgSource = fs.readFileSync(path.join(root, 'dev', 'svgs', 'Guerrilla-Ops.svg'), 'utf8').trim();
-const releaseBuilderSource = fs.readFileSync(path.join(root, 'build', 'build_release.py'), 'utf8');
-const devIndexSource = fs.readFileSync(path.join(root, 'dev', 'index.html'), 'utf8');
-const modalsSource = fs.readFileSync(path.join(javascriptDir, 'modals.js'), 'utf8');
-const qaSource = fs.readFileSync(path.join(javascriptDir, 'qa.js'), 'utf8');
-const modelConfigSource = fs.readFileSync(path.join(javascriptDir, 'model-config.js'), 'utf8');
-const qaGraphSource = fs.readFileSync(path.join(javascriptDir, 'qa-graph.js'), 'utf8');
-const qaResultsSource = fs.readFileSync(path.join(javascriptDir, 'results.js'), 'utf8');
-const appLifecycleSource = fs.readFileSync(path.join(javascriptDir, 'app-lifecycle.js'), 'utf8');
-const qaSchemaSource = fs.readFileSync(path.join(root, 'dev', 'specification', 'guerrilla-ops-schema.xml'), 'utf8');
-const resultsCssSource = fs.readFileSync(path.join(javascriptDir, '..', 'css', 'results.css'), 'utf8');
-const currentJavascriptSource = fs.readdirSync(javascriptDir)
-  .filter(filename => filename.endsWith('.js'))
-  .map(filename => fs.readFileSync(path.join(javascriptDir, filename), 'utf8'))
-  .join('\n');
+const logoThemeSource = readJavascript('logo-theme.js');
+const logoSvgSource = readText(path.join(root, 'svgs', 'Guerrilla-Ops.svg')).trim();
+const releaseBuilderSource = readText(path.join(root, 'build', 'build_release.py'));
+const devIndexSource = readText(path.join(root, 'index.html'));
+const modalsSource = readJavascript('modals.js');
+const qaSource = readJavascript('qa.js');
+const modelConfigSource = readJavascript('model-config.js');
+const qaGraphSource = readJavascript('qa-graph.js');
+const qaResultsSource = readJavascript('results.js');
+const appLifecycleSource = readJavascript('app-lifecycle.js');
+const qaSchemaSource = readText(path.join(root, 'specification', 'guerrilla-ops-schema.xml'));
+const resultsCssSource = readText(path.join(root, 'css', 'results.css'));
+const currentJavascriptSource = javascriptFiles.map(readJavascript).join('\n');
 assert(!fs.existsSync(path.join(javascriptDir, 'edit.js')), 'the legacy edit modal module must remain removed');
-assert(!devIndexSource.includes('id="edit-modal"') && !devIndexSource.includes('javascript/edit.js'),
-  'development HTML must not contain or load the legacy edit modal');
-assert(qaResultsSource.includes('active: new Set()') && !appLifecycleSource.includes("groupState.active.add('type')") &&
-  !devIndexSource.includes('class="group-chip gchip-active" data-dim="type"'),
-  'no view may default result grouping to Type');
-['openEditModal', 'data-edit-entity', "getElementById('edit-modal')", '_editState'].forEach(reference => {
-  assert(!currentJavascriptSource.includes(reference), `legacy edit modal reference must remain removed: ${reference}`);
-});
+runPostBuildIndexRegression({ assert, fs, path, root, javascriptDir, devIndexSource,
+  qaResultsSource, appLifecycleSource, currentJavascriptSource });
+runDevChannelRegression({ assert, fs, path, javascriptDir, devIndexSource,
+  currentJavascriptSource, qaSource, qaResultsSource, modelConfigSource, qaGraphSource,
+  appLifecycleSource, modalsSource, resultsCssSource, qaSchemaSource });
 assert(!qaSource.includes('bi-pencil') && !qaSource.includes('data-edit-entity'),
   'QA finding cards must use only the editable information action');
 assert(modelConfigSource.includes('const MODEL_MODAL_CONFIG = Object.freeze(_buildModelModalConfig());') &&
@@ -139,10 +100,6 @@ assert(!floorSvgSource.includes('refreshDisplay();') && floorSvgSource.includes(
 assert(modalsSource.includes("info: { icon:'bi-info-circle-fill', color:'text-info', label:'Advisory' }") &&
   modalsSource.includes("warning: { icon:'bi-exclamation-triangle-fill', color:'text-warning', label:'Warning' }"),
   'modal QA flags must distinguish advisories from warning triangles');
-assert(devIndexSource.includes('id="qa-graph-edge-toggle"'),
-  'the QA graph must expose a resize and collapse edge control');
-assert(devIndexSource.includes('id="file-operation-progress"') && appLifecycleSource.includes('function _fileOperationProgress'),
-  'file loading and saving must share a visible QA-styled progress surface');
 ['Reading ${file.name}', 'Decoding workbook structure', 'Merging COBie rows',
   'Rebuilding workbook indexes', 'Capturing workbook baseline', 'Rendering workspace'].forEach(stage => {
   assert(appLifecycleSource.includes(stage), `file loading progress must report the ${stage} phase`);
@@ -190,28 +147,9 @@ assert(schemaColumn('Floor', 'Height')?.querySelector(':scope > qa > rule')?.get
   'Floor Height must use ZeroOrGreaterOrNA');
 assert(schemaColumn('Type', 'Description')?.querySelector(':scope > qa > rule')?.getAttribute('name') === 'NotNull',
   'Type Description must be checked by QA');
-assert(releaseBuilderSource.includes("module == 'utils.js'") && releaseBuilderSource.includes('QA_SCHEMA_SOURCE'),
-  'standalone builds must embed the active COBie XML profile once through the shared schema loader');
+runReleaseHtmlRegression({ assert, fs, path, root, vm, qaSchemaSource, releaseBuilderSource });
 assert(!qaSource.includes('_qaDefaultSchema') && !qaSource.includes('fallbackUsed') && qaSource.includes('No fallback rules were applied.'),
   'QA schema failures must be reported explicitly without legacy fallback rules');
-[
-  fs.readFileSync(path.join(root, 'index.html'), 'utf8'),
-  fs.readFileSync(path.join(root, 'release', 'Guerrilla-Ops.html'), 'utf8'),
-].forEach((standaloneSource, index) => {
-  const embedded = standaloneSource.match(/const _COBIE_EMBEDDED_SCHEMA\s*=\s*((?:'(?:\\.|[^'\\])*')|(?:"(?:\\.|[^"\\])*"));/);
-  assert(embedded, `standalone output ${index + 1} must contain an embedded COBie XML string`);
-  assert.strictEqual(vm.runInNewContext(embedded[1]), qaSchemaSource,
-    `standalone output ${index + 1} must embed the exact current QA XML source`);
-  assert(!standaloneSource.includes('_qaDefaultSchema') && !standaloneSource.includes('fallbackUsed'),
-    `standalone output ${index + 1} must not contain legacy QA fallback code`);
-  assert(!standaloneSource.includes('specification/guerrilla-ops-schema.xml'),
-    `standalone output ${index + 1} must not reference an external QA XML file`);
-  assert(/const _COBIE_SCHEMA_PATHS\s*=\s*Object\.freeze\(\[\]\);/.test(standaloneSource),
-    `standalone output ${index + 1} must disable external COBie schema loading`);
-  assert(/const xmlText\s*=\s*_COBIE_EMBEDDED_SCHEMA;/.test(standaloneSource) &&
-    !standaloneSource.includes('_COBIE_EMBEDDED_SCHEMA || _cobieReadXmlSync'),
-    `standalone output ${index + 1} must load COBie metadata exclusively from embedded XML`);
-});
 
 const unsupportedSchemaContext = {
   console,
@@ -293,7 +231,7 @@ assert.strictEqual(vm.runInContext("_qaRuleDescriptionForCheck('Contact.Email.Fo
   'Must have a valid email address.',
   'format check IDs must resolve their XML description for QA summaries and printable reports');
 assert.strictEqual(vm.runInContext("_qaRuleDescriptionForCheck('Component.InstallationDate.Format')", columnSchemaContext),
-  'Must use ISO date format YYYY-MM-DD.',
+  'Must use an ISO date and time with an optional timezone.',
   'format check IDs must resolve the description selected by their column');
 assert.strictEqual(normalizedColumnRules.manufacturerFormat, 'email',
   'Type Manufacturer must reference the shared email regex');
@@ -301,10 +239,10 @@ assert.strictEqual(normalizedColumnRules.partsGuarantorFormat, 'email',
   'the parts warranty guarantor must reference the shared email regex');
 assert.strictEqual(normalizedColumnRules.laborGuarantorFormat, 'email',
   'the labour warranty guarantor must reference the shared email regex');
-assert.strictEqual(normalizedColumnRules.installationDateFormat, 'isoDate',
-  'Component InstallationDate must reference the shared ISO date regex');
-assert.strictEqual(normalizedColumnRules.warrantyStartDateFormat, 'isoDate',
-  'Component WarrantyStartDate must reference the shared ISO date regex');
+assert.strictEqual(normalizedColumnRules.installationDateFormat, 'isoDateTime',
+  'Component InstallationDate must reference the shared ISO date-time regex');
+assert.strictEqual(normalizedColumnRules.warrantyStartDateFormat, 'isoDateTime',
+  'Component WarrantyStartDate must reference the shared ISO date-time regex');
 assert.deepStrictEqual(normalizedColumnRules.contactUnique[0].keys, ['Email'],
   'Contact Email must normalize into a single-column uniqueness rule');
 assert.strictEqual(normalizedColumnRules.contactUnique[0].ruleId, 'Contact.Email.Unique',
@@ -633,65 +571,12 @@ assert(appLifecycleSource.includes("if (typeof resetQaAudit === 'function') rese
   'workbook lifecycle changes must invalidate the completed QA audit');
 assert(modalsSource.includes("if (entityType === 'facility' && renamedFacility) resolvedName = renamedFacility;"),
   'non-facility rename previews must retain the edited item name instead of the facility scope');
-assert(devIndexSource.includes('<span id="go-logo-hdr" class="go-logo go-logo-hdr" aria-hidden="true"></span>'),
-  'the header must provide an empty host for inline logo injection');
-assert(devIndexSource.includes('<span id="go-logo-upload" class="go-logo go-logo-upload" aria-hidden="true"></span>'),
-  'the upload page must provide an empty host for inline logo injection');
-assert(!logoThemeSource.includes('fetch('), 'logo theming must not fetch the SVG through JavaScript');
-assert(logoThemeSource.includes('const LOGO_SVG = `<svg '), 'logo-theme.js must hardcode the complete SVG markup');
-assert(logoThemeSource.includes('targetEl.innerHTML = LOGO_SVG'), 'logo-theme.js must inject a complete SVG into each host');
-assert(logoThemeSource.includes('--sw-major:10;--sw-minor:5'), 'hardcoded logos must preserve dynamic line-width variables');
-assert(logoThemeSource.includes('stroke-width="var(--sw-major)"'), 'major logo lines must use the dynamic width');
-assert(logoThemeSource.includes('stroke-width="var(--sw-minor)"'), 'minor logo lines must use the dynamic width');
-assert(logoSvgSource.includes('stroke="var(--lines)"'), 'logo line strokes must use the target theme color');
-assert(releaseBuilderSource.includes("'svgs', 'Guerrilla-Ops.svg'"), 'the release build must read the canonical logo SVG');
-assert(devIndexSource.includes('<link rel="icon" type="image/svg+xml" href="svgs/Guerrilla-Ops.svg">'), 'development must use the canonical SVG as its favicon');
-assert(releaseBuilderSource.includes("'data:image/svg+xml;base64,'"), 'the release build must embed the SVG favicon as a data URL');
-assert(!releaseBuilderSource.includes('logo_reference'), 'the release build must not rewrite visible logo references');
-assert(!releaseBuilderSource.includes('svg_sprite'), 'the release build must not replace inline logos with a shared sprite');
-assert(logoThemeSource.includes("{ id:'go-logo-hdr', lineColor:'--on-dark' }"), 'header logo lines must be light on the dark header');
-assert(logoThemeSource.includes("{ id:'go-logo-upload', lineColor:'--text-dark' }"), 'upload logo lines must be dark on the light landing card');
-const logoElements = {};
-['go-logo-hdr', 'go-logo-upload'].forEach(id => {
-  const properties = {};
-  const svg = {
-    style:{ setProperty:(name, value) => { properties[name] = value; } },
-    setAttribute:() => {},
-  };
-  logoElements[id] = {
-    properties,
-    element:{
-      classList:{ add:() => {} },
-      set innerHTML(value) { this.markup = value; },
-      querySelector:() => svg,
-    },
-  };
-});
-const logoContext = {
-  console,
-  Math,
-  window:{},
-  document:{
-    documentElement:{},
-    addEventListener:() => {},
-    getElementById:id => logoElements[id]?.element || null,
-  },
-  getComputedStyle:() => ({
-    getPropertyValue:name => ({ '--on-dark':'#fff', '--text-dark':'#292929' }[name] || '#00fed8'),
-  }),
-};
-vm.createContext(logoContext);
-vm.runInContext(logoThemeSource, logoContext, { filename:'logo-theme.js' });
-logoContext.window.applyBrandLogoTheme();
-assert.strictEqual(logoElements['go-logo-hdr'].properties['--lines'], '#fff', 'header logo lines must render light');
-assert.strictEqual(logoElements['go-logo-upload'].properties['--lines'], '#292929', 'upload logo lines must render dark');
+runLogoThemeRegression({ assert, vm,
+  devIndexSource, logoSvgSource, logoThemeSource, releaseBuilderSource });
 
 context.DOMParser = DOMParser;
 context.XMLHttpRequest = xmlRequestFor(qaSchemaSource);
-loadModule('utils.js');
-loadModule('cobie-parser.js');
-loadModule('filters.js');
-loadModule('three-d-viewer.js');
+loadModules(['utils.js', 'cobie-parser.js', 'filters.js', 'three-d-viewer.js']);
 
 const runtimeFilterContract = JSON.parse(vm.runInContext(`JSON.stringify(COBIE_FILTER_DIMENSIONS.map(filter => ({
   dimension:filter.dimension, order:filter.order, valueField:filter.valueField,
@@ -899,54 +784,7 @@ assert.deepStrictEqual({ ...documentCounts.doccat }, {}, 'document categories mu
 context.searchQuery = previousDocumentFilterSearch;
 Object.entries(previousDocumentFilterSelections).forEach(([dimension, selection]) => { context.sel[dimension] = selection; });
 
-loadModule('documents.js');
-const documentEntries = context.db.documents.map(doc => ({ doc }));
-const documentRoots = context.groupDocsByClassification(documentEntries);
-assert(documentRoots.includes('PM_70 : Asset information'), 'Document view should start with the top used PM classification');
-assert(documentRoots.includes('grp-action-label">Count'), 'document group headers should use the shared Count action');
-assert(documentRoots.includes('>Info</span>'), 'document group headers should expose the shared Info action');
-assert(documentRoots.includes('>Highlight</span>'), 'document group headers should expose the shared Highlight action');
-const documentChildren = context.groupDocsByClassification(documentEntries, [], 1, 'pm_70');
-assert(documentChildren.includes('PM_70_15 : Asset information management'), 'Document view should nest the next PM classification level');
-context.docStore = [];
-const linkedDocument = { ...context.db.documents[0], Directory:'https://example.test/document.pdf' };
-const documentCardHtml = context.docCard({ doc:linkedDocument, linkedType:'facility', linkedName:'Facility A' });
-assert(documentCardHtml.includes('data-card-highlight-key'), 'document cards should be selectable as a whole');
-assert(documentCardHtml.includes('document-link-action'), 'document cards should retain the Link action');
-assert(!documentCardHtml.includes('data-edit-doc'), 'document cards must not expose the redundant edit action');
-const resultsSource = fs.readFileSync(path.join(javascriptDir, 'results.js'), 'utf8');
-assert(!resultsSource.includes('data-edit-doc'), 'document trees must not expose the redundant edit action');
-loadModule('results.js');
-const canonicalTypes = context.idx.types;
-context.idx.types = [];
-const mixedCaseTypeGroups = [...context.buildGroupMap([
-  { Name:'Mixed Component', TypeName:'MixedCaseType', _facility:'Facility A' },
-], 'type').keys()];
-context.idx.types = canonicalTypes;
-assert.deepStrictEqual(mixedCaseTypeGroups, ['MixedCaseType'],
-  'Type group headers must preserve source field casing when a canonical list entry is temporarily unavailable');
-context.componentHighlightFixture = { Name:'Highlight Pump', Description:'Edited component', _facility:'Facility A' };
-const componentHighlightFixture = context.componentHighlightFixture;
-const highlightKey = context._groupHighlightBuildKey('component', componentHighlightFixture.Name, componentHighlightFixture._facility);
-vm.runInContext(`groupHighlightStore.add(${JSON.stringify(highlightKey)})`, context);
-const highlightedComponentHtml = vm.runInContext('card(componentHighlightFixture)', context);
-assert(highlightedComponentHtml.includes('data-card-highlight-action'), 'component cards must expose a dedicated Highlight action');
-assert(highlightedComponentHtml.includes('grp-highlight-btn is-active'), 'the component Highlight action must show its active state');
-assert(highlightedComponentHtml.includes('component-result-card'), 'component highlight styling must remain scoped independently of edit state');
-context._changeLog.push({
-  entityType:'document', entityName:linkedDocument.Name, originalName:linkedDocument.Name,
-  facNames:[linkedDocument._facility], timestamp:Date.now(),
-});
-assert(
-  context.docCard({ doc:linkedDocument, linkedType:'facility', linkedName:'Facility A' }).includes('document-result-card-unsaved'),
-  'unsaved documents should be highlighted in the main document tree',
-);
-context._changeLog.length = 0;
-
-const devHtml = fs.readFileSync(path.join(root, 'dev', 'index.html'), 'utf8');
-const createSource = fs.readFileSync(path.join(javascriptDir, 'create.js'), 'utf8');
-assert(!devHtml.includes('id="create-modal"'), 'the legacy Create Item modal must not be present');
-assert(!createSource.includes('saveCreate'), 'the legacy Create Item form engine must not be present');
+runDocumentViewRegression({ assert, context, fs, path, javascriptDir, loadModule, vm });
 
 loadModule('panels.js');
 const filterBarHost = { innerHTML:'' };
@@ -1276,8 +1114,7 @@ assert.strictEqual(dotPositions.length, 1, 'a component highlight must exclude u
 assert(Math.abs(dotPositions[0].u - 0.25) < 1e-10);
 assert(Math.abs(dotPositions[0].v - 0.75) < 1e-10);
 
-loadModule('model-config.js');
-loadModule('modals.js');
+loadModules(['model-config.js', 'modals.js']);
 assert.strictEqual(vm.runInContext('MODEL_CONFIG_SCHEMA_STATUS.loaded', context), true,
   'modal configuration must hydrate from the shared COBie XML document');
 const facilityModalTitle = [...categorizedSchema.querySelectorAll('sheets > sheet')]

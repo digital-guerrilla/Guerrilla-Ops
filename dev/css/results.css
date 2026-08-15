@@ -108,7 +108,9 @@
   color: var(--text-medium);
 }
 .qa-graph-body {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 2 1 1 auto;
   min-height: 0;
   overflow: auto;
   padding: .65rem .8rem .8rem;
@@ -165,9 +167,9 @@
 .qa-graph-chip.fail .n { color: #c92a2a; }
 .qa-donut {
   --qa-pass: 0%;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
+  width: 40px;
+  height: 40px;
+  flex: none;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -189,29 +191,35 @@
   color: var(--text-dark);
 }
 .qa-donut-main {
-  width: 68px;
-  height: 68px;
-  flex-basis: 68px;
+  width: 100px;
+  height: 100px;
+  flex-basis: 100px;
 }
-.qa-donut-main::after { inset: 9px; }
+.qa-donut-main::after { inset: 12px; }
 .qa-donut-main span { font-size: .78rem; }
 .qa-graph-row {
   display: flex;
   align-items: center;
-  gap: .55rem;
-  margin-bottom: .5rem;
+  width: 100%;
+  gap: 1rem;
+  margin-bottom: 0rem;
 }
 .qa-graph-sheet-row,
 .qa-graph-rule-row {
-  width: 100%;
+  width: 50%;
+  min-width: 400px;
+  max-height: 100px;
+  min-height: 100px;
   text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
   color: inherit;
   font: inherit;
   cursor: pointer;
-  padding: .7rem 0;
-  border: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  border-radius: 0;
+  padding: 1rem;
+  margin-bottom: .5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
   background: transparent;
 }
 .qa-graph-sheet-row:hover,
@@ -227,7 +235,7 @@
   flex: 0 0 68px;
 }
 .qa-graph-sheet-row .qa-donut::after,
-.qa-graph-rule-row .qa-donut::after { inset: 9px; }
+.qa-graph-rule-row .qa-donut::after { inset: 10px; }
 .qa-graph-sheet-row .qa-donut span,
 .qa-graph-rule-row .qa-donut span { font-size: .72rem; }
 .qa-graph-meta {
