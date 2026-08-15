@@ -267,9 +267,13 @@ function _qaSchemaOrderComparator(schema = _qaParseSchema()) {
     const sheet = _qaNorm(item?.sheet || item?.entityType);
     const field = item?.column || item?.fields?.[0] || '';
     const firstField = String(field).split(/\s*\+\s*/)[0];
+    const key = _qaNormKey(firstField);
+    const index = key ? columnOrder.get(sheet)?.get(key) : undefined;
+    // Sheet-level results carry the 'Sheet' pseudo-column and lead their worksheet.
+    const sheetLevel = !key || (index === undefined && key === _qaNormKey('Sheet'));
     return {
       sheet:sheetOrder.get(sheet) ?? Number.MAX_SAFE_INTEGER,
-      column:firstField ? (columnOrder.get(sheet)?.get(_qaNormKey(firstField)) ?? Number.MAX_SAFE_INTEGER) : -1,
+      column:sheetLevel ? -1 : (index ?? Number.MAX_SAFE_INTEGER),
     };
   };
   return (left, right) => {
@@ -478,6 +482,7 @@ function _qaParseSchema() {
       const stage = _qaStage(qaAttr('stage'), inheritedStage || 'design');
       const column = {
         name: _qaAttr(col, 'name'),
+        colorToken: _qaAttr(_qaDirectChild(col, 'ui'), 'colorToken'),
         required: _qaNorm(qaAttr('required')) === 'true',
         unique: _qaNorm(qaAttr('unique')) === 'true',
         severity: _qaSeverity(qaAttr('severity'), ''),
@@ -616,6 +621,9 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
   const publishRuleResults = () => {
     qaRuleResults = [...ruleCounts.values()].map(result => ({
       ...result,
+      colorToken: schema.sheets
+        .find(sheet => _qaNorm(sheet.name) === _qaNorm(result.sheet))?.columns
+        .find(column => _qaNormKey(column.name) === _qaNormKey(result.column))?.colorToken || '',
       label: QA_CHECKS[result.check]?.label || result.check,
     }));
   };
@@ -1009,7 +1017,7 @@ function runQA() {
 
 let _qaRunToken = null;
 let _qaResultsSelectedSheet = '';
-let _qaResultsSelectedCheck = '';
+let _qaResultsSelectedChecks = [];
 let _qaRunProgress = null;
 
 function qaIsRunning() {
@@ -1083,7 +1091,7 @@ function resetQaAudit() {
   qaScopeCounts = { comps:0, spaces:0, types:0, docs:0 };
   qaHasRun = false;
   _qaResultsSelectedSheet = '';
-  _qaResultsSelectedCheck = '';
+  _qaResultsSelectedChecks = [];
   _qaCellCache = new WeakMap();
 }
 
@@ -1092,7 +1100,7 @@ function setQaStage(stage) {
   if (nextStage === qaSelectedStage) return;
   qaSelectedStage = nextStage;
   _qaApplyStageFilter();
-  _qaResultsSelectedCheck = '';
+  _qaResultsSelectedChecks = [];
   const context = typeof _projectActiveEntityContext === 'function' ? _projectActiveEntityContext() : null;
   if (context?.row && typeof _projectRefreshFieldIssueBadges === 'function') {
     _projectRefreshFieldIssueBadges(context.entityType, context.entityName, context.facility);
@@ -1534,7 +1542,7 @@ const QA_ENTITY_GROUP_DIMS = Object.freeze((typeof COBIE_FILTER_DIMENSIONS === '
 
 function setQaResultsSheetFilter(sheetName = '', shouldRender = true) {
   _qaResultsSelectedSheet = _qaNorm(sheetName);
-  _qaResultsSelectedCheck = '';
+  _qaResultsSelectedChecks = [];
   QA_ENTITY_GROUP_DIMS.forEach(dim => groupState.active.delete(dim));
   if (QA_ENTITY_GROUP_DIMS.includes(_qaResultsSelectedSheet)) {
     groupState.active.add(_qaResultsSelectedSheet);
@@ -1548,7 +1556,8 @@ function setQaResultsSheetFilter(sheetName = '', shouldRender = true) {
 }
 
 function setQaResultsCheckFilter(checkName = '') {
-  _qaResultsSelectedCheck = String(checkName || '');
+  const names = Array.isArray(checkName) ? checkName : [checkName];
+  _qaResultsSelectedChecks = names.map(name => String(name || '')).filter(Boolean);
   if (viewMode !== 'qa') return;
   const list = document.getElementById('comp-list');
   if (list) renderQAMode(list, false);
@@ -1559,7 +1568,7 @@ function _qaVisibleFindings() {
   const selectedSheet = _qaResultsSelectedSheet || activeEntityDim;
   return qaFindings.filter(finding => {
     if (selectedSheet && _qaNorm(finding.sheet || finding.entityType) !== selectedSheet) return false;
-    if (_qaResultsSelectedCheck && finding.check !== _qaResultsSelectedCheck) return false;
+    if (_qaResultsSelectedChecks.length && !_qaResultsSelectedChecks.includes(finding.check)) return false;
     return true;
   });
 }
@@ -1582,7 +1591,6 @@ function renderQAMode(list) {
     ${bySev.info?`<span class="qa-sev qa-sev-info">${bySev.info} advisor${bySev.info!==1?'ies':'y'}</span>`:''}
     <span class="qa-scope">${esc(scopeTxt)} — ${esc(qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1))} includes all preceding stages; active filters set the row-level scope.</span>
     ${_qaResultsSelectedSheet ? `<span class="qa-scope">Sheet: ${esc(_qaResultsSelectedSheet)}</span>` : ''}
-    ${_qaResultsSelectedCheck ? `<span class="qa-scope">Rule: ${esc(_qaResultsSelectedCheck)}</span>` : ''}
     ${visibleFindings.length?`<button class="xbtn" onclick="exportQAReport()"><i class="bi bi-download me-1"></i>Download XLSX</button>`:''}
     ${qaRuleResults.length?`<button class="xbtn" onclick="exportQAPdf()"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</button>`:''}
   </div>`;
@@ -1796,6 +1804,32 @@ function _qaRuleSubtitle(result) {
   return named || '';
 }
 
+function _qaResultSeverity(result) {
+  const findings = Array.isArray(qaFindings) ? qaFindings : [];
+  const finding = findings.find(item => item.check === result.check && _qaNorm(item.sheet || item.entityType) === _qaNorm(result.sheet));
+  return String(finding?.sev || QA_CHECKS[result.check]?.sev || 'warning').toLowerCase();
+}
+
+// Advisory (info) failures score as passes; warning and error failures score as fails.
+function _qaScoreTally(results) {
+  return (results || []).reduce((totals, result) => {
+    const pass = Number(result.pass || 0);
+    const fail = Number(result.fail || 0);
+    const severity = _qaResultSeverity(result);
+    totals.pass += pass;
+    if (severity === 'info') totals.advisory += fail;
+    else if (severity === 'error') totals.error += fail;
+    else totals.warning += fail;
+    totals.fail = totals.warning + totals.error;
+    totals.total += pass + fail;
+    return totals;
+  }, { pass:0, advisory:0, warning:0, error:0, fail:0, total:0 });
+}
+
+function _qaTallyScore(tally) {
+  return tally && tally.total ? Math.round(((tally.pass + tally.advisory) / tally.total) * 100) : 100;
+}
+
 function _qaPdfReportHtml(logoMarkup = '') {
   const generated = new Date();
   const selectedFacilityKeys = sel?.facility?.size
@@ -1805,6 +1839,10 @@ function _qaPdfReportHtml(logoMarkup = '') {
     ? getComputedStyle(document.documentElement)
     : null;
   const themeToken = name => String(rootStyles?.getPropertyValue(name) || '').trim();
+  const columnBackground = result => {
+    const token = String(result?.colorToken || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+    return token ? themeToken(`--${token}`) : '';
+  };
   const headerThemeBySheet = {
     facility:  { bg:themeToken('--pill-fac-bg'), text:themeToken('--pill-fac-text'), border:themeToken('--pill-fac-text') },
     floor:     { bg:themeToken('--pill-floor-bg'), text:themeToken('--pill-floor-text'), border:themeToken('--pill-floor-text') },
@@ -1838,10 +1876,6 @@ function _qaPdfReportHtml(logoMarkup = '') {
     const severity = String(finding.sev || 'warning').toLowerCase();
     if (Object.prototype.hasOwnProperty.call(severityCounts, severity)) severityCounts[severity]++;
   });
-  const totalPass = qaRuleResults.reduce((sum, result) => sum + Number(result.pass || 0), 0);
-  const totalFail = qaRuleResults.reduce((sum, result) => sum + Number(result.fail || 0), 0);
-  const totalChecks = totalPass + totalFail;
-  const overallScore = totalChecks ? Math.round((totalPass / totalChecks) * 100) : 100;
   const grouped = new Map();
   qaRuleResults.forEach(result => {
     const sheet = String(result.sheet || 'Workbook');
@@ -1849,41 +1883,75 @@ function _qaPdfReportHtml(logoMarkup = '') {
     grouped.get(sheet).push(result);
   });
   const sheets = [...grouped.entries()];
-  const severityFor = result => {
-    const finding = qaFindings.find(item => item.check === result.check && _qaNorm(item.sheet || item.entityType) === _qaNorm(result.sheet));
-    return String(finding?.sev || QA_CHECKS[result.check]?.sev || 'warning').toLowerCase();
-  };
-  const scoreFor = result => {
-    const pass = Number(result.pass || 0);
-    const fail = Number(result.fail || 0);
-    return pass + fail ? Math.round((pass / (pass + fail)) * 100) : 100;
+  const severityFor = _qaResultSeverity;
+  const overallTally = _qaScoreTally(qaRuleResults);
+  const totalChecks = overallTally.total;
+  const overallScore = _qaTallyScore(overallTally);
+  const scoreFor = result => _qaTallyScore(_qaScoreTally([result]));
+  const donut = (tally, size, thickness) => {
+    const radius = (size - thickness) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const centre = size / 2;
+    const segments = [
+      { value:tally.pass, color:'#1f9d55' },
+      { value:tally.advisory, color:'#0f8ab0' },
+      { value:tally.warning, color:'#e8873a' },
+      { value:tally.error, color:'#d64545' },
+    ].filter(segment => segment.value > 0);
+    const total = segments.reduce((sum, segment) => sum + segment.value, 0);
+    let offset = 0;
+    const arcs = segments.map(segment => {
+      const length = (segment.value / total) * circumference;
+      const arc = `<circle cx="${centre}" cy="${centre}" r="${radius}" fill="none" stroke="${segment.color}" stroke-width="${thickness}" stroke-dasharray="${length.toFixed(2)} ${(circumference - length).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${centre} ${centre})"></circle>`;
+      offset += length;
+      return arc;
+    }).join('');
+    return `<svg class="donut" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true">
+      <circle cx="${centre}" cy="${centre}" r="${radius}" fill="none" stroke="#e6ecf1" stroke-width="${thickness}"></circle>
+      ${arcs}
+      <text x="${centre}" y="${centre}" text-anchor="middle" dominant-baseline="central" font-size="${(size * 0.25).toFixed(1)}" font-weight="800" fill="#16324f">${_qaTallyScore(tally)}%</text>
+    </svg>`;
   };
   const sheetSummaryRows = sheets.map(([sheet, results]) => {
-    const pass = results.reduce((sum, result) => sum + Number(result.pass || 0), 0);
-    const fail = results.reduce((sum, result) => sum + Number(result.fail || 0), 0);
-    const score = pass + fail ? Math.round((pass / (pass + fail)) * 100) : 100;
-    return `<tr><td>${esc(sheet)}</td><td>${results.length}</td><td>${pass}</td><td>${fail}</td><td><strong>${score}%</strong></td></tr>`;
+    const tally = _qaScoreTally(results);
+    return `<tr>
+      <td>${esc(sheet)}</td>
+      <td class="num">${results.length}</td>
+      <td class="num cell-pass">${tally.pass.toLocaleString()}</td>
+      <td class="num cell-advisory">${tally.advisory.toLocaleString()}</td>
+      <td class="num cell-warning">${tally.warning.toLocaleString()}</td>
+      <td class="num cell-error">${tally.error.toLocaleString()}</td>
+      <td class="num"><strong>${_qaTallyScore(tally)}%</strong></td>
+    </tr>`;
   }).join('');
   const sheetSections = sheets.map(([sheet, results]) => {
     const sheetKey = _qaNorm(sheet).replace(/[^a-z0-9]+/g, '-');
-    const rows = results.map(result => {
+    const columnGroups = new Map();
+    results.forEach(result => {
+      const column = String(result.column || 'Sheet');
+      const key = _qaNormKey(column);
+      if (!columnGroups.has(key)) columnGroups.set(key, []);
+      columnGroups.get(key).push(result);
+    });
+    const rows = [...columnGroups.values()].map(columnResults => `<tbody class="column-group">${columnResults.map(result => {
         const severity = severityFor(result);
         const fail = Number(result.fail || 0);
         const status = fail ? (severity === 'info' ? 'Advisory' : severity.charAt(0).toUpperCase() + severity.slice(1)) : 'Pass';
         const ruleName = String(result.check || result.label || 'rule');
         const ruleDescription = _qaRuleSubtitle(result);
+        const columnBg = columnBackground(result);
         return `<tr>
-          <td>${esc(result.column || 'Sheet')}</td>
+          <td${columnBg ? ` style="background:${esc(columnBg)}"` : ''}>${esc(result.column || 'Sheet')}</td>
           <td><span class="rule-name">${esc(ruleName)}</span>${ruleDescription ? `<span class="rule-id">${esc(ruleDescription)}</span>` : ''}</td>
           <td class="num">${Number(result.pass || 0)}</td>
           <td class="num">${fail}</td>
           <td class="num">${scoreFor(result)}%</td>
           <td><span class="status status-${fail ? severity : 'pass'}">${esc(status)}</span></td>
         </tr>`;
-      }).join('');
+      }).join('')}</tbody>`).join('');
     return `<section class="sheet-section sheet-${esc(sheetKey)}">
       <h2>${esc(sheet)} <span>${results.length} rule${results.length === 1 ? '' : 's'}</span></h2>
-      <table class="results-table"><thead><tr><th>Column / Scope</th><th>Rule</th><th>Pass</th><th>Fail</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="results-table"><thead><tr><th>Column / Scope</th><th>Rule</th><th>Pass</th><th>Fail</th><th>Score</th><th>Status</th></tr></thead>${rows}</table>
     </section>`;
   }).join('');
 
@@ -1919,17 +1987,35 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .subtitle { margin-top:2px; color:#536273; font-size:9pt; }
     .meta { display:grid; grid-template-columns:1fr 1.5fr 1.5fr; gap:6px 14px; margin:12px 0; padding:9px 10px; background:#f1f5f8; border-left:4px solid #00a9a5; }
     .meta-label { color:#607080; font-weight:700; }
-    .summary { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; margin:0 0 12px; }
-    .summary-card { padding:8px; border:1px solid #d9e1e8; border-radius:4px; }
+    .cover { break-after:page; }
+    .hero { display:flex; align-items:center; gap:14px; margin:0 0 10px; padding:10px 12px; border:1px solid #d9e1e8; border-radius:8px; background:linear-gradient(135deg,#f6fafc 0%,#eef4f8 100%); }
+    .hero-headline { flex:1 1 auto; }
+    .hero-title { display:block; color:#16324f; font-size:13pt; font-weight:800; }
+    .hero-note { display:block; margin-top:2px; color:#607080; font-size:8pt; }
+    .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin:10px 0 0; }
+    .summary-card { padding:8px; border:1px solid #d9e1e8; border-radius:5px; background:#fff; }
     .summary-value { display:block; color:#16324f; font-size:16pt; font-weight:800; }
     .summary-label { color:#607080; font-size:7.5pt; text-transform:uppercase; }
+    .summary-card-error { border-left:4px solid #d64545; } .summary-card-warning { border-left:4px solid #e0a800; }
+    .summary-card-info { border-left:4px solid #0f8ab0; } .summary-card-rules { border-left:4px solid #16324f; }
+    .section-title { margin:14px 0 7px; padding-bottom:4px; color:#16324f; border-bottom:2px solid #00a9a5; font-size:10pt; text-transform:uppercase; letter-spacing:.06em; }
+    .sheet-summary th:nth-child(1) { width:34%; }
+    .sheet-summary td, .sheet-summary th { padding:5px 7px; }
+    .cell-pass { color:#17653a; } .cell-advisory { color:#075c78; }
+    .cell-warning { color:#a8600f; } .cell-error { color:#9d1c1c; }
+    .donut { flex:0 0 auto; }
     table { width:100%; border-collapse:collapse; }
     th { color:#fff; background:#16324f; font-size:7.5pt; text-align:left; text-transform:uppercase; }
     th, td { padding:5px 6px; border:1px solid #d9e1e8; vertical-align:top; }
+    .results-table th, .results-table td { border-color:#e8edf1; }
     tbody tr:nth-child(even) { background:#f7f9fb; }
-    .sheet-summary { margin-bottom:14px; }
     .sheet-section { margin:0 0 13px; }
     .sheet-section h2 { break-after:avoid; margin:0; padding:6px 8px; color:#16324f; background:#e8f1f5; border-left:4px solid #00a9a5; font-size:12pt; }
+    .results-table { border-right:1px solid #536273; }
+    .results-table tbody.column-group tr:first-child td { border-top:1px solid #536273; }
+    .results-table tbody.column-group tr:last-child td { border-bottom:1px solid #536273; }
+    .results-table tbody.column-group td:first-child { border-left:1px solid #536273; }
+    .results-table tbody.column-group td:last-child { border-right:1px solid #536273; }
     ${sheetHeaderThemeCss}
     .sheet-section h2 span { float:right; color:#607080; font-size:8pt; font-weight:500; }
     .results-table thead { display:table-header-group; }
@@ -1942,18 +2028,27 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .status-pass { color:#17653a; background:#dff3e7; } .status-error { color:#9d1c1c; background:#fbe1e1; }
     .status-warning { color:#7b4a00; background:#fff0c8; } .status-info { color:#075c78; background:#dff3fa; }
     .report-footer { display:none; }
-    @media screen { body { width:210mm; min-height:297mm; margin:10mm auto; padding:14mm 12mm 19mm; box-shadow:0 2px 18px #0002; } .report-footer { display:flex; justify-content:space-between; gap:12px; margin-top:16px; color:#697887; font-size:7pt; } }
+    @media screen { body { width:210mm; min-height:297mm; margin:10mm auto; padding:14mm 12mm 19mm; box-shadow:0 2px 18px #0002; } .report-footer { display:flex; justify-content:space-between; gap:12px; margin-top:16px; color:#697887; font-size:7pt; } .cover { padding-bottom:14px; margin-bottom:16px; border-bottom:2px dashed #c3ced8; } }
   </style></head><body>
-    <header class="report-header"><div class="report-logo">${logoMarkup}</div><div><h1>COBie QA Report</h1><div class="subtitle">Guerrilla Ops workbook quality assessment</div></div></header>
-    <div class="meta"><div><span class="meta-label">Generated</span><br>${esc(generated.toLocaleString())}<br><span class="meta-label">QA stage</span><br>${esc(qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1))}</div><div><span class="meta-label">Facilities</span><br>${esc(facilities.join(', ') || 'No facility names available')}</div><div><span class="meta-label">Workbooks</span><br>${esc(workbookFiles.join(', ') || 'No source file names available')}</div></div>
-    <div class="summary">
-      <div class="summary-card"><span class="summary-value">${overallScore}%</span><span class="summary-label">Overall score</span></div>
-      <div class="summary-card"><span class="summary-value">${qaRuleResults.length}</span><span class="summary-label">Rules assessed</span></div>
-      <div class="summary-card"><span class="summary-value">${severityCounts.error}</span><span class="summary-label">Errors</span></div>
-      <div class="summary-card"><span class="summary-value">${severityCounts.warning}</span><span class="summary-label">Warnings</span></div>
-      <div class="summary-card"><span class="summary-value">${severityCounts.info}</span><span class="summary-label">Advisories</span></div>
+    <div class="cover">
+      <header class="report-header"><div class="report-logo">${logoMarkup}</div><div><h1>COBie QA Report</h1><div class="subtitle">Guerrilla Ops workbook quality assessment</div></div></header>
+      <div class="meta"><div><span class="meta-label">Generated</span><br>${esc(generated.toLocaleString())}<br><span class="meta-label">QA stage</span><br>${esc(qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1))}</div><div><span class="meta-label">Facilities</span><br>${esc(facilities.join(', ') || 'No facility names available')}</div><div><span class="meta-label">Workbooks</span><br>${esc(workbookFiles.join(', ') || 'No source file names available')}</div></div>
+      <div class="hero">
+        ${donut(overallTally, 82, 14)}
+        <div class="hero-headline">
+          <span class="hero-title">Overall quality score</span>
+          <span class="hero-note">${(overallTally.pass + overallTally.advisory).toLocaleString()} of ${totalChecks.toLocaleString()} checks scored as complete across ${sheets.length} sheet${sheets.length === 1 ? '' : 's'}. Advisories score as a pass; warnings and errors score as a fail.</span>
+          <div class="summary">
+            <div class="summary-card summary-card-rules"><span class="summary-value">${qaRuleResults.length}</span><span class="summary-label">Rules assessed</span></div>
+            <div class="summary-card summary-card-error"><span class="summary-value">${severityCounts.error}</span><span class="summary-label">Errors</span></div>
+            <div class="summary-card summary-card-warning"><span class="summary-value">${severityCounts.warning}</span><span class="summary-label">Warnings</span></div>
+            <div class="summary-card summary-card-info"><span class="summary-value">${severityCounts.info}</span><span class="summary-label">Advisories</span></div>
+          </div>
+        </div>
+      </div>
+      <h2 class="section-title">Sheet scores</h2>
+      <table class="sheet-summary"><thead><tr><th>Sheet</th><th class="num">Rules</th><th class="num">Passed</th><th class="num">Advisory</th><th class="num">Warning</th><th class="num">Error</th><th class="num">Score</th></tr></thead><tbody>${sheetSummaryRows || '<tr><td colspan="7">No QA rule results are available.</td></tr>'}</tbody></table>
     </div>
-    <table class="sheet-summary"><thead><tr><th>Sheet</th><th>Rules</th><th>Pass</th><th>Fail</th><th>Score</th></tr></thead><tbody>${sheetSummaryRows}</tbody></table>
     ${sheetSections || '<p>No QA rule results are available.</p>'}
     <footer class="report-footer"><span>Generated by Guerrilla Ops and provided without guarantee of accuracy. Verify results against source information and applicable requirements.</span><span>Page numbers are included in the printed report.</span></footer>
   </body></html>`;

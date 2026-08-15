@@ -168,6 +168,10 @@ function _setProjectModalColor(modal, token) {
 
 function _projectReturnContext(context = _projectActiveEntityContext()) {
   if (!context) return null;
+  // An unsaved draft has no persisted row to reopen, so carry the draft state itself.
+  if (_newEntityDraft && !_newEntityDraft.saving && context.row === _newEntityDraft.row) {
+    return { kind:'draft', draft:_newEntityDraft };
+  }
   if (context.entityType === 'document') return { kind:'document', documentRow:context.row };
   if (context.entityType === 'component') {
     return { kind:'component', entityName:context.entityName, facility:context.facility };
@@ -177,7 +181,9 @@ function _projectReturnContext(context = _projectActiveEntityContext()) {
 
 function restoreTypeModalView(context) {
   if (!context) return;
-  if (context.kind === 'group') {
+  if (context.kind === 'draft') {
+    _renderNewEntityInfoModal(context.draft);
+  } else if (context.kind === 'group') {
     openGroupInfo(context.entityType, context.entityName, context.facility || '');
   } else if (context.kind === 'document' && context.documentRow) {
     openDoc(context.documentRow, context.returnContext || null);
@@ -372,11 +378,11 @@ function _modalAssociationValues(row, relationship) {
     .map(value => value.trim()).filter(Boolean);
 }
 
-function _associationSelectedNames(entityType, row, association, facility) {
+function _associationSelectedNames(entityType, row, association, facility, draftState = _newEntityDraft) {
   const selected = new Set();
   if (!row || !association) return selected;
   const key = String(association.key || '');
-  const staged = _newEntityDraft?.row === row ? _newEntityDraft.associations?.[key] : null;
+  const staged = draftState?.row === row ? draftState.associations?.[key] : null;
   if (staged instanceof Set) return new Set(staged);
 
   if (entityType === 'document') {
@@ -613,15 +619,15 @@ function _setDocumentAssociation(documentRow, targetType, targetName, targetFaci
   }
 }
 
-function _setEntityAssociation(entityType, row, association, targetName, targetFacility, selected) {
+function _setEntityAssociation(entityType, row, association, targetName, targetFacility, selected, draftState = _newEntityDraft) {
   if (!row || !association || !targetName) return;
   const key = String(association.key || '');
   const facility = String(row._facility || _projectActiveFacilityName() || '');
-  const isDraft = _newEntityDraft?.row === row && !_newEntityDraft.saving;
+  const isDraft = draftState?.row === row && !draftState.saving;
   const relationship = entityType === 'document' ? null : _modalAssociationRelationship(entityType, association);
   if (isDraft) {
-    const staged = _newEntityDraft.associations || (_newEntityDraft.associations = Object.create(null));
-    const values = staged[key] || _associationSelectedNames(entityType, row, association, facility);
+    const staged = draftState.associations || (draftState.associations = Object.create(null));
+    const values = staged[key] || _associationSelectedNames(entityType, row, association, facility, draftState);
     if (association.cardinality === 'one') values.clear();
     if (selected) values.add(targetName.toLowerCase()); else values.delete(targetName.toLowerCase());
     staged[key] = values;
@@ -836,6 +842,7 @@ function buildEntityInfoBody(entityType, entityName, facility = '', entityRow = 
         const lookup = field?.edit === 'lookup'
           ? (field.lookupSource === 'category' ? 'category' : (field.lookupSource || ''))
           : '';
+        const format = ['guid', 'date', 'datetime'].includes(field?.edit) ? field.edit : '';
         const keys = [...new Set([label, ...aliases].map(_projectIssueKey).filter(Boolean))];
         const related = [];
         keys.forEach(key => {
@@ -844,7 +851,10 @@ function buildEntityInfoBody(entityType, entityName, facility = '', entityRow = 
         if (!related.length && _projectIssueKey(label) === 'name') {
           (fieldIssueMap.get('__entity') || []).forEach(item => related.push(item));
         }
-        return _projectFieldRow({ label, aliases, lookup }, value, originalValue, _projectDedupeIssues(related));
+        const action = type === 'component' && lookup === 'space'
+          ? _projectLocateFieldActionMarkup()
+          : (format === 'guid' ? _projectGenerateGuidActionMarkup() : '');
+        return _projectFieldRow({ label, aliases, lookup, format }, value, originalValue, _projectDedupeIssues(related), action);
       }).join('');
       if (!bodyHtml) bodyHtml = '<div class="project-empty">No configured fields.</div>';
     }
@@ -869,6 +879,7 @@ const _PROJECT_FIELD_GROUPS = (() => {
     lookup: field.edit === 'lookup'
       ? (field.lookupSource === 'category' ? 'category' : (field.lookupSource || ''))
       : (field.lookup || ''),
+    format: ['guid', 'date', 'datetime'].includes(field.edit) ? field.edit : '',
   }));
   return Object.fromEntries(Object.entries(facilityCards)
     .filter(([, card]) => !card?.mode && Array.isArray(card?.fields))
@@ -883,6 +894,11 @@ const _projectDocCollapsedCategories = new Set();
 
 function _projectIsNewEntityRow(row) {
   return !!row && (_newEntityDraft?.row === row || _projectCreatedEntityRows.has(row));
+}
+
+// Returns the draft state only while its row is still unsaved, so callers can stage instead of mutating the database.
+function _projectUnsavedDraftFor(row) {
+  return row && _newEntityDraft?.row === row && !_newEntityDraft.saving ? _newEntityDraft : null;
 }
 
 function _restoreNewEntityInfoContext(returnContext, savedType = '', savedRow = null) {
@@ -921,8 +937,21 @@ function openNewEntityInfoModal(entityType, prefillName = '', facility = '', ret
     draft.RowName = String(documentContext?.rowName || '').trim();
   }
   if (type === 'contact' && String(prefillName || '').includes('@')) draft.Email = String(prefillName).trim();
-  _newEntityDraft = { type, row:draft, returnContext:returnInfoContext, associationReturn, fieldReturn, associations:Object.create(null), saving:false };
-  _setTypeModalCloseReturns(Boolean(returnInfoContext));
+  _renderNewEntityInfoModal({
+    type, row:draft, returnContext:returnInfoContext, associationReturn, fieldReturn,
+    associations:Object.create(null), saving:false,
+  });
+}
+
+function _renderNewEntityInfoModal(state) {
+  const type = String(state?.type || '').toLowerCase();
+  const config = MODEL_MODAL_CONFIG?.[type];
+  const draft = state?.row;
+  if (!config || !draft) return;
+
+  state.saving = false;
+  _newEntityDraft = state;
+  _setTypeModalCloseReturns(Boolean(state.returnContext));
 
   const typeModal = document.getElementById('type-modal');
   typeModal.classList.add('project-modal');
@@ -1000,6 +1029,7 @@ function _saveNewEntityInfo() {
   });
   const associationReturn = state.associationReturn;
   if (associationReturn?.row && associationReturn.association) {
+    const parentDraft = associationReturn.draft?.row === associationReturn.row ? associationReturn.draft : null;
     _setEntityAssociation(
       associationReturn.entityType,
       associationReturn.row,
@@ -1007,27 +1037,31 @@ function _saveNewEntityInfo() {
       entityName,
       state.row._facility || '',
       true,
+      parentDraft,
     );
-    const relationship = MODEL_MODAL_RELATIONSHIPS.find(item =>
-      item.owner === associationReturn.entityType && item.key === associationReturn.association.key
-    );
-    mutationChanges.push({
-      entityType:associationReturn.entityType,
-      row:associationReturn.row,
-      facility:associationReturn.row._facility || '',
-      aliases:relationship ? _cobieFieldAliasesFor(relationship.field) : [],
-    });
+    if (!parentDraft) {
+      const relationship = MODEL_MODAL_RELATIONSHIPS.find(item =>
+        item.owner === associationReturn.entityType && item.key === associationReturn.association.key
+      );
+      mutationChanges.push({
+        entityType:associationReturn.entityType,
+        row:associationReturn.row,
+        facility:associationReturn.row._facility || '',
+        aliases:relationship ? _cobieFieldAliasesFor(relationship.field) : [],
+      });
+    }
   }
   const fieldReturn = state.fieldReturn;
   if (fieldReturn?.row && Array.isArray(fieldReturn.aliases)) {
-    const contactValue = f(state.row, 'Email').trim() || entityName;
-    _projectSetFieldValue(fieldReturn.row, fieldReturn.aliases, contactValue);
-    mutationChanges.push({
-      entityType:fieldReturn.entityType,
-      row:fieldReturn.row,
-      facility:fieldReturn.row._facility || '',
-      aliases:fieldReturn.aliases,
-    });
+    _projectSetFieldValue(fieldReturn.row, fieldReturn.aliases, _projectLookupValueForRow(state.type, state.row) || entityName);
+    if (!fieldReturn.isDraft) {
+      mutationChanges.push({
+        entityType:fieldReturn.entityType,
+        row:fieldReturn.row,
+        facility:fieldReturn.row._facility || '',
+        aliases:fieldReturn.aliases,
+      });
+    }
   }
   _logChange(state.type, entityName, state.row._facility || '');
   if (['type', 'space', 'system'].includes(state.type)) {
@@ -1234,6 +1268,18 @@ function _projectNormalizeLookupValue(type, value, previousValue = '') {
     option.value.toLowerCase() === raw.toLowerCase() || option.label.toLowerCase() === raw.toLowerCase()
   );
   return match?.value || String(previousValue || '').trim();
+}
+
+// Lookup sources that resolve to a schema reference target can create the missing record inline.
+function _projectLookupCreateType(lookupType) {
+  const type = String(lookupType || '').trim().toLowerCase();
+  if (!type || type === 'category' || type.startsWith('picklist:')) return '';
+  if (!_cobieEntityDescriptor(type)?.modal || !MODEL_MODAL_CONFIG?.[type]) return '';
+  return Array.isArray(db[_cobieEntityBucket(type)]) ? type : '';
+}
+
+function _projectLookupValueForRow(lookupType, row) {
+  return _cobieEntityIdentity(lookupType, row) || f(row || {}, 'Name').trim();
 }
 
 function _projectBaselineFacilityName(currentFacilityName) {
@@ -1565,13 +1611,43 @@ function _projectRefreshFieldIssueBadges(entityType, entityName, facility) {
   });
 }
 
-function _projectFieldRow(field, value, originalValue = value, fieldIssues = []) {
+function _projectLocateFieldActionMarkup() {
+  return '<button type="button" class="project-field-action project-component-locate" title="Locate in 2D / 3D" aria-label="Locate in 2D / 3D"><i class="bi bi-geo-alt"></i></button>';
+}
+
+function _projectGenerateGuidActionMarkup() {
+  return '<button type="button" class="project-field-action project-field-generate-guid" title="Generate a new GUID" aria-label="Generate a new GUID"><i class="bi bi-magic"></i> Generate</button>';
+}
+
+// Standard UUID v4 satisfies the schema's GUID format (8-4-4-4-12 hex).
+function _projectGenerateGuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => {
+    const random = Math.random() * 16 | 0;
+    const value = character === 'x' ? random : (random & 0x3 | 0x8);
+    return value.toString(16);
+  });
+}
+
+// Converts a stored ISO date/date-time string into the value a native date/datetime-local input expects.
+function _projectDateInputValue(format, raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  if (format === 'date') {
+    const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : '';
+  }
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)/);
+  return match ? `${match[1]}T${match[2]}` : '';
+}
+
+function _projectFieldRow(field, value, originalValue = value, fieldIssues = [], actionHtml = '') {
   const text = String(value || '');
   const original = String(originalValue || '');
   const dirty = text !== original;
   const badge = _projectFieldIssueBadge(fieldIssues);
-  return `<div class="project-field-row${dirty ? ' project-dirty' : ''}" data-field-label="${esc(field.label)}" data-aliases="${esc(field.aliases.join('|'))}" data-lookup="${esc(field.lookup || '')}" data-original-value="${esc(original)}"${dirty ? ' data-dirty-kind="field"' : ''}>
-    <div class="project-field-name"><span class="project-field-label">${esc(field.label)}</span><span class="project-field-issue-badge">${badge}</span></div>
+  return `<div class="project-field-row${dirty ? ' project-dirty' : ''}" data-field-label="${esc(field.label)}" data-aliases="${esc(field.aliases.join('|'))}" data-lookup="${esc(field.lookup || '')}" data-format="${esc(field.format || '')}" data-original-value="${esc(original)}"${dirty ? ' data-dirty-kind="field"' : ''}>
+    <div class="project-field-name"><span class="project-field-label">${esc(field.label)}</span><span class="project-field-issue-badge">${badge}</span>${actionHtml}</div>
     <div class="project-field-value project-editable" data-role="field-value" data-raw-value="${esc(text)}" title="Double click to edit">${_projectValueMarkup(text, dirty)}</div>
   </div>`;
 }
@@ -1789,7 +1865,9 @@ function buildFacilityBody(name) {
     .map(field => _projectFieldRow(
       field,
       _projectFieldValue(fac, field.aliases),
-      originalFac ? _projectFieldValue(originalFac, field.aliases) : _projectFieldValue(fac, field.aliases)
+      originalFac ? _projectFieldValue(originalFac, field.aliases) : _projectFieldValue(fac, field.aliases),
+      [],
+      field.format === 'guid' ? _projectGenerateGuidActionMarkup() : ''
     )).join('');
 
   const facilityCards = MODEL_MODAL_CONFIG.facility.cards;
@@ -1975,17 +2053,23 @@ function _projectDeleteAttributeRow(row, options = {}) {
   }
 }
 
-function _projectLookupMenuMarkup(options, query, allowCreate = false) {
+function _projectLookupMenuMarkup(options, query, createType = '') {
   const q = String(query || '').trim().toLowerCase();
   const filtered = options.filter(option => !q || option.search.includes(q));
-  return filtered.length
+  const createLabel = createType ? (_cobieEntityUi(createType).label || createType) : '';
+  const createIcon = createType ? (_cobieEntityUi(createType).icon || 'bi-plus-circle') : '';
+  // Creation is offered on the unique key, not the searchable description.
+  const exists = options.some(option => String(option.value || '').trim().toLowerCase() === q);
+  const createHtml = createType && q && !exists
+    ? `<button type="button" class="project-lookup-option project-lookup-create"><i class="bi ${esc(createIcon)} me-1"></i>Create ${esc(createLabel)} "${esc(String(query).trim())}"</button>`
+    : '';
+  const optionsHtml = filtered.length
     ? filtered.map(option => `<button type="button" class="project-lookup-option" data-value="${esc(option.value)}" style="padding-left:${0.65 + (option.depth || 0) * 0.8}rem">${esc(option.label)}</button>`).join('')
-    : allowCreate && q
-      ? `<button type="button" class="project-lookup-option project-lookup-create"><i class="bi bi-person-plus me-1"></i>Create contact "${esc(String(query).trim())}"</button>`
-      : '<div class="project-lookup-empty">No matching values</div>';
+    : createHtml ? '' : '<div class="project-lookup-empty">No matching values</div>';
+  return createHtml + optionsHtml;
 }
 
-function _projectCreateFloatingLookup(input, options, onPick, initialQuery = '', onCreate = null) {
+function _projectCreateFloatingLookup(input, options, onPick, initialQuery = '', onCreate = null, createType = '') {
   const menu = document.createElement('div');
   menu.className = 'project-lookup-floating-menu';
   document.body.appendChild(menu);
@@ -2022,9 +2106,10 @@ function _projectCreateFloatingLookup(input, options, onPick, initialQuery = '',
   };
   const render = q => {
     currentQuery = String(q || '');
-    menu.innerHTML = _projectLookupMenuMarkup(options, currentQuery, Boolean(onCreate));
+    menu.innerHTML = _projectLookupMenuMarkup(options, currentQuery, onCreate ? createType : '');
     activeIndex = -1;
-    if (choices().length) activate(0);
+    const items = choices();
+    if (items.length) activate(Math.max(0, items.findIndex(item => !item.classList.contains('project-lookup-create'))));
     position();
   };
 
@@ -2275,10 +2360,13 @@ function _projectStartInlineEdit(target) {
 
   const lookupType = role === 'field-value' ? (row.dataset.lookup || '') : '';
   const lookupOptions = lookupType ? _projectLookupOptions(lookupType) : [];
+  const formatType = role === 'field-value' && !lookupType ? (row.dataset.format || '') : '';
   const editor = document.createElement('div');
   const useLookup = Boolean(lookupType);
   editor.className = 'project-inline-editor' + (useLookup ? ' project-lookup-editor' : '');
-  editor.innerHTML = `<input type="${useLookup ? 'search' : 'text'}" class="form-control form-control-sm project-inline-input" value="${esc(current)}" autocomplete="off">`;
+  const inputType = useLookup ? 'search' : (formatType === 'date' ? 'date' : (formatType === 'datetime' ? 'datetime-local' : 'text'));
+  const inputValue = formatType ? _projectDateInputValue(formatType, current) : current;
+  editor.innerHTML = `<input type="${inputType}" class="form-control form-control-sm project-inline-input" value="${esc(inputValue)}" autocomplete="off">`;
 
   target.classList.add('d-none');
   target.insertAdjacentElement('afterend', editor);
@@ -2286,20 +2374,22 @@ function _projectStartInlineEdit(target) {
   const input = editor.querySelector('input');
   let floatingLookup = null;
   if (useLookup) {
+    const createType = _projectLookupCreateType(lookupType);
     floatingLookup = _projectCreateFloatingLookup(input, lookupOptions, picked => {
       input.value = picked;
       _projectFinishFieldEdit(editor, true);
-    }, current, lookupType === 'contact' ? query => {
+    }, current, createType ? query => {
       const entity = _projectActiveEntityRow();
       const context = _projectActiveEntityContext();
       const aliases = (row.dataset.aliases || '').split('|').filter(Boolean);
+      const isDraft = Boolean(_projectUnsavedDraftFor(entity));
       const returnContext = _projectReturnContext(context);
       _projectFinishFieldEdit(editor, false);
       openNewEntityInfoModal(
-        'contact', query, context?.facility || '', returnContext, null, null,
-        { entityType:context?.entityType || '', row:entity, aliases },
+        createType, query, context?.facility || _projectActiveFacilityName(), returnContext, null, null,
+        { entityType:context?.entityType || '', row:entity, aliases, isDraft },
       );
-    } : null);
+    } : null, createType);
     editor._cleanupLookup = () => {
       floatingLookup?.destroy();
       floatingLookup = null;
@@ -2551,6 +2641,35 @@ if (_projectModalEl) {
       });
       return;
     }
+    const generateGuidButton = event.target.closest('.project-field-generate-guid');
+    if (generateGuidButton) {
+      const row = generateGuidButton.closest('.project-field-row');
+      const valueCell = row?.querySelector('[data-role="field-value"]');
+      if (!row || !valueCell) return;
+      if (row.querySelector('.project-inline-editor')) return;
+      const entity = _projectActiveEntityRow();
+      if (!entity) return;
+      const aliases = (row.dataset.aliases || '').split('|').filter(Boolean);
+      if (!aliases.length) return;
+      const entityType = _projectActiveEntityType();
+      const entityFacility = _projectActiveFacilityName() || '';
+      const entityName = _projectActiveEntityName() || f(entity, 'Name') || '';
+      const isNewEntity = _projectIsNewEntityRow(entity);
+      const guid = _projectGenerateGuid();
+      _projectSetEntityFieldValue(entityType, entity, aliases, guid);
+      _projectSetValueCellMarkup(valueCell, guid);
+      if (isNewEntity) _projectClearRowDirty(row);
+      else if (guid !== (row.dataset.originalValue || '')) _projectMarkRowDirty(row, 'field');
+      else _projectClearRowDirty(row);
+      if (!isNewEntity) {
+        _logChange(entityType, entityName, entityFacility);
+        _projectApplyMutation({
+          changes:[{ entityType, row:entity, entityName, facility:entityFacility, aliases }],
+          refreshAssociations:true,
+        });
+      }
+      return;
+    }
     const clearAssociations = event.target.closest('.project-association-clear');
     if (clearAssociations) {
       const control = clearAssociations.closest('.project-association');
@@ -2578,7 +2697,7 @@ if (_projectModalEl) {
     if (createAssociation) {
       const control = createAssociation.closest('.project-association');
       const context = _projectActiveEntityContext();
-      if (!control || !context?.row || _newEntityDraft) return;
+      if (!control || !context?.row) return;
       const association = MODEL_MODAL_CONFIG?.[context.entityType]?.cards?.associations?.associations
         ?.find(item => item.key === control.dataset.associationKey);
       if (!association) return;
@@ -2589,7 +2708,7 @@ if (_projectModalEl) {
         context.facility || '',
         returnContext,
         null,
-        { entityType:context.entityType, row:context.row, association },
+        { entityType:context.entityType, row:context.row, association, draft:_projectUnsavedDraftFor(context.row) },
       );
       return;
     }

@@ -52,6 +52,14 @@ function _modalConfigReferenceMap(sheetNode) {
       ]));
 }
 
+function _modalConfigFormatEdit(column) {
+  const formatName = _modalConfigNorm(_cobieColumnChild(column, 'qa', 'format')?.getAttribute('name'));
+  if (formatName === 'guid') return 'guid';
+  if (formatName === 'isodatetime') return 'datetime';
+  if (formatName === 'isodate') return 'date';
+  return '';
+}
+
 function _modalConfigField(entityType, column, references) {
   const name = String(column.getAttribute('name') || '').trim();
   const key = _modalConfigNorm(name);
@@ -63,10 +71,11 @@ function _modalConfigField(entityType, column, references) {
   const lookupSource = categoryLookup
     ? 'category'
     : (targetType === 'picklist' && reference?.targetColumn ? `picklist:${reference.targetColumn}` : targetType);
+  const formatEdit = _modalConfigFormatEdit(column);
   return {
     label:String(ui?.getAttribute('label') || '').trim() || _modalConfigLabel(name),
     aliases:_modalConfigAliases(column),
-    edit:lookupSource ? 'lookup' : 'text',
+    edit:lookupSource ? 'lookup' : (formatEdit || 'text'),
     ...(lookupSource ? { lookupSource } : {}),
   };
 }

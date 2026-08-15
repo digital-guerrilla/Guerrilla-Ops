@@ -148,6 +148,7 @@ function _buildCobieRuntimeModel() {
         pluralLabel:String(ui?.getAttribute('pluralLabel') || '').trim(),
         icon:String(ui?.getAttribute('icon') || '').trim(),
         colorToken:String(ui?.getAttribute('colorToken') || type).trim(),
+        colorSheet:String(ui?.getAttribute('colorSheet') || '').trim(),
         modalTitle:String(ui?.getAttribute('modalTitle') || '').trim(),
       },
     });

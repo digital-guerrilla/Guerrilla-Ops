@@ -32,7 +32,7 @@
   <sheets>
     <sheet name="Contact" bucket="contacts" identityField="Email">
       <runtime modal="true" attributes="true"/>
-      <ui label="Contact" pluralLabel="Contacts" icon="bi-person-fill" colorToken="contact" modalTitle="Contact Information"/>
+      <ui label="Contact" pluralLabel="Contacts" icon="bi-person-fill" colorToken="contact" colorSheet="10" modalTitle="Contact Information"/>
       <validation presenceRule="Contact.AtLeastOneRowPresent" stage="Design"/>
       <columns>
         <column name="Email">
@@ -40,7 +40,7 @@
             <rule name="NotNull|Unique"/>
             <format name="email"/>
           </qa>
-          <ui groupTitle="Identification" label="Email Address"/>
+          <ui groupTitle="Identification" label="Email Address" colorToken="cobie-required"/>
         </column>
         <column name="CreatedBy">
           <qa>
@@ -48,20 +48,20 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa>
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-required"/>
         </column>
         <column name="ExternalSystem">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExternalObject">
@@ -69,7 +69,7 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objContact" required="false"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtObject"/>
         </column>
         <column name="ExternalIdentifier">
@@ -77,7 +77,7 @@
             <rule name="NotEmpty|Unique"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtIdentifier"/>
         </column>
         <column name="Category">
@@ -85,86 +85,86 @@
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="Category-Role" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="Company">
           <qa>
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Identification" label="Company / Organisation"/>
+          <ui groupTitle="Identification" label="Company / Organisation" colorToken="cobie-required"/>
         </column>
         <column name="Phone">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Communication"/>
+          <ui groupTitle="Communication" colorToken="cobie-requirable"/>
         </column>
         <column name="Department">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-requirable"/>
         </column>
         <column name="OrganizationCode">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Identification" label="Organisation Code"/>
+          <ui groupTitle="Identification" label="Organisation Code" colorToken="cobie-requirable"/>
           <runtime aliases="OrganisationCode"/>
         </column>
         <column name="GivenName">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-requirable"/>
         </column>
         <column name="FamilyName">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-requirable"/>
         </column>
         <column name="Street">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Address"/>
+          <ui groupTitle="Address" colorToken="cobie-requirable"/>
         </column>
         <column name="PostalBox">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Address"/>
+          <ui groupTitle="Address" colorToken="cobie-requirable"/>
         </column>
         <column name="Town">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Address" label="Town / City"/>
+          <ui groupTitle="Address" label="Town / City" colorToken="cobie-requirable"/>
         </column>
         <column name="StateRegion">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Address" label="State / Region"/>
+          <ui groupTitle="Address" label="State / Region" colorToken="cobie-requirable"/>
         </column>
         <column name="PostalCode">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Address"/>
+          <ui groupTitle="Address" colorToken="cobie-requirable"/>
         </column>
         <column name="Country">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Address"/>
+          <ui groupTitle="Address" colorToken="cobie-requirable"/>
         </column>
       </columns>
     </sheet>
     <sheet name="Facility" bucket="facilities" identityField="Name">
       <runtime scopeIdentity="true" modal="true" attributes="true" listIndex="facilityNames" descriptionIndex="facility" categoryPicklist="Category-Facility"/>
-      <ui label="Facility" pluralLabel="Facilities" icon="bi-building" colorToken="facility" modalTitle="Facility Information"/>
+      <ui label="Facility" pluralLabel="Facilities" icon="bi-building" colorToken="facility" colorSheet="01" modalTitle="Facility Information"/>
       <filter dimension="facility" order="1" category="true" contextProperty="facilities" valueField="_facility" emptyLabel="Unknown"/>
       <documents target="true" dimension="facilities"/>
       <validation singleRowRule="Facility.OneAndOnlyOneFacilityFound" stage="Design"/>
@@ -174,7 +174,7 @@
             <rule name="NotNull"/>
             <unique severity="error"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="CreatedBy">
           <qa>
@@ -182,80 +182,80 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa>
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="Category-Facility" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="Description">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="ProjectName">
           <qa>
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Context"/>
+          <ui groupTitle="Context" colorToken="cobie-required"/>
         </column>
         <column name="SiteName">
           <qa>
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Context"/>
+          <ui groupTitle="Context" colorToken="cobie-required"/>
         </column>
         <column name="LinearUnits">
           <qa>
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="LinearUnit" required="true"/>
           </qa>
-          <ui groupTitle="Units"/>
+          <ui groupTitle="Units" colorToken="cobie-reference"/>
         </column>
         <column name="AreaUnits">
           <qa>
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="AreaUnit" required="true"/>
           </qa>
-          <ui groupTitle="Units"/>
+          <ui groupTitle="Units" colorToken="cobie-reference"/>
         </column>
         <column name="VolumeUnits">
           <qa>
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="VolumeUnit" required="true"/>
           </qa>
-          <ui groupTitle="Units"/>
+          <ui groupTitle="Units" colorToken="cobie-reference"/>
         </column>
         <column name="CurrencyUnit">
           <qa>
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="CostUnit" required="true"/>
           </qa>
-          <ui groupTitle="Units"/>
+          <ui groupTitle="Units" colorToken="cobie-reference"/>
           <runtime aliases="CurrencyUnit|Currency Unit"/>
         </column>
         <column name="AreaMeasurement">
           <qa>
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Units"/>
+          <ui groupTitle="Units" colorToken="cobie-reference"/>
         </column>
         <column name="ExternalSystem">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExternalProjectObject">
@@ -263,35 +263,35 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objProject" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
         </column>
         <column name="ExternalProjectIdentifier">
           <qa>
             <rule name="NotEmpty"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
         </column>
         <column name="ExternalSiteObject">
           <qa>
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objSite" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
         </column>
         <column name="ExternalSiteIdentifier">
           <qa>
             <rule name="NotEmpty"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
         </column>
         <column name="ExternalFacilityObject">
           <qa>
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objFacility" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExternalFacilityIdentifier">
@@ -299,14 +299,14 @@
             <rule name="NotEmpty"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalIdentifier|ExtIdentifier"/>
         </column>
       </columns>
     </sheet>
     <sheet name="Floor" bucket="floors" identityField="Name">
       <runtime mergeRows="true" modal="true" attributes="true" listIndex="floors" listFallbackSheet="Space" listFallbackField="FloorName" descriptionIndex="floor"/>
-      <ui label="Floor" pluralLabel="Floors" icon="bi-layers-fill" colorToken="floor" modalTitle="Floor Information"/>
+      <ui label="Floor" pluralLabel="Floors" icon="bi-layers-fill" colorToken="floor" colorSheet="02" modalTitle="Floor Information"/>
       <filter dimension="floor" order="2" contextProperty="floors" throughField="Space" throughIndex="spFloor" emptyLabel="No Floor"/>
       <documents target="true" dimension="floors"/>
       <validation presenceRule="Floor.AtLeastOneRowPresent" stage="Design"/>
@@ -315,7 +315,7 @@
           <qa>
             <rule name="NotNull|Unique"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="CreatedBy">
           <qa>
@@ -323,20 +323,20 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa>
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="ExternalSystem">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References"  colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExtObject">
@@ -344,7 +344,7 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objFloor" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExtIdentifier">
@@ -352,7 +352,7 @@
             <rule name="NotEmpty"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalIdentifier"/>
         </column>
         <column name="Category">
@@ -360,25 +360,25 @@
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="FloorType" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="Elevation">
           <qa>
             <rule name="ValidNumberOrNA"/>
           </qa>
-          <ui groupTitle="Geometry"/>
+          <ui groupTitle="Geometry" colorToken="cobie-requirable"/>
         </column>
         <column name="Height">
           <qa>
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Geometry"/>
+          <ui groupTitle="Geometry" colorToken="cobie-requirable"/>
         </column>
       </columns>
     </sheet>
     <sheet name="Space" bucket="spaces" identityField="Name">
       <runtime modal="true" attributes="true" listIndex="spaces" descriptionIndex="space" categoryPicklist="Category-Space"/>
-      <ui label="Space" pluralLabel="Spaces" icon="bi-grid-fill" colorToken="space" modalTitle="Space Information"/>
+      <ui label="Space" pluralLabel="Spaces" icon="bi-grid-fill" colorToken="space" colorSheet="03" modalTitle="Space Information"/>
       <filter dimension="space" order="4" category="true" contextProperty="spaces" valueField="Space" emptyLabel="No Space"/>
       <documents target="true" dimension="spaces"/>
       <validation presenceRule="Space.AtLeastOneRowPresent" stage="Design"/>
@@ -387,7 +387,7 @@
           <qa>
             <rule name="NotNull|Unique"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="CreatedBy">
           <qa>
@@ -395,20 +395,20 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa>
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="ExternalSystem">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExtObject">
@@ -416,7 +416,7 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objSpace" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExtIdentifier">
@@ -424,7 +424,7 @@
             <rule name="NotEmpty"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalIdentifier"/>
         </column>
         <column name="Category">
@@ -432,7 +432,7 @@
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="Category-Space" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="FloorName">
           <qa>
@@ -443,53 +443,53 @@
               <association ownerSheet="Space" key="floor" label="Floor" cardinality="one"/>
             </reference>
           </qa>
-          <ui groupTitle="Identification" label="Floor"/>
+          <ui groupTitle="Identification" label="Floor" colorToken="cobie-reference"/>
           <runtime aliases="Floor Name|Floor"/>
         </column>
         <column name="Description">
           <qa>
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="RoomTag">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-requirable"/>
           <runtime aliases="Room Tag"/>
         </column>
         <column name="UsableHeight">
           <qa>
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Measurements"/>
+          <ui groupTitle="Measurements" colorToken="cobie-requirable"/>
         </column>
         <column name="GrossArea">
           <qa>
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Measurements"/>
+          <ui groupTitle="Measurements" colorToken="cobie-requirable"/>
         </column>
         <column name="NetArea">
           <qa>
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Measurements"/>
+          <ui groupTitle="Measurements" colorToken="cobie-requirable"/>
         </column>
       </columns>
     </sheet>
     <sheet name="Zone" bucket="zones" identityField="Name">
       <runtime modal="true" listIndex="zones" descriptionIndex="zone"/>
       <filter dimension="zone" order="3" throughField="Space" throughIndex="spZones" emptyLabel="No Zone"/>
-      <ui label="Zone" pluralLabel="Zones" icon="bi-bounding-box-circles" colorToken="space" modalTitle="Zone Information"/>
+      <ui label="Zone" pluralLabel="Zones" icon="bi-bounding-box-circles" colorToken="zone" colorSheet="02" modalTitle="Zone Information"/>
       <columns>
         <column name="Name">
           <qa>
             <rule name="NotNull"/>
             <unique keys="Name|SpaceNames" severity="error"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="CreatedBy">
           <qa>
@@ -497,27 +497,27 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa>
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-required"/>
         </column>
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="ZoneCategory" required="false"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="Description">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="SpaceNames">
           <qa>
@@ -528,13 +528,13 @@
               <association ownerSheet="Space" key="zones" label="Zones" cardinality="many"/>
             </reference>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="ExternalSystem">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExtObject">
@@ -542,7 +542,7 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objZone" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExtIdentifier">
@@ -550,14 +550,14 @@
             <rule name="NotEmpty"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalIdentifier"/>
         </column>
       </columns>
     </sheet>
     <sheet name="Type" bucket="types" identityField="Name">
       <runtime modal="true" attributes="true" listIndex="types" descriptionIndex="type" categoryPicklist="Category-Product"/>
-      <ui label="Type" pluralLabel="Types" icon="bi-tag-fill" colorToken="type" modalTitle="Type Information"/>
+      <ui label="Type" pluralLabel="Types" icon="bi-tag-fill" colorToken="type" colorSheet="04" modalTitle="Type Information"/>
       <filter dimension="type" order="5" category="true" contextProperty="types" valueField="TypeName" emptyLabel="Unassigned" defaultActive="true"/>
       <documents target="true" dimension="types"/>
       <validation presenceRule="Type.AtLeastOneRowPresent" stage="Design|Construction"/>
@@ -798,7 +798,7 @@
     </sheet>
     <sheet name="Component" bucket="components" identityField="Name">
       <runtime modal="true" attributes="true" searchIndex="searchText"/>
-      <ui label="Component" pluralLabel="Components" icon="bi-tools" colorToken="component" modalTitle="Component Information"/>
+      <ui label="Component" pluralLabel="Components" icon="bi-tools" colorToken="component" colorSheet="06" modalTitle="Component Information"/>
       <documents target="true" dimension="components"/>
       <validation presenceRule="Component.AtLeastOneRowPresent" stage="Design|Construction"/>
       <columns>
@@ -925,7 +925,7 @@
     </sheet>
     <sheet name="System" bucket="systems" identityField="Name">
       <runtime modal="true" attributes="true" listIndex="systems" descriptionIndex="system" categoryPicklist="Category-Element"/>
-      <ui label="System" pluralLabel="Systems" icon="bi-diagram-3-fill" colorToken="system" modalTitle="System Information"/>
+      <ui label="System" pluralLabel="Systems" icon="bi-diagram-3-fill" colorToken="system" colorSheet="05" modalTitle="System Information"/>
       <filter dimension="system" order="6" category="true" contextProperty="systems" valueIndex="compSys" emptyLabel="No System"/>
       <documents target="true" dimension="systems"/>
       <validation stage="Design|Construction"/>
@@ -1002,7 +1002,7 @@
     </sheet>
     <sheet name="Document" bucket="documents" identityField="Name">
       <runtime modal="true" categoryPicklist="DocumentType" categoryDimension="doccat"/>
-      <ui label="Document" pluralLabel="Documents" icon="bi-file-earmark-text" colorToken="doccat" modalTitle="Document Information"/>
+      <ui label="Document" pluralLabel="Documents" icon="bi-file-earmark-text" colorToken="doccat" colorSheet="07" modalTitle="Document Information"/>
       <filter dimension="doccat" order="7" category="true" contextProperty="categories" valueIndex="docCatByComp" emptyLabel="No Documents"/>
       <validation stage="Operation"/>
       <columns>
@@ -1107,7 +1107,7 @@
       </columns>
     </sheet>
     <sheet name="Attribute" bucket="attributes" identityField="Name">
-      <ui label="Attribute" pluralLabel="Attributes" icon="bi-list-check" colorToken="attribute"/>
+      <ui label="Attribute" pluralLabel="Attributes" icon="bi-list-check" colorToken="attribute" colorSheet="09"/>
       <validation stage="Design"/>
       <columns>
         <column name="Name">

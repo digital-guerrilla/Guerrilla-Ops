@@ -526,13 +526,18 @@ function _componentPlacementSelectRoom(event) {
     if (_cobieField(space, 'floorName').toLowerCase() !== floorEntry.name.toLowerCase()) return false;
     return true;
   }).map(space => [f(space, 'Name').toLowerCase(), space]));
-  let roomNode = event.target.closest('[id]');
-  while (roomNode && roomNode !== svgRoot && !spacesByName.has(String(roomNode.id || '').trim().toLowerCase())) {
-    roomNode = roomNode.parentElement?.closest('[id]') || null;
+  let node = event.target;
+  let roomKey = '';
+  while (node && node !== svgRoot) {
+    roomKey = _svgNodeMatchedIdentifier(node, spacesByName);
+    if (roomKey) break;
+    node = node.parentElement;
   }
-  const roomKey = String(roomNode?.id || '').trim().toLowerCase();
-  const spaceRow = spacesByName.get(roomKey) || null;
-  if (!spaceRow) return;
+  const spaceRow = roomKey ? spacesByName.get(roomKey) : null;
+  if (!spaceRow) {
+    els.status.textContent = 'That shape is not linked to a Space on this floor.';
+    return;
+  }
 
   const rootPoint = _componentPlacementPointFromEvent(svgRoot, event.clientX, event.clientY);
   const rootBounds = _svgDrawingBounds(svgRoot);
@@ -751,11 +756,16 @@ function initComponentPlacementModal() {
     const returnModal = _componentPlacementReturnModalId ? document.getElementById(_componentPlacementReturnModalId) : null;
     _componentPlacementReturnModalId = '';
     if (typeof _projectOpeningChildModal !== 'undefined') _projectOpeningChildModal = false;
-    if (completedMode === 'info' && _componentPlacementRefreshInfo && _typeModalViewContext?.kind === 'component') {
-      const component = _findEntity(db.components, _typeModalViewContext.entityName, _typeModalViewContext.facility || '');
-      if (component) document.getElementById('mtype-body').innerHTML = buildEntityInfoBody(
-        'component', f(component, 'Name'), component._facility || '', component,
-      );
+    if (completedMode === 'info' && _componentPlacementRefreshInfo) {
+      const draft = typeof _projectUnsavedDraftFor === 'function' ? _projectUnsavedDraftFor(_projectModalContext?.row) : null;
+      if (draft) {
+        _renderNewEntityInfoModal(draft);
+      } else if (_typeModalViewContext?.kind === 'component') {
+        const component = _findEntity(db.components, _typeModalViewContext.entityName, _typeModalViewContext.facility || '');
+        if (component) document.getElementById('mtype-body').innerHTML = buildEntityInfoBody(
+          'component', f(component, 'Name'), component._facility || '', component,
+        );
+      }
     }
     _componentPlacementRefreshInfo = false;
     if (returnModal && !returnModal.classList.contains('show')) {
@@ -780,12 +790,19 @@ function initComponentPlacementModal() {
       const component = _projectModalContext?.row;
       const facility = _componentPlacementFacility();
       const componentName = f(component, 'Name');
+      if (component && !componentName) {
+        alert('Name the component before placing it.');
+        return;
+      }
       if (component && componentName) {
+        const draftState = typeof _projectUnsavedDraftFor === 'function' ? _projectUnsavedDraftFor(component) : null;
         _projectSetFieldValue(component, ['Space'], current.spaceName);
+        // The placed space replaces any staged selection so the draft picker reflects the located room.
+        if (draftState?.associations) delete draftState.associations.space;
         const coordinateRows = _writeComponentCoordinates(facility, componentName, current);
         _projectApplyMutation({
           changes:[
-            { entityType:'component', row:component, entityName:componentName, facility, aliases:['Space'] },
+            { entityType:'component', row:component, entityName:componentName, facility, aliases:['Space'], qa:!draftState, track:!draftState },
             ...coordinateRows.map(row => ({ entityType:'coordinate', row, facility, aliases:Object.keys(row) })),
           ],
           deferRender:true,

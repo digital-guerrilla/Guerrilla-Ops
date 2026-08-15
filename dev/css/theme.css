@@ -16,7 +16,23 @@
   --cat-green:  #22c55e;   /* space    */
   --cat-purple: #a855f7;   /* facility */
   --cat-cyan:   #06b6d4;   /* doc cat  */
+
+  --sheet-01: #a855f7; /* facility */
+  --sheet-02: #3b82f6; /* floor    */
+  --sheet-03: #22c55e; /* space    */
+  --sheet-04: #06b6d4; /* type  */
+  --sheet-05: #f59e0b; /* System  */
+  --sheet-06: #ef4444; /* Component   */
+  --sheet-07: #0ea5e9; /* Document   */
+  --sheet-08: #facc15; /* Zone    */
+  --sheet-09: #f97316; /* Attribute   */
+  --sheet-10: #f97316; /* Contact   */
+
   /* type pill uses --brand-danger, system pill uses --brand-warn */
+  --cobie-required: color-mix(in srgb, #ffff99, white 30%); 
+  --cobie-reference: color-mix(in srgb, #ffcc99, white 30%);  
+  --cobie-external: color-mix(in srgb, #cc99ff, white 30%);   
+  --cobie-requirable: color-mix(in srgb, #ccffcc, white 30%);
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -97,22 +113,22 @@
   --lm-hover-bg:  color-mix(in srgb, var(--brand-accent) 12%, var(--brand-surface));
   --lm-hover-bdr: color-mix(in srgb, var(--brand-accent) 45%, var(--brand-surface));
 
-  /* ── Filter pills (light fills + dark text) */
-  --pill-floor-bg:    color-mix(in srgb, var(--cat-blue)    20%, var(--brand-surface));
+  /* ── Filter pills (light fills + dark text) — sheet-NN order matches the comments above */
+  --pill-floor-bg:    color-mix(in srgb, var(--sheet-02) 20%, var(--brand-surface));
   --pill-floor-text:  var(--text-dark);
-  --pill-space-bg:    color-mix(in srgb, var(--cat-green)   20%, var(--brand-surface));
+  --pill-space-bg:    color-mix(in srgb, var(--sheet-03) 20%, var(--brand-surface));
   --pill-space-text:  var(--text-dark);
-  --pill-type-bg:     color-mix(in srgb, var(--brand-danger) 20%, var(--brand-surface));
+  --pill-type-bg:     color-mix(in srgb, var(--sheet-04) 20%, var(--brand-surface));
   --pill-type-text:   var(--text-dark);
-  --pill-system-bg:   color-mix(in srgb, var(--brand-warn)  20%, var(--brand-surface));
+  --pill-system-bg:   color-mix(in srgb, var(--sheet-05) 20%, var(--brand-surface));
   --pill-system-text: var(--text-dark);
-  --pill-component-bg: color-mix(in srgb, var(--brand-accent) 20%, var(--brand-surface));
+  --pill-component-bg: color-mix(in srgb, var(--sheet-06) 20%, var(--brand-surface));
   --pill-component-text: var(--text-dark);
-  --pill-contact-bg:  color-mix(in srgb, var(--success) 16%, var(--brand-surface));
+  --pill-contact-bg:  color-mix(in srgb, var(--sheet-10) 16%, var(--brand-surface));
   --pill-contact-text: var(--text-dark);
-  --pill-fac-bg:      color-mix(in srgb, var(--cat-purple)  20%, var(--brand-surface));
+  --pill-fac-bg:      color-mix(in srgb, var(--sheet-01) 20%, var(--brand-surface));
   --pill-fac-text:    var(--text-dark);
-  --pill-doc-bg:      color-mix(in srgb, var(--cat-cyan)    20%, var(--brand-surface));
+  --pill-doc-bg:      color-mix(in srgb, var(--sheet-07) 20%, var(--brand-surface));
   --pill-doc-text:    var(--text-dark);
 
   /* ── Document badges ──────────────────────────────────────── */
