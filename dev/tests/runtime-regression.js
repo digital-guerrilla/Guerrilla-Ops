@@ -36,7 +36,7 @@ const modelConfigSource = readJavascript('model-config.js');
 const qaGraphSource = readJavascript('qa-graph.js');
 const qaResultsSource = readJavascript('results.js');
 const appLifecycleSource = readJavascript('app-lifecycle.js');
-const qaSchemaSource = readText(path.join(root, 'specification', 'guerrilla-ops-schema.xml'));
+const qaSchemaSource = readText(path.join(root, 'specification', 'guerrilla-ops-schema.xml')).replace(/\r\n/g, '\n');
 const resultsCssSource = readText(path.join(root, 'css', 'results.css'));
 const currentJavascriptSource = javascriptFiles.map(readJavascript).join('\n');
 assert(!fs.existsSync(path.join(javascriptDir, 'edit.js')), 'the legacy edit modal module must remain removed');
