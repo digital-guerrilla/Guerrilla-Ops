@@ -36,7 +36,7 @@ const modelConfigSource = readJavascript('model-config.js');
 const qaGraphSource = readJavascript('qa-graph.js');
 const qaResultsSource = readJavascript('results.js');
 const appLifecycleSource = readJavascript('app-lifecycle.js');
-const qaSchemaSource = readText(path.join(root, 'specification', 'guerrilla-ops-schema.xml'));
+const qaSchemaSource = readText(path.join(root, 'specification', 'guerrilla-ops-schema.xml')).replace(/\r\n/g, '\n');
 const resultsCssSource = readText(path.join(root, 'css', 'results.css'));
 const currentJavascriptSource = javascriptFiles.map(readJavascript).join('\n');
 assert(!fs.existsSync(path.join(javascriptDir, 'edit.js')), 'the legacy edit modal module must remain removed');
@@ -62,6 +62,11 @@ const placementSource = fs.readFileSync(path.join(javascriptDir, 'component-plac
 const placementApplySource = placementSource.slice(placementSource.indexOf("const applyBtn = event.target.closest('[data-component-placement-apply]')"));
 assert(placementApplySource.includes('_projectApplyMutation({') && !placementApplySource.includes('buildIdx();'),
   'component placement must use incremental mutation handling instead of rebuilding every index');
+const placementSelectSource = placementSource.slice(placementSource.indexOf('function _componentPlacementSelectRoom'),
+  placementSource.indexOf('function _componentPlacementRows'));
+assert(placementSelectSource.includes('_svgNodeMatchedIdentifier(node, spacesByName)') &&
+  !placementSelectSource.includes("closest('[id]')"),
+  'placement room picking must use the shared SVG identifier matcher so namespaced ids resolve');
 assert(modalsSource.includes('let _projectMutationRenderPending = false;') &&
   modalsSource.includes('function _projectFlushMutationRender()'),
   'modal mutations must coalesce hidden result refreshes until the modal closes');
@@ -409,6 +414,11 @@ assert.deepStrictEqual(JSON.parse(vm.runInContext('JSON.stringify(qaFindings.map
 vm.runInContext("qaSelectedStage = 'construction'; _qaApplyStageFilter();", qaContext);
 assert.deepStrictEqual(JSON.parse(vm.runInContext('JSON.stringify(qaRuleResults.map(result => result.check))', qaContext)),
   ['design-check', 'construction-check'], 'cached Construction scores must include Design and Construction only');
+assert.strictEqual(vm.runInContext(`[
+  { sheet:_qaSchemaCache.sheets[0].name, column:_qaSchemaCache.sheets[0].columns[0].name },
+  { sheet:_qaSchemaCache.sheets[0].name, column:'Sheet' },
+].sort(_qaSchemaOrderComparator())[0].column`, qaContext), 'Sheet',
+  'sheet-level QA results must sort ahead of the column results for that worksheet');
 const pdfReportContract = JSON.parse(vm.runInContext(`JSON.stringify((() => {
   globalThis.esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
   db.facilities = [{ Name:'Facility A', _facility:'Facility A' }];
@@ -420,15 +430,16 @@ const pdfReportContract = JSON.parse(vm.runInContext(`JSON.stringify((() => {
     hidesFlowFooter:html.includes('.report-footer { display:none; }'),
     hasFacility:html.includes('Facility A'),
     hasBrand:html.includes('qa-report-brand'),
-    hasSummaries:html.includes('Overall score') && html.includes('Rules assessed') && html.includes('Advisories'),
+    hasSummaries:html.includes('Overall quality score') && html.includes('Rules assessed') && html.includes('Advisories'),
+    hasSummaryCards:html.includes('class="sheet-summary"') && html.includes('class="donut"') && html.includes('break-after:page;'),
     hasDisclaimer:html.includes('provided without guarantee of accuracy'),
     hasAllResults:qaRuleResults.every(result => html.includes(esc(result.label || result.check)) && html.includes(esc(result.column || 'Sheet'))),
   };
 })())`, qaContext));
 assert.deepStrictEqual(pdfReportContract, {
   hasA4:true, hasPrintFooter:true, hasPageNumbers:true, hidesFlowFooter:true,
-  hasFacility:true, hasBrand:true, hasSummaries:true, hasDisclaimer:true, hasAllResults:true,
-}, 'the PDF export must include branding, scope, summaries, disclaimer, and every sheet/column QA result');
+  hasFacility:true, hasBrand:true, hasSummaries:true, hasSummaryCards:true, hasDisclaimer:true, hasAllResults:true,
+}, 'the PDF export must include branding, scope, a summary-only cover page with sheet pie cards, disclaimer, and every sheet/column QA result');
 qaContext.viewMode = 'asset';
 vm.runInContext(`
   qaFindings = runQA();
@@ -463,7 +474,7 @@ vm.runInContext(`
 assert.strictEqual(vm.runInContext('_qaCreateFullRunCalls', qaContext), 0,
   'creating a row without a sheet-level structural rule must use incremental QA');
 vm.runInContext('runQA = _qaOriginalRun', qaContext);
-assert(qaGraphSource.includes('data-qa-sheet') && qaGraphSource.includes('_qaGraphRuleRows(selectedResults)'),
+assert(qaGraphSource.includes('data-qa-sheet') && qaGraphSource.includes('_qaGraphRuleRows(rowResults)'),
   'selecting a QA sheet score pill must filter the graph to that sheet\'s rules');
 assert(qaGraphSource.includes('setQaResultsSheetFilter(_qaGraphSelectedSheet)') && qaSource.includes('function _qaVisibleFindings()'),
   'selecting a QA graph sheet must filter the findings rendered on the left');
@@ -519,7 +530,8 @@ assert(qaSource.includes('function renderQAMode(list)') && !qaSource.includes('f
   'QA rendering must remain presentational and never execute checks');
 assert(qaSource.includes('const checks = [...byCheck.keys()];') && !qaSource.includes('const checks = [...byCheck.keys()].sort'),
   'QA finding checks must retain XML evaluation order');
-assert(qaSource.includes('const sheets = [...grouped.entries()];') && qaSource.includes('const rows = results.map(result => {'),
+assert(qaSource.includes('const sheets = [...grouped.entries()];') &&
+  qaSource.includes('const rows = [...columnGroups.values()].map('),
   'QA PDF sheets and checks must retain XML evaluation order');
 assert(qaGraphSource.includes("const sheets = _qaGraphAggregate(ruleResults, 'sheet');") && !/function _qaGraphRuleRows[\s\S]*?\.sort\(/.test(qaGraphSource),
   'QA graph sheets and checks must retain XML evaluation order');
@@ -1395,8 +1407,27 @@ assert.strictEqual(component.Space, 'Store', 'removing one Space must preserve t
 context._setEntityAssociation('component', component, componentSpaceAssociation, 'Plant Room', 'Facility A', true);
 assert.strictEqual(component.Space, 'Store,Plant Room', 'Component Spaces must be written back with a comma delimiter');
 component.Space = '';
-assert(context._projectLookupMenuMarkup([], 'new@example.test', true).includes('project-lookup-create'),
+assert(context._projectLookupMenuMarkup([], 'new@example.test', 'contact').includes('project-lookup-create'),
   'an unmatched Contact lookup must offer Contact creation');
+assert.strictEqual(context._projectLookupCreateType('type'), 'type',
+  'reference-backed entity lookups must be creatable inline');
+assert(!context._projectLookupCreateType('category') && !context._projectLookupCreateType('picklist:Category-Facility') &&
+  !context._projectLookupCreateType('linear-unit'),
+  'category, picklist and unit lookups must not offer inline entity creation');
+const typeLookupOptions = context._projectLookupOptions('type');
+const typeLookupMarkup = context._projectLookupMenuMarkup(typeLookupOptions, 'Pump', 'type');
+assert(typeLookupMarkup.includes('Create Type "Pump"') &&
+  typeLookupMarkup.indexOf('project-lookup-create') < typeLookupMarkup.indexOf('data-value="Pump Type"'),
+  'a query that matches descriptions but no unique key must keep its results and lead with the create option');
+assert(!context._projectLookupMenuMarkup(typeLookupOptions, 'Pump Type', 'type').includes('project-lookup-create'),
+  'an exact unique-key match must not offer creation');
+const parentDraftState = { type:'type', row:{ Name:'Draft Type', _facility:'Facility A' }, associations:Object.create(null), saving:false };
+context._setEntityAssociation('type', parentDraftState.row, { key:'components', targetType:'component', cardinality:'many' },
+  'Pump 01', 'Facility A', true, parentDraftState);
+assert(parentDraftState.associations.components?.has('pump 01') && component.TypeName !== 'Draft Type',
+  'associations created for an unsaved draft must stage instead of writing to the database');
+assert(!context._projectUnsavedDraftFor(component) && context._projectUnsavedDraftFor(parentDraftState.row) === null,
+  'only the active unsaved draft row may report draft state');
 assert(context._projectLookupOptions('type').some(option => option.value === 'Pump Type') &&
   context._projectLookupOptions('space').some(option => option.value === 'Plant Room'),
   'XML entity field lookups must include facility-scoped canonical Type and Space rows');

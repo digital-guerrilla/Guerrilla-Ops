@@ -725,7 +725,9 @@ def strip_vendor_comments(source: str) -> str:
 
 def embed_favicon(html: str) -> str:
     validate_file(SVG_SOURCE)
-    svg_bytes = SVG_SOURCE.read_bytes()
+    # Canonicalise line endings so the embedded favicon (and therefore the
+    # release hash) is identical no matter how the source was checked out.
+    svg_bytes = SVG_SOURCE.read_bytes().replace(b"\r\n", b"\n")
     encoded = base64.b64encode(svg_bytes).decode("ascii")
     favicon_data_uri = 'data:image/svg+xml;base64,' + encoded
 
@@ -836,7 +838,9 @@ def run_build(refresh: bool, offline: bool) -> None:
     if not script_refs:
         fail("No script references found in dev/index.html.")
 
-    embedded_schema_xml = read_text_exact(QA_SCHEMA_SOURCE)
+    # Canonicalise line endings so the embedded schema (and therefore the
+    # release hash) is identical no matter how the source was checked out.
+    embedded_schema_xml = read_text_exact(QA_SCHEMA_SOURCE).replace("\r\n", "\n")
 
     min_css_airgapped = bundle_css(
         stylesheet_refs=stylesheet_refs,
