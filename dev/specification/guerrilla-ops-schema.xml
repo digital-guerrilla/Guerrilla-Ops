@@ -968,7 +968,7 @@
               <association ownerSheet="Component" key="systems" label="Systems" cardinality="many"/>
             </reference>
           </qa>
-          <ui groupTitle="Identification" colorToken="cobie-reference"/>
+          <ui colorToken="cobie-reference"/>
         </column>
         <column name="ExternalSystem">
           <qa stage="Design">
