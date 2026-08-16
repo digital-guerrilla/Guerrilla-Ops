@@ -567,13 +567,13 @@
             <rule name="NotNull"/>
             <unique severity="error"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="Description">
           <qa stage="Design">
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="CreatedBy">
           <qa stage="Design">
@@ -581,27 +581,27 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa stage="Design">
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-required"/>
         </column>
         <column name="Category">
           <qa stage="Design">
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="Category-Product" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="ExternalSystem">
           <qa stage="Design">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExtObject">
@@ -609,7 +609,7 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objType" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalObject|ExtObject"/>
         </column>
         <column name="ExtIdentifier">
@@ -617,7 +617,7 @@
             <rule name="NotEmpty|Unique"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalIdentifier"/>
         </column>
         <column name="AssetType">
@@ -625,7 +625,7 @@
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="AssetType" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="Manufacturer">
           <qa stage="Construction">
@@ -633,13 +633,13 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Manufacturer"/>
+          <ui groupTitle="Manufacturer" colorToken="cobie-reference"/>
         </column>
         <column name="ModelNumber">
           <qa stage="Construction">
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Manufacturer"/>
+          <ui groupTitle="Manufacturer" colorToken="cobie-required"/>
         </column>
         <column name="WarrantyGuarantorParts">
           <qa stage="Construction">
@@ -647,13 +647,13 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Warranty" label="Parts Guarantor"/>
+          <ui groupTitle="Warranty" label="Parts Guarantor" colorToken="cobie-reference"/>
         </column>
         <column name="WarrantyDurationParts">
           <qa stage="Construction">
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Warranty" label="Parts Duration"/>
+          <ui groupTitle="Warranty" label="Parts Duration" colorToken="cobie-required"/>
         </column>
         <column name="WarrantyGuarantorLabor">
           <qa stage="Construction">
@@ -661,135 +661,135 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Warranty" label="Labour Guarantor"/>
+          <ui groupTitle="Warranty" label="Labour Guarantor" colorToken="cobie-reference"/>
         </column>
         <column name="WarrantyDurationLabor">
           <qa stage="Construction">
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Warranty" label="Labour Duration"/>
+          <ui groupTitle="Warranty" label="Labour Duration" colorToken="cobie-required"/>
         </column>
         <column name="WarrantyDurationUnit">
           <qa stage="Construction">
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="DurationUnit" required="true"/>
           </qa>
-          <ui groupTitle="Warranty"/>
+          <ui groupTitle="Warranty" colorToken="cobie-reference"/>
         </column>
         <column name="ReplacementCost">
           <qa stage="Construction">
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Warranty"/>
+          <ui groupTitle="Warranty" colorToken="cobie-requirable"/>
         </column>
         <column name="ExpectedLife">
           <qa stage="Construction">
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Warranty"/>
+          <ui groupTitle="Warranty" colorToken="cobie-requirable"/>
         </column>
         <column name="DurationUnit">
           <qa stage="Construction">
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="DurationUnit" required="true"/>
           </qa>
-          <ui groupTitle="Warranty"/>
+          <ui groupTitle="Warranty" colorToken="cobie-reference"/>
         </column>
         <column name="WarrantyDescription">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Warranty"/>
+          <ui groupTitle="Warranty" colorToken="cobie-requirable"/>
         </column>
         <column name="NominalLength">
           <qa stage="Design">
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Dimensions"/>
+          <ui groupTitle="Dimensions" colorToken="cobie-required"/>
         </column>
         <column name="NominalWidth">
           <qa stage="Design">
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Dimensions"/>
+          <ui groupTitle="Dimensions" colorToken="cobie-required"/>
         </column>
         <column name="NominalHeight">
           <qa stage="Design">
             <rule name="ZeroOrGreaterOrNA"/>
           </qa>
-          <ui groupTitle="Dimensions"/>
+          <ui groupTitle="Dimensions" colorToken="cobie-required"/>
         </column>
         <column name="ModelReference">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Specification"/>
+          <ui groupTitle="Specification" colorToken="cobie-requirable"/>
         </column>
         <column name="Shape">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Dimensions"/>
+          <ui groupTitle="Dimensions" colorToken="cobie-requirable"/>
         </column>
         <column name="Size">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Dimensions"/>
+          <ui groupTitle="Dimensions" colorToken="cobie-requirable"/>
         </column>
         <column name="Color">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Specification"/>
+          <ui groupTitle="Specification" colorToken="cobie-requirable"/>
         </column>
         <column name="Finish">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Specification"/>
+          <ui groupTitle="Specification" colorToken="cobie-requirable"/>
         </column>
         <column name="Grade">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Specification"/>
+          <ui groupTitle="Specification" colorToken="cobie-requirable"/>
         </column>
         <column name="Material">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Specification"/>
+          <ui groupTitle="Specification" colorToken="cobie-requirable"/>
         </column>
         <column name="Constituents">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Specification"/>
+          <ui groupTitle="Specification" colorToken="cobie-requirable"/>
         </column>
         <column name="Features">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Specification"/>
+          <ui groupTitle="Specification" colorToken="cobie-requirable"/>
         </column>
         <column name="AccessibilityPerformance">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Performance"/>
+          <ui groupTitle="Performance" colorToken="cobie-requirable"/>
         </column>
         <column name="CodePerformance">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Performance"/>
+          <ui groupTitle="Performance" colorToken="cobie-requirable"/>
         </column>
         <column name="SustainabilityPerformance">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Performance"/>
+          <ui groupTitle="Performance" colorToken="cobie-requirable"/>
         </column>
       </columns>
       <relationRules>
@@ -807,7 +807,7 @@
             <rule name="NotNull|Unique"/>
             <unique severity="error"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
           <runtime search="true"/>
         </column>
         <column name="CreatedBy">
@@ -816,20 +816,20 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa stage="Design">
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-required"/>
         </column>
         <column name="ExternalSystem">
           <qa stage="Design">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExtObject">
@@ -837,7 +837,7 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objComponent" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtObject"/>
         </column>
         <column name="ExtIdentifier">
@@ -845,7 +845,7 @@
             <rule name="NotEmpty|Unique"/>
             <format name="GUID"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalIdentifier"/>
         </column>
         <column name="TypeName">
@@ -857,7 +857,7 @@
               <association ownerSheet="Component" key="type" label="Type" cardinality="one"/>
             </reference>
           </qa>
-          <ui groupTitle="Identification" label="Type"/>
+          <ui groupTitle="Identification" label="Type" colorToken="cobie-reference"/>
           <runtime search="true" aliases="Type Name"/>
         </column>
         <column name="Space">
@@ -869,21 +869,21 @@
               <association ownerSheet="Component" key="space" label="Spaces" cardinality="many"/>
             </reference>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
           <runtime search="true"/>
         </column>
         <column name="Description">
           <qa stage="Design">
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
           <runtime search="true"/>
         </column>
         <column name="SerialNumber">
           <qa stage="Construction">
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Asset"/>
+          <ui groupTitle="Asset" colorToken="cobie-requirable"/>
           <runtime search="true"/>
         </column>
         <column name="InstallationDate">
@@ -891,34 +891,34 @@
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Asset"/>
+          <ui groupTitle="Asset" colorToken="cobie-requirable"/>
         </column>
         <column name="WarrantyStartDate">
           <qa stage="Construction">
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Asset"/>
+          <ui groupTitle="Asset" colorToken="cobie-requirable"/>
         </column>
         <column name="TagNumber">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Asset"/>
+          <ui groupTitle="Asset" colorToken="cobie-requirable"/>
           <runtime search="true"/>
         </column>
         <column name="BarCode">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Asset"/>
+          <ui groupTitle="Asset" colorToken="cobie-requirable"/>
           <runtime search="true"/>
         </column>
         <column name="AssetIdentifier">
           <qa stage="Construction">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Asset"/>
+          <ui groupTitle="Asset" colorToken="cobie-requirable"/>
           <runtime search="true"/>
         </column>
       </columns>
@@ -935,7 +935,7 @@
             <rule name="NotNull"/>
             <unique keys="Name|ComponentNames" severity="error"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
         <column name="CreatedBy">
           <qa stage="Design">
@@ -943,21 +943,21 @@
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa stage="Design">
             <rule name="NotNull"/>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-required"/>
         </column>
         <column name="Category">
           <qa stage="Design">
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="Category-Element" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="ComponentNames">
           <qa stage="Design">
@@ -968,12 +968,13 @@
               <association ownerSheet="Component" key="systems" label="Systems" cardinality="many"/>
             </reference>
           </qa>
+          <ui colorToken="cobie-reference"/>
         </column>
         <column name="ExternalSystem">
           <qa stage="Design">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExtObject">
@@ -981,7 +982,7 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objSystem" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtObject"/>
         </column>
         <column name="ExtIdentifier">
@@ -989,14 +990,14 @@
             <rule name="NotEmpty"/>
             <unique keys="Name|ComponentNames|ExtIdentifier" severity="info"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExternalIdentifier"/>
         </column>
         <column name="Description">
           <qa stage="Design">
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-requirable"/>
         </column>
       </columns>
     </sheet>
@@ -1011,39 +1012,36 @@
             <rule name="NotNull"/>
             <unique keys="Name|SheetName|RowName" severity="error"/>
           </qa>
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification"  colorToken="cobie-required"/>
         </column>
         <column name="CreatedBy">
           <qa>
             <format name="email"/>
             <reference targetSheet="Contact" targetColumn="Email" required="true"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit"  colorToken="cobie-reference"/>
         </column>
         <column name="CreatedOn">
           <qa>
             <format name="isoDateTime"/>
           </qa>
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-required"/>
         </column>
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="DocumentType" required="true"/>
           </qa>
-          <ui groupTitle="Identification"/>
-        </column>
-        <column name="Description">
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
         <column name="ApprovedBy">
-          <ui groupTitle="Audit"/>
+          <ui groupTitle="Audit" colorToken="cobie-reference"/>
           <qa>
             <rule name="NotEmpty"/>
           </qa>
         </column>
         <column name="Stage">
-          <ui groupTitle="Identification"/>
+          <ui groupTitle="Identification" colorToken="cobie-reference"/>
           <qa>
             <rule name="NotEmpty"/>
           </qa>
@@ -1053,33 +1051,33 @@
             <rule name="NotNull"/>
             <reference targetSheet="Picklist" targetColumn="SheetType" required="true"/>
           </qa>
-          <ui groupTitle="Association"/>
+          <ui groupTitle="Association" colorToken="cobie-reference"/>
           <runtime aliases="Sheet Name"/>
         </column>
         <column name="RowName">
           <qa>
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Association"/>
+          <ui groupTitle="Association" colorToken="cobie-reference"/>
           <runtime aliases="Row Name"/>
         </column>
         <column name="Directory">
           <qa>
             <rule name="NotNull"/>
           </qa>
-          <ui groupTitle="Location"/>
+          <ui groupTitle="Location" colorToken="cobie-required"/>
         </column>
         <column name="File">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="Location"/>
+          <ui groupTitle="Location" colorToken="cobie-required"/>
         </column>
         <column name="ExternalSystem">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtSystem"/>
         </column>
         <column name="ExtObject">
@@ -1087,7 +1085,7 @@
             <rule name="NotEmpty"/>
             <reference targetSheet="Picklist" targetColumn="objDocument" required="true"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtObject"/>
         </column>
         <column name="ExternalIdentifier">
@@ -1095,14 +1093,17 @@
             <rule name="NotEmpty"/>
             <unique keys="Name|SheetName|RowName|ExternalIdentifier" severity="info"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-external"/>
           <runtime aliases="ExtIdentifier"/>
+        </column>
+        <column name="Description">
+          <ui groupTitle="Identification" colorToken="cobie-requirable"/>
         </column>
         <column name="Reference">
           <qa>
             <rule name="NotEmpty"/>
           </qa>
-          <ui groupTitle="External References"/>
+          <ui groupTitle="External References" colorToken="cobie-requirable"/>
         </column>
       </columns>
     </sheet>
