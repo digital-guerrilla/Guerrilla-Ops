@@ -189,14 +189,14 @@ function _floorAlignmentFromRaw(raw) {
     const axisScales = [Number(parsed?.scaleX), Number(parsed?.scaleY)].filter(value => Number.isFinite(value) && value > 0);
     const scale = axisScales.length ? Math.min(...axisScales) : (Number(parsed?.scale) || 1);
     return {
-      xPct: _unitInterval(parsed?.xPct ?? parsed?.centerX),
-      yPct: _unitInterval(parsed?.yPct ?? parsed?.centerY),
+      xPct: _finiteNumber(parsed?.xPct ?? parsed?.centerX),
+      yPct: _finiteNumber(parsed?.yPct ?? parsed?.centerY),
       scale,
       rotation: Number(parsed?.rotation) || 0,
       flipHorizontal: !!(parsed?.flipHorizontal || parsed?.flipX),
       flipVertical: !!(parsed?.flipVertical || parsed?.flipY),
-      originXPct: _unitInterval(parsed?.originXPct ?? parsed?.originX),
-      originYPct: _unitInterval(parsed?.originYPct ?? parsed?.originY),
+      originXPct: _finiteNumber(parsed?.originXPct ?? parsed?.originX),
+      originYPct: _finiteNumber(parsed?.originYPct ?? parsed?.originY),
       floorToSvg:_normalizedFloorToSvgAffine(parsed?.floorToSvg),
     };
   } catch (_) {
@@ -207,14 +207,14 @@ function _floorAlignmentFromRaw(raw) {
 function _floorAlignmentToRaw(alignment) {
   const scale = Number(alignment?.scale) || 1;
   return JSON.stringify({
-    xPct: _unitInterval(alignment?.xPct ?? alignment?.centerX),
-    yPct: _unitInterval(alignment?.yPct ?? alignment?.centerY),
+    xPct: _finiteNumber(alignment?.xPct ?? alignment?.centerX),
+    yPct: _finiteNumber(alignment?.yPct ?? alignment?.centerY),
     scale,
     rotation: Number(alignment?.rotation) || 0,
     flipHorizontal: !!(alignment?.flipHorizontal || alignment?.flipX),
     flipVertical: !!(alignment?.flipVertical || alignment?.flipY),
-    originXPct: _unitInterval(alignment?.originXPct ?? alignment?.originX),
-    originYPct: _unitInterval(alignment?.originYPct ?? alignment?.originY),
+    originXPct: _finiteNumber(alignment?.originXPct ?? alignment?.originX),
+    originYPct: _finiteNumber(alignment?.originYPct ?? alignment?.originY),
     floorToSvg:_normalizedFloorToSvgAffine(alignment?.floorToSvg) || undefined,
   });
 }
@@ -247,14 +247,14 @@ function _floorAlignmentSave(entry, alignment) {
   }
 
   _floorPlanAlignment = {
-    xPct: _unitInterval(alignment?.xPct ?? alignment?.centerX),
-    yPct: _unitInterval(alignment?.yPct ?? alignment?.centerY),
+    xPct: _finiteNumber(alignment?.xPct ?? alignment?.centerX),
+    yPct: _finiteNumber(alignment?.yPct ?? alignment?.centerY),
     scale:Number(alignment?.scale) || 1,
     rotation: Number(alignment?.rotation) || 0,
     flipHorizontal: !!alignment?.flipHorizontal,
     flipVertical: !!alignment?.flipVertical,
-    originXPct: _unitInterval(alignment?.originXPct ?? alignment?.originX),
-    originYPct: _unitInterval(alignment?.originYPct ?? alignment?.originY),
+    originXPct: _finiteNumber(alignment?.originXPct ?? alignment?.originX),
+    originYPct: _finiteNumber(alignment?.originYPct ?? alignment?.originY),
     floorToSvg:_normalizedFloorToSvgAffine(alignment?.floorToSvg),
   };
   _floorPlanAlignmentFloorKey = entry?.key || '';
@@ -1209,14 +1209,14 @@ function _alignmentTransformForStage(transform) {
   const stageHeight = Math.max(1, Math.round(rect?.height || els.stage?.clientHeight || 1));
   const scale = Math.max(0.0001, Number(transform?.scale) || 1);
   return {
-    x: stageWidth * _unitInterval(transform?.xPct),
-    y: stageHeight * _unitInterval(transform?.yPct),
+    x: stageWidth * _finiteNumber(transform?.xPct),
+    y: stageHeight * _finiteNumber(transform?.yPct),
     scale,
     rotation: Number(transform?.rotation) || 0,
     flipHorizontal: !!transform?.flipHorizontal,
     flipVertical: !!transform?.flipVertical,
-    originXPct: _unitInterval(transform?.originXPct ?? transform?.originX),
-    originYPct: _unitInterval(transform?.originYPct ?? transform?.originY),
+    originXPct: _finiteNumber(transform?.originXPct ?? transform?.originX),
+    originYPct: _finiteNumber(transform?.originYPct ?? transform?.originY),
   };
 }
 
@@ -1272,6 +1272,10 @@ function _alignmentRenderSvg(floorEntry, svgRaw, transform) {
   svgShell.style.zIndex = '1';
   svgShell.style.pointerEvents = 'auto';
 
+  // Explicit shell box keeps transform-origin percentages resolving against the plan size, not a shrink-to-fit box.
+  shell.style.width = `${Math.max(1, shellWidth)}px`;
+  shell.style.height = `${Math.max(1, shellHeight)}px`;
+
   const dragSurface = document.createElement('div');
   dragSurface.id = 'floor-align-drag-surface';
   dragSurface.className = 'position-absolute top-0 start-0 w-100 h-100';
@@ -1306,8 +1310,8 @@ function _alignmentRenderSvg(floorEntry, svgRaw, transform) {
   originHandle.className = 'position-absolute rounded-circle shadow';
   originHandle.style.width = '20px';
   originHandle.style.height = '20px';
-  originHandle.style.left = `${Math.max(0, Math.min(100, transform.originXPct * 100))}%`;
-  originHandle.style.top = `${Math.max(0, Math.min(100, transform.originYPct * 100))}%`;
+  originHandle.style.left = `${transform.originXPct * 100}%`;
+  originHandle.style.top = `${transform.originYPct * 100}%`;
   originHandle.style.transform = 'translate(-50%, -50%)';
   originHandle.style.cursor = 'move';
   originHandle.style.touchAction = 'none';
@@ -1417,10 +1421,15 @@ function _alignmentBindInteractions() {
     const shellRect = shell.getBoundingClientRect();
     const svgShell = shell.firstElementChild;
     const initial = { ...(_floorPlanAlignmentDraft || _floorPlanAlignment || _alignmentDefaultForEntry(currentEntry)) };
-    const originXPct = _unitInterval(initial.originXPct);
-    const originYPct = _unitInterval(initial.originYPct);
-    const originX = shellRect.left - rect.left + (shellRect.width * originXPct);
-    const originY = shellRect.top - rect.top + (shellRect.height * originYPct);
+    const originXPct = _finiteNumber(initial.originXPct);
+    const originYPct = _finiteNumber(initial.originYPct);
+    const stageTransform = _alignmentTransformForStage(initial);
+    const localW = Math.max(1, Number(svgShell?.offsetWidth) || shellRect.width || 1);
+    const localH = Math.max(1, Number(svgShell?.offsetHeight) || shellRect.height || 1);
+    const viewZoomAtStart = Math.max(0.0001, Number(_floorAlignView?.zoom) || 1);
+    // The pivot is fixed under rotate/scale, so derive it from the untransformed layout box rather than the rotated bounding rect.
+    const originX = _floorAlignView.panX + (viewZoomAtStart * (stageTransform.x - (localW / 2) + (originXPct * localW)));
+    const originY = _floorAlignView.panY + (viewZoomAtStart * (stageTransform.y - (localH / 2) + (originYPct * localH)));
 
     state.mode = originHandle ? 'moveOrigin' : (resize ? 'resize' : (event.button === 2 ? 'rotate' : 'move'));
     state.startX = event.clientX;
@@ -1429,8 +1438,8 @@ function _alignmentBindInteractions() {
     state.stageSize = { width: rect.width, height: rect.height };
     state.startOrigin = { x: originX, y: originY };
     state.shellRect = shellRect;
-    state.shellLocalW = Math.max(1, Number(svgShell?.offsetWidth || shellRect.width) || shellRect.width);
-    state.shellLocalH = Math.max(1, Number(svgShell?.offsetHeight || shellRect.height) || shellRect.height);
+    state.shellLocalW = localW;
+    state.shellLocalH = localH;
     state.startOriginLocal = {
       x: originXPct * state.shellLocalW,
       y: originYPct * state.shellLocalH,
@@ -1474,8 +1483,8 @@ function _alignmentBindInteractions() {
         const dLocalX = rotInvX / (Math.abs(sx) > 0.000001 ? sx : 1);
         const dLocalY = rotInvY / (Math.abs(sy) > 0.000001 ? sy : 1);
 
-        const localX = Math.max(0, Math.min(state.shellLocalW, state.startOriginLocal.x + dLocalX));
-        const localY = Math.max(0, Math.min(state.shellLocalH, state.startOriginLocal.y + dLocalY));
+        const localX = state.startOriginLocal.x + dLocalX;
+        const localY = state.startOriginLocal.y + dLocalY;
         draft.originXPct = localX / Math.max(1, state.shellLocalW);
         draft.originYPct = localY / Math.max(1, state.shellLocalH);
 
@@ -1811,6 +1820,17 @@ function initFloorSvgPanel() {
         const axis = flipBtn.getAttribute('data-floor-align-flip');
         if (axis === 'horizontal') current.flipHorizontal = !current.flipHorizontal;
         if (axis === 'vertical') current.flipVertical = !current.flipVertical;
+        _floorPlanAlignmentDraft = current;
+        _renderAlignmentModal();
+        return;
+      }
+
+      const rotateBtn = event.target.closest('[data-floor-align-rotate]');
+      if (rotateBtn) {
+        const current = { ...(_floorPlanAlignmentDraft || _floorPlanAlignment || _alignmentDefaultForEntry(_alignmentModalFloorEntry())) };
+        const step = Number(rotateBtn.getAttribute('data-floor-align-rotate')) || 0;
+        const next = ((Number(current.rotation) || 0) + step) % 360;
+        current.rotation = next > 180 ? next - 360 : (next <= -180 ? next + 360 : next);
         _floorPlanAlignmentDraft = current;
         _renderAlignmentModal();
         return;

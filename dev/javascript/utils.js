@@ -531,8 +531,8 @@ function _resolvedFloorAlignmentForEntry(entry) {
         rotation: Number(parsed?.rotation) || 0,
         flipHorizontal: !!parsed?.flipHorizontal,
         flipVertical: !!parsed?.flipVertical,
-        originXPct: _unitInterval(parsed?.originXPct ?? parsed?.originX),
-        originYPct: _unitInterval(parsed?.originYPct ?? parsed?.originY),
+        originXPct: _finiteNumber(parsed?.originXPct ?? parsed?.originX),
+        originYPct: _finiteNumber(parsed?.originYPct ?? parsed?.originY),
         floorToSvg:parsed?.floorToSvg || null,
       };
     } catch (_) {
