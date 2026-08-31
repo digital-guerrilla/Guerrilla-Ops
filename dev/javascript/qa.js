@@ -53,6 +53,25 @@ let qaRuleResults = [];
 let qaAllRuleResults = [];
 let qaHasRun = false;
 const QA_STAGE_ORDER = Object.freeze(['design', 'construction', 'operation']);
+
+// The COBie worksheets this tool RECOGNISES, independent of which ones the active QA
+// profile happens to describe. Coverage needs both sets: without this inventory a
+// client's own tab ("Notes", "Revisions") would be reported as COBie work that failed
+// assessment, which is a false statement about their data.
+const COBIE_WORKSHEETS = Object.freeze([
+  'Contact', 'Facility', 'Floor', 'Space', 'Zone', 'Type', 'Component', 'System',
+  'Assembly', 'Connection', 'Spare', 'Resource', 'Job', 'Impact', 'Document',
+  'Attribute', 'Coordinate', 'Issue', 'Picklist',
+]);
+const _COBIE_WORKSHEET_KEYS = Object.freeze(COBIE_WORKSHEETS.map(name => name.toLowerCase()));
+
+// Part of the COBie template, but guidance rather than project data. Calling Instruction
+// an "additional worksheet outside this profile" is false — it is COBie — and calling it
+// "not assessed" implies rules should have run against it. It carries nothing to assess,
+// so it is excluded from the data-coverage count entirely. Andy's own example workbook
+// ships it, which is how this surfaced.
+const COBIE_TEMPLATE_SHEETS = Object.freeze(['Instruction']);
+const _COBIE_TEMPLATE_KEYS = Object.freeze(COBIE_TEMPLATE_SHEETS.map(name => name.toLowerCase()));
 let qaSelectedStage = 'operation';
 let _qaSchemaCache = null;
 let _qaFilterScope = null;
@@ -1573,6 +1592,84 @@ function _qaVisibleFindings() {
   });
 }
 
+// Coverage is descriptive, never evaluative: it reports what was looked at, and is
+// deliberately kept out of qaFindings/qaRuleResults so it cannot reach _qaScoreTally()
+// and move the score or the donut.
+//
+// Two deliberate choices, both of which are wrong the obvious way round:
+//   * the DESCRIBED set is the profile's full sheet list, NOT the stage-filtered one.
+//     A sheet excluded by the selected stage is described; calling it unassessed would
+//     make coverage change every time a user switches stage.
+//   * iteration is per SOURCE WORKBOOK, not per logical facility.
+//     _qaLogicalFacilityRows() keeps one representative per facility identity, so a
+//     second file describing the same facility would vanish from the report.
+function _qaCoverage() {
+  const schema = _qaParseSchema();
+  const described = new Set((schema?.sheets || []).map(sheet => _qaNorm(sheet.name)));
+  const recognised = new Set(_COBIE_WORKSHEET_KEYS);
+
+  const workbooks = new Map();
+  (db.facilities || []).forEach(row => {
+    const key = String(row._workbookKey || row._fileName || '');
+    if (key && row._workbook && !workbooks.has(key)) workbooks.set(key, row);
+  });
+
+  const notAssessed = [], additional = [], empty = [];
+  let recognisedPresent = 0, coveredPresent = 0;
+
+  workbooks.forEach(row => {
+    const wb = row._workbook;
+    const fileName = String(row._fileName || '').trim();
+    (wb?.SheetNames || []).forEach(sheetName => {
+      const key = _qaNorm(sheetName);
+      if (!key) return;
+      if (_COBIE_TEMPLATE_KEYS.includes(key)) return;   // guidance, not project data
+      const rows = readSheet(wb, sheetName).length;
+      const entry = { sheet: String(sheetName).trim(), file: fileName, rows };
+      if (!recognised.has(key)) { additional.push(entry); return; }
+      recognisedPresent += 1;
+      if (!described.has(key)) { notAssessed.push(entry); return; }
+      coveredPresent += 1;
+      if (rows === 0) empty.push(entry);
+    });
+  });
+
+  const order = (a, b) => a.sheet.localeCompare(b.sheet) || a.file.localeCompare(b.file);
+  return {
+    covered: coveredPresent, recognisedPresent,
+    notAssessed: notAssessed.sort(order),
+    additional: additional.sort(order),
+    empty: empty.sort(order),
+    workbooks: workbooks.size,
+  };
+}
+
+// Rendered identically in the QA view and the PDF cover so the two can never disagree.
+function _qaCoverageHtml(coverage) {
+  if (!coverage || !coverage.recognisedPresent && !coverage.additional.length) return '';
+  // The filename only earns its place when more than one workbook is loaded; repeating
+  // it on every entry of a single-file report is noise, not provenance.
+  const showFile = coverage.workbooks > 1;
+  const line = items => items
+    .map(item => `${esc(item.sheet)}${showFile && item.file ? ` (${esc(item.file)})` : ''} — ${item.rows.toLocaleString()} row${item.rows === 1 ? '' : 's'}`)
+    .join('; ');
+  const parts = [];
+  if (coverage.notAssessed.length) {
+    parts.push(`<li><strong>Not assessed</strong> — recognised COBie worksheets this profile does not describe: ${line(coverage.notAssessed)}</li>`);
+  }
+  if (coverage.empty.length) {
+    parts.push(`<li><strong>Present, empty</strong> — described, but no data rows to assess: ${coverage.empty.map(item => esc(item.sheet) + (showFile && item.file ? ` (${esc(item.file)})` : '')).join('; ')}</li>`);
+  }
+  if (coverage.additional.length) {
+    parts.push(`<li><strong>Additional worksheets outside this COBie profile</strong>: ${line(coverage.additional)}</li>`);
+  }
+  return `<div class="qa-coverage">
+    <span class="qa-coverage-head">Coverage and scope</span>
+    <p class="qa-coverage-line">The active profile describes ${coverage.covered} of ${coverage.recognisedPresent} recognised COBie worksheet${coverage.recognisedPresent === 1 ? '' : 's'} present${coverage.additional.length ? `. ${coverage.additional.length} additional worksheet${coverage.additional.length === 1 ? ' was' : 's were'} outside this profile` : ''}. Does not affect QA score.</p>
+    ${parts.length ? `<ul class="qa-coverage-list">${parts.join('')}</ul>` : ''}
+  </div>`;
+}
+
 function renderQAMode(list) {
   const visibleFindings = _qaVisibleFindings();
   const bySev = { error:0, warning:0, info:0 };
@@ -1593,7 +1690,7 @@ function renderQAMode(list) {
     ${_qaResultsSelectedSheet ? `<span class="qa-scope">Sheet: ${esc(_qaResultsSelectedSheet)}</span>` : ''}
     ${visibleFindings.length?`<button class="xbtn" onclick="exportQAReport()"><i class="bi bi-download me-1"></i>Download XLSX</button>`:''}
     ${qaRuleResults.length?`<button class="xbtn" onclick="exportQAPdf()"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</button>`:''}
-  </div>`;
+  </div>` + _qaCoverageHtml(_qaCoverage());
 
   if (!visibleFindings.length) {
     list.innerHTML = summary + `<div class="qa-clear"><i class="bi bi-patch-check"></i>
@@ -1988,6 +2085,12 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .meta { display:grid; grid-template-columns:1fr 1.5fr 1.5fr; gap:6px 14px; margin:12px 0; padding:9px 10px; background:#f1f5f8; border-left:4px solid #00a9a5; }
     .meta-label { color:#607080; font-weight:700; }
     .cover { break-after:page; }
+    /* Coverage and scope: descriptive, not evaluative — no severity colour, no icon. */
+    .qa-coverage { margin:14px 0 0; padding:9px 11px; border:1px solid #d8e0e6; border-radius:4px; background:#f7f9fa; font-size:11px; }
+    .qa-coverage-head { display:block; font-weight:600; margin-bottom:3px; }
+    .qa-coverage-line { margin:0; }
+    .qa-coverage-list { margin:5px 0 0; padding-left:16px; }
+    .qa-coverage-list li { margin:2px 0; }
     .hero { display:flex; align-items:center; gap:14px; margin:0 0 10px; padding:10px 12px; border:1px solid #d9e1e8; border-radius:8px; background:linear-gradient(135deg,#f6fafc 0%,#eef4f8 100%); }
     .hero-headline { flex:1 1 auto; }
     .hero-title { display:block; color:#16324f; font-size:13pt; font-weight:800; }
@@ -2046,6 +2149,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
           </div>
         </div>
       </div>
+      ${_qaCoverageHtml(_qaCoverage())}
       <h2 class="section-title">Sheet scores</h2>
       <table class="sheet-summary"><thead><tr><th>Sheet</th><th class="num">Rules</th><th class="num">Passed</th><th class="num">Advisory</th><th class="num">Warning</th><th class="num">Error</th><th class="num">Score</th></tr></thead><tbody>${sheetSummaryRows || '<tr><td colspan="7">No QA rule results are available.</td></tr>'}</tbody></table>
     </div>

@@ -2245,3 +2245,12 @@
     width: calc(100vw - 2rem);
   }
 }
+
+/* Coverage and scope — descriptive, never evaluative. Deliberately carries no
+   severity colour and no icon: it reports what was looked at, not what is wrong. */
+.qa-coverage { margin:10px 0 0; padding:10px 12px; border:1px solid var(--border, #d8e0e6);
+  border-radius:4px; background:var(--surface-2, #f7f9fa); font-size:.86rem; }
+.qa-coverage-head { display:block; font-weight:600; letter-spacing:.02em; margin-bottom:3px; }
+.qa-coverage-line { margin:0; }
+.qa-coverage-list { margin:6px 0 0; padding-left:18px; }
+.qa-coverage-list li { margin:2px 0; }
