@@ -3,12 +3,13 @@
   "private": true,
   "scripts": {
     "dev": "node node_modules/vite/bin/vite.js --host=localhost --port=8080 --open",
-    "test": "npm run test:runtime && npm run test:schema && npm run test:filters",
+    "test": "npm run test:runtime && npm run test:schema && npm run test:filters && npm run test:coverage",
     "test:runtime": "node tests/runtime-regression.js",
     "test:filters": "node tests/system-floor-filter-regression.js",
     "test:schema": "node tests/schema-regression.js",
     "test:build": "python build/build_release.py --offline",
-    "build": "python build/build_release.py"
+    "build": "python build/build_release.py",
+    "test:coverage": "node tests/qa-coverage-regression.js"
   },
   "devDependencies": {
     "linkedom": "^0.18.13",
