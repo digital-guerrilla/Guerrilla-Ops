@@ -315,6 +315,22 @@ function _cobieEntityUi(entityType) {
   return _cobieEntityDescriptor(entityType)?.ui || { label:String(entityType || ''), pluralLabel:'', icon:'bi-folder', colorToken:'' };
 }
 
+function _cobieColorVariableSuffix(colorToken) {
+  return { facility:'fac', doccat:'doc' }[colorToken] || colorToken;
+}
+
+function _workspacePanelMaxWidth(panelId, fallback) {
+  const layout = document.getElementById('results-layout');
+  if (!layout?.clientWidth) return fallback;
+  const style = getComputedStyle(layout);
+  const visible = [...layout.children].filter(child => !child.classList.contains('d-none'));
+  const otherPanelsWidth = visible.filter(child => child.id !== panelId && child.id !== 'results-main')
+    .reduce((width, child) => width + child.getBoundingClientRect().width, 0);
+  const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  const gaps = (parseFloat(style.columnGap) || 0) * Math.max(0, visible.length - 1);
+  return layout.clientWidth - otherPanelsWidth - padding - gaps - 240;
+}
+
 function _cobieEntityBucket(entityType) {
   const type = _cobieEntityType(entityType);
   if (!type) return '';

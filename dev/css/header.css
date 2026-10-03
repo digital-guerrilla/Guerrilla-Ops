@@ -3,11 +3,14 @@
   --logo-size: 1.45rem;
   flex-shrink: 0; height: var(--hh);
   background: var(--navy); color: var(--on-dark);
-  display: flex; align-items: center; gap: .7rem;
-  padding: 0 1.2rem;
+  display: flex; align-items: center; gap: .5rem;
+  padding: 0 .7rem;
   box-shadow: 0 2px 8px var(--shadow-md);
   z-index: 200;
+  overflow-x: auto; overflow-y: hidden;
 }
+#hdr::-webkit-scrollbar { height: 4px; }
+#hdr::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); }
 #hdr .go-logo {
   display: inline-flex;
   width: var(--logo-size);
@@ -88,12 +91,34 @@
     --hex-4: var(--brand-dark); --hex-5: var(--brand-surface); --hex-6: var(--brand-warn); --hex-7: var(--brand-danger);
   }
 }
-#hdr .title { font-size: 1.05rem; font-weight: 600; letter-spacing: .02em; flex: 1; }
-#hdr .file-lbl {
-  font-size: .78rem; opacity: .6; max-width: 280px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+#hdr .title { font-size: 1.05rem; font-weight: 600; letter-spacing: .02em; flex: 0 0 auto; white-space: nowrap; }
 
+/* ── Compact workbook summary ───────────────────────────────── */
+#header-summary {
+  flex: 1 1 0; min-width: min-content; height: 40px;
+  border-left: 1px solid rgba(255,255,255,.25); padding-left: .5rem;
+}
+#stats {
+  display: grid; align-items: center; gap: .25rem;
+  grid-template-columns: minmax(4rem, 1fr);
+  grid-auto-flow: column; grid-auto-columns: max-content;
+  min-width: min-content; height: 40px;
+}
+#stats .fac {
+  min-width: 0; overflow: hidden; padding-right: .25rem;
+}
+#stats .fac-name, #stats .fac-desc {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2;
+}
+#stats .fac-name { font-size: .7rem; font-weight: 700; color: var(--on-dark); }
+#stats .fac-desc { font-size: .55rem; color: rgba(255,255,255,.65); }
+#stats .s-chip {
+  flex: 0 0 auto; text-align: center; padding: .15rem .25rem;
+  border: 1px solid rgba(255,255,255,.2); border-radius: 4px;
+  background: rgba(255,255,255,.08);
+}
+#stats .s-chip .n { font-size: .78rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+#stats .s-chip .l { font-size: .52rem; line-height: 1.2; color: rgba(255,255,255,.7); }
 /* Header buttons */
 #load-lbl, #load-folder-lbl, #edit-files-btn, #close-btn {
   cursor: pointer;
@@ -101,6 +126,7 @@
   color: var(--on-dark); padding: .3rem .8rem;
   border-radius: 6px; font-size: .8rem;
   display: flex; align-items: center; gap: .35rem;
+  flex-shrink: 0; white-space: nowrap;
   transition: background .15s;
 }
 #load-lbl:hover, #load-folder-lbl:hover, #edit-files-btn:hover, #close-btn:hover { background: rgba(255,255,255,.12); }
@@ -113,6 +139,7 @@
   background: rgba(var(--amber-rgb),.15); color: var(--on-dark);
   padding: .3rem .8rem; border-radius: 6px; font-size: .8rem;
   display: flex; align-items: center; gap: .35rem;
+  flex-shrink: 0; white-space: nowrap;
   transition: background .15s;
 }
 #changes-btn:hover { background: rgba(var(--amber-rgb),.35); }
@@ -126,7 +153,7 @@
   display: flex; align-items: center; gap: .4rem;
   background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.2);
   border-radius: 6px; padding: .22rem .7rem;
-  flex: 1; max-width: 340px; min-width: 150px;
+  flex: 0 1 240px; max-width: 240px; min-width: 120px;
   transition: background .15s, border-color .15s;
 }
 #search-wrap:focus-within { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.42); }

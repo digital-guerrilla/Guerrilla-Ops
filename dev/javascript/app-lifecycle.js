@@ -155,7 +155,7 @@ async function loadFiles(fileList, handleMap = new Map()) {
     : `${logicalFacilities.length} facilities loaded`;
   updateLoadProgress(95, 'Rendering workspace', 'Refreshing filters, results, summaries, and navigation');
   await _yieldForFileProgress();
-  showApp(label);
+  showApp();
   updateLoadProgress(100, 'Load complete', label);
   _clearFileOperationProgress(900);
   document.getElementById('fileInput').value = '';
@@ -210,14 +210,7 @@ function closeWorkbooks() {
 
   groupState.order = [...DEFAULT_GROUP_ORDER];
   groupState.active.clear();
-  const groupList = document.getElementById('group-sortable');
-  DEFAULT_GROUP_ORDER.forEach(dim => {
-    const chip = groupList.querySelector(`[data-dim="${dim}"]`);
-    if (chip) {
-      chip.classList.toggle('gchip-active', !!_cobieFilterDescriptor(dim)?.defaultActive);
-      groupList.appendChild(chip);
-    }
-  });
+  resetFilterTabs();
 
   document.getElementById('fileInput').value = '';
   document.getElementById('folderInput').value = '';
@@ -227,22 +220,17 @@ function closeWorkbooks() {
   document.getElementById('hdr').classList.remove('search-active');
   document.getElementById('search-wrap').classList.add('d-none');
   document.getElementById('close-btn').classList.add('d-none');
-  const fileLabel = document.getElementById('file-lbl');
-  fileLabel.textContent = '';
-  fileLabel.classList.add('d-none');
 
   document.getElementById('comp-list').replaceChildren();
   document.getElementById('pills').replaceChildren();
   document.getElementById('res-count').textContent = '-';
   document.getElementById('fac-name').textContent = '-';
   document.getElementById('fac-desc').textContent = '';
-  ['facilities','types','comps','spaces','sys','docs'].forEach(id => {
+  document.querySelector('#stats .fac').title = '';
+  ['facilities','floors','types','comps','spaces','sys','docs'].forEach(id => {
     document.getElementById('st-' + id).textContent = '0';
   });
-  document.querySelectorAll('.fp').forEach(panel => panel.classList.remove('fp-collapsed'));
   document.querySelectorAll('.fp-search').forEach(input => { input.value = ''; });
-  document.getElementById('filter-bar').style.removeProperty('height');
-  document.getElementById('filter-bar').dataset.userSized = '';
   document.getElementById('content').scrollTop = 0;
   document.getElementById('btn-asset').classList.add('active');
   document.getElementById('btn-document').classList.remove('active');
@@ -290,17 +278,10 @@ function _restoreDbState() {
 }
 
 // ── Application display lifecycle ────────────────────────────
-function showApp(filename) {
+function showApp() {
   document.getElementById('hdr').style.display    = 'flex';
   document.getElementById('upload').style.display = 'none';
   document.getElementById('app').style.display    = 'flex';
-
-  if (typeof applyInitialVerticalFilterSplit === 'function') {
-    applyInitialVerticalFilterSplit(false);
-  }
-
-  const lbl = document.getElementById('file-lbl');
-  lbl.textContent = filename; lbl.classList.remove('d-none');
 
   _renderSummary();
   document.getElementById('search-wrap').classList.remove('d-none');
@@ -332,6 +313,10 @@ function _renderSummary() {
     document.getElementById('fac-name').textContent = logicalFacilities.length + ' Facilities';
     document.getElementById('fac-desc').textContent = logicalFacilities.map(fac => fac._facility || f(fac, 'Name')).join(' · ');
   }
+  document.querySelector('#stats .fac').title = [
+    document.getElementById('fac-name').textContent,
+    document.getElementById('fac-desc').textContent,
+  ].filter(Boolean).join(' - ');
   document.getElementById('st-facilities').textContent = logicalFacilities.length;
   document.getElementById('st-floors').textContent = db.floors.length;
   document.getElementById('st-types') .textContent = db.types.length;

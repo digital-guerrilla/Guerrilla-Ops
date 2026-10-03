@@ -1550,6 +1550,7 @@ function setQaResultsSheetFilter(sheetName = '', shouldRender = true) {
   document.querySelectorAll('#group-sortable .group-chip[data-dim]').forEach(chip => {
     chip.classList.toggle('gchip-active', groupState.active.has(chip.dataset.dim));
   });
+  if (typeof syncFilterTabs === 'function') syncFilterTabs();
   if (!shouldRender || viewMode !== 'qa') return;
   const list = document.getElementById('comp-list');
   if (list) renderQAMode(list, false);

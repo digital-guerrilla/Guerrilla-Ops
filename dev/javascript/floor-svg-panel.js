@@ -154,6 +154,11 @@ function _floorByKey(key) {
   return db.floors.find(row => _rowKey(row, f(row, 'Name')) === key) || null;
 }
 
+// Tolerates zero-padding differences between sheets (e.g. "Level 03" vs "Level 3").
+function _floorNameKey(name) {
+  return String(name || '').trim().toLowerCase().replace(/\b0+(\d)/g, '$1');
+}
+
 function _floorLabel(entry) {
   if (db.facilities.length > 1 && entry.facility) return entry.name + ' - ' + entry.facility;
   return entry.name;
@@ -282,7 +287,7 @@ function _desiredDefaultPanelWidth() {
 
 function _clampPanelWidth(width) {
   const min = 280;
-  const max = Math.max(min + 40, window.innerWidth - 260);
+  const max = Math.max(min, _workspacePanelMaxWidth('svg-floor-panel', window.innerWidth - 260));
   return Math.max(min, Math.min(max, Math.round(width)));
 }
 
@@ -1009,21 +1014,52 @@ function _renderExpandedFloorContent(els, floorEntry, svgRaw, options = null) {
     <img src="${esc(href)}" alt="SVG preview" loading="lazy" style="max-width:100%;height:auto;margin-top:.4rem">`;
 }
 
+function _alignmentComponentBoxes(floorEntry, coordIndex) {
+  const facility = floorEntry.facility || '';
+  const floorNameKey = _floorNameKey(floorEntry.name);
+  const spacesOnFloor = new Set(db.spaces
+    .filter(space => (space._facility || '') === facility && _floorNameKey(_cobieField(space, 'floorName')) === floorNameKey)
+    .map(space => f(space, 'Name').toLowerCase())
+    .filter(Boolean));
+  if (!spacesOnFloor.size) return [];
+
+  return (db.components || [])
+    .filter(comp => (comp._facility || '') === facility)
+    .filter(comp => _cobieReferenceValues('component', comp, 'Space')
+      .some(space => spacesOnFloor.has(space.toLowerCase())))
+    .map(comp => {
+      const coord = typeof _viewer3dCoordFor === 'function'
+        ? _viewer3dCoordFor(coordIndex, 'component', comp._facility, f(comp, 'Name'))
+        : null;
+      const bounds = typeof _viewer3dBounds === 'function' ? _viewer3dBounds(coord, 1200) : null;
+      if (!bounds) return null;
+      return {
+        name: f(comp, 'Name'),
+        x: bounds.minX,
+        y: bounds.minZ,
+        w: bounds.sizeX,
+        h: bounds.sizeZ,
+      };
+    })
+    .filter(Boolean);
+}
+
 function _alignmentRoomBoxes(floorEntry, existingCoordIndex = null) {
   const coordIndex = existingCoordIndex || (typeof _viewer3dCoordIndex === 'function' ? _viewer3dCoordIndex() : null);
   if (!coordIndex || !floorEntry) return [];
 
-  return db.spaces
+  const spaceBoxes = db.spaces
     .filter(space => {
       if ((space._facility || '') !== (floorEntry.facility || '')) return false;
-      return _cobieField(space, 'floorName').toLowerCase() === floorEntry.name.toLowerCase();
+      return _floorNameKey(_cobieField(space, 'floorName')) === _floorNameKey(floorEntry.name);
     })
     .map(space => {
       const coord = typeof _viewer3dCoordFor === 'function'
         ? _viewer3dCoordFor(coordIndex, 'space', space._facility, f(space, 'Name'))
         : null;
       const bounds = typeof _viewer3dBounds === 'function' ? _viewer3dBounds(coord, 2400) : null;
-      if (!bounds?.hasCorners) return null;
+      // Accept single-point fallback bounds too, matching the 3D viewer's room rendering.
+      if (!bounds) return null;
       return {
         name: f(space, 'Name'),
         x: bounds.minX,
@@ -1033,6 +1069,21 @@ function _alignmentRoomBoxes(floorEntry, existingCoordIndex = null) {
       };
     })
     .filter(Boolean);
+
+  // Some floors have no coordinate rows at all for their spaces; fall back to
+  // component coordinates (visible as cubes in the 3D viewer) so there's still
+  // something to align against.
+  return spaceBoxes.length ? spaceBoxes : _alignmentComponentBoxes(floorEntry, coordIndex);
+}
+
+function _alignmentRoomBoxesEmptyReason(floorEntry) {
+  const spacesOnFloor = db.spaces.filter(space =>
+    (space._facility || '') === (floorEntry.facility || '') &&
+    _floorNameKey(_cobieField(space, 'floorName')) === _floorNameKey(floorEntry.name));
+  if (!spacesOnFloor.length) {
+    return 'No spaces reference this floor name. Check the Space \'Floor Name\' field matches the Floor \'Name\'.';
+  }
+  return 'Spaces found for this floor, but none have Coordinate rows (or a linked component with coordinates).';
 }
 
 function _alignmentRoomLayout(floorEntry, width, height) {
@@ -1074,7 +1125,7 @@ function _drawAlignmentRooms(canvas, floorEntry) {
   if (!layout) {
     ctx.fillStyle = '#6b7280';
     ctx.font = '14px sans-serif';
-    ctx.fillText('No room coordinate boxes found for this floor.', 18, 28);
+    ctx.fillText(_alignmentRoomBoxesEmptyReason(floorEntry), 18, 28);
     return;
   }
 
@@ -1619,6 +1670,7 @@ function _saveFloorPlanAlignment() {
 function _applyFloorPanelCollapsedState(els) {
   els.panel.classList.toggle('svg-panel-collapsed', _floorSvgCollapsed);
   els.edgeToggle?.setAttribute('aria-expanded', _floorSvgCollapsed ? 'false' : 'true');
+  els.edgeToggle?.setAttribute('title', _floorSvgCollapsed ? 'Expand floor plan panel' : 'Resize or collapse floor plan panel');
   if (_floorSvgCollapsed) {
     _floorPanelLastWidth = _floorPanelWidth || _desiredDefaultPanelWidth();
   } else if (!_floorPanelWidth) {
@@ -1639,7 +1691,7 @@ function _bindEdgeDragAndToggle(els) {
     _isPanelDragging = false;
 
     const onMove = moveEvent => {
-      const delta = startX - moveEvent.clientX;
+      const delta = moveEvent.clientX - startX;
       if (Math.abs(delta) > 3) _isPanelDragging = true;
       if (_floorSvgCollapsed) {
         _floorSvgCollapsed = false;

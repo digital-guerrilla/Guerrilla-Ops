@@ -24,8 +24,10 @@ for the selectable floor-plan overlay.
 
 ## Open and resize the panel
 
+The viewer sits to the left of the result hierarchy, beside the Plan viewer.
+
 - Select the vertical **3D** edge control to collapse or reopen the viewer.
-- On a wide desktop, drag the panel's left edge to change its width.
+- On a wide desktop, drag the panel's right edge to change its width; drag right to widen it.
 - Clear restrictive filters if the panel says **No coordinate data available for the current view.**
 
 The panel is hidden when the loaded workbooks contain no Coordinate rows.

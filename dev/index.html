@@ -25,7 +25,21 @@
 <!-- HEADER -->
 <header id="hdr" style="display:none">
   <span id="go-logo-hdr" class="go-logo go-logo-hdr" aria-hidden="true"></span><span class="title">Guerrilla Ops</span>
-  <span class="file-lbl d-none" id="file-lbl"></span>
+  <div id="header-summary">
+    <div id="stats" role="group" aria-label="Workbook summary">
+      <div class="fac">
+        <div class="fac-name" id="fac-name">-</div>
+        <div class="fac-desc" id="fac-desc"></div>
+      </div>
+      <div class="s-chip"><div class="n" id="st-facilities">0</div><div class="l">Facilities</div></div>
+      <div class="s-chip"><div class="n" id="st-floors">0</div><div class="l">Floors</div></div>
+      <div class="s-chip"><div class="n" id="st-spaces">0</div><div class="l">Spaces</div></div>
+      <div class="s-chip"><div class="n" id="st-sys">0</div><div class="l">Systems</div></div>
+      <div class="s-chip"><div class="n" id="st-types">0</div><div class="l">Types</div></div>
+      <div class="s-chip"><div class="n" id="st-comps">0</div><div class="l">Components</div></div>
+      <div class="s-chip"><div class="n" id="st-docs">0</div><div class="l">Documents</div></div>
+    </div>
+  </div>
   <div id="search-wrap" class="d-none">
     <i class="bi bi-search" style="opacity:.5;font-size:.8rem;flex-shrink:0"></i>
     <input type="search" id="search-input" placeholder="Search all fields…" oninput="onSearch(this.value)" autocomplete="off">
@@ -76,88 +90,6 @@
 
 <!-- APP -->
 <div id="app">
-    <div id="summary-section-header">
-      <span class="summary-section-title"><i class="bi bi-list-ul"></i><span>Summary</span></span>
-      <div id="summary-toggle-btns">
-        <button class="frb" id="stats-min-btn" type="button" title="Hide summary bar" aria-label="Hide summary bar"><i class="bi bi-chevron-up"></i></button>
-        <button class="frb" id="stats-max-btn" type="button" title="Show summary bar" aria-label="Show summary bar"><i class="bi bi-chevron-down"></i></button>
-      </div>
-    </div>
-    <div id="stats">
-      <div class="fac">
-        <div class="fac-name" id="fac-name">-</div>
-        <div class="fac-desc" id="fac-desc"></div>
-      </div>
-      <div class="s-chip"><div class="n" id="st-facilities">0</div><div class="l">Facilities</div></div>
-      <div class="s-chip"><div class="n" id="st-floors">0</div><div class="l">Floors</div></div>
-      <div class="s-chip"><div class="n" id="st-spaces">0</div><div class="l">Spaces</div></div>
-      <div class="s-chip"><div class="n" id="st-sys">0</div><div class="l">Systems</div></div>
-      <div class="s-chip"><div class="n" id="st-types">0</div><div class="l">Types</div></div>
-      <div class="s-chip"><div class="n" id="st-comps">0</div><div class="l">Components</div></div>
-      <div class="s-chip"><div class="n" id="st-docs">0</div><div class="l">Documents</div></div>
-    </div>
-  <div id="filter-section-header">
-    <span class="filter-section-title"><i class="bi bi-funnel-fill"></i><span>Filters</span></span>
-    <div id="filter-resize-btns">
-      <button class="frb" id="frb-min" title="Minimise filter pane"><i class="bi bi-chevron-up"></i></button>
-      <button class="frb" id="frb-max" title="Maximise filter pane"><i class="bi bi-chevron-down"></i></button>
-    </div>
-  </div>
-
-  <!-- 6-panel filter bar -->
-  <div id="filter-bar">
-    <div class="fp fp-facility">
-      <div class="fp-inner">
-        <div class="fp-hd-top"><span>Facility</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="facility" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="facility" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-facility"></span></span></div>
-        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
-        <div class="fp-body" id="fpl-facility"></div>
-      </div>
-      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Facility</span></div>
-    </div>
-    <div class="fp fp-floor">
-      <div class="fp-inner">
-        <div class="fp-hd-top"><span>Floor</span><span class="fp-badge d-none" id="fb-floor"></span></div>
-        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
-        <div class="fp-body" id="fpl-floor"></div>
-      </div>
-      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Floor</span></div>
-    </div>
-    <div class="fp fp-space">
-      <div class="fp-inner">
-        <div class="fp-hd-top"><span>Space</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="space" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="space" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-space"></span></span></div>
-        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
-        <div class="fp-body" id="fpl-space"></div>
-      </div>
-      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Space</span></div>
-    </div>
-    <div class="fp fp-type">
-      <div class="fp-inner">
-        <div class="fp-hd-top"><span>Type</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="type" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="type" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-type"></span></span></div>
-        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
-        <div class="fp-body" id="fpl-type"></div>
-      </div>
-      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Type</span></div>
-    </div>
-    <div class="fp fp-system">
-      <div class="fp-inner">
-        <div class="fp-hd-top"><span>System</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="system" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="system" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-system"></span></span></div>
-        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
-        <div class="fp-body" id="fpl-system"></div>
-      </div>
-      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">System</span></div>
-    </div>
-    <div class="fp fp-doccat">
-      <div class="fp-inner">
-        <div class="fp-hd-top"><span>Document Category</span><span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="doccat" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="doccat" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-doccat"></span></span></div>
-        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
-        <div class="fp-body" id="fpl-doccat"></div>
-      </div>
-      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">Doc Cat.</span></div>
-    </div>
-  </div>
-
-  <div id="filter-resize" title="Drag to resize"></div>
-
   <!-- Results -->
   <div id="content">
 
@@ -193,30 +125,17 @@
       <button id="clear-highlights-btn" class="d-none" onclick="clearAllHighlights()">Remove all highlights</button>
       <div class="res-row">
         <span id="res-count">-</span>
-        <div id="group-config">
-          <span class="grp-cfg-lbl">Group:</span>
-          <ul id="group-sortable">
-            <li class="group-chip" data-dim="facility"><i class="bi bi-grip-vertical gchip-grip"></i>Facility</li>
-            <li class="group-chip" data-dim="floor"><i class="bi bi-grip-vertical gchip-grip"></i>Floor</li>
-            <li class="group-chip" data-dim="space"><i class="bi bi-grip-vertical gchip-grip"></i>Space</li>
-            <li class="group-chip" data-dim="type"><i class="bi bi-grip-vertical gchip-grip"></i>Type</li>
-            <li class="group-chip" data-dim="system"><i class="bi bi-grip-vertical gchip-grip"></i>System</li>
-            <li class="group-chip" data-dim="doccat" id="chip-doccat"><i class="bi bi-grip-vertical gchip-grip"></i>Doc Category</li>
-          </ul>
-        </div>
         <button id="expand-all-btn" onclick="toggleExpandAll()">
           <i class="bi bi-arrows-expand"></i>Expand All
         </button>
       </div>
     </div>
 
+    <div id="results-workspace">
     <div id="results-layout">
-      <div id="results-main">
-        <div id="comp-list"></div>
-      </div>
       <aside id="svg-floor-panel" class="d-none" aria-label="Floor SVG panel">
         <button class="svgp-edge-toggle" id="svgp-edge-toggle" type="button" title="Collapse floor plan panel" aria-expanded="true">
-          <i class="bi bi-chevron-right"></i>
+          <i class="bi bi-chevron-left"></i>
           <span>Plan</span>
         </button>
         <div class="svgp-content">
@@ -228,7 +147,7 @@
       </aside>
       <aside id="viewer-3d-panel" class="d-none" aria-label="3D viewer panel">
         <button class="viewer3d-edge-toggle" id="viewer3d-edge-toggle" type="button" title="Collapse 3D viewer panel" aria-expanded="true">
-          <i class="bi bi-chevron-right"></i>
+          <i class="bi bi-chevron-left"></i>
           <span>3D</span>
         </button>
         <div class="viewer3d-content">
@@ -247,6 +166,9 @@
           </div>
         </div>
       </aside>
+      <div id="results-main">
+        <div id="comp-list"></div>
+      </div>
       <aside id="qa-graph-panel" class="d-none" aria-label="QA graph panel">
         <button class="qa-graph-edge-toggle" id="qa-graph-edge-toggle" type="button" title="Resize or collapse QA graph panel" aria-expanded="true">
           <i class="bi bi-chevron-right"></i>
@@ -260,6 +182,13 @@
           <div class="qa-graph-body" id="qa-graph-body"></div>
         </div>
       </aside>
+    </div>
+    <div id="filter-bar" aria-label="Filter drawers"></div>
+    <nav id="filter-tabs" aria-label="Filters and grouping order">
+      <span class="filter-tabs-title"><i class="bi bi-funnel-fill"></i><span>Filters</span></span>
+      <ul id="group-sortable" aria-label="Drag tabs vertically to order enabled groups"></ul>
+    </nav>
+    <span id="filter-order-status" class="visually-hidden" aria-live="polite"></span>
     </div>
   </div>
 </div>
@@ -458,7 +387,7 @@
 <script src="javascript/create.js"></script>
 <script src="javascript/export.js"></script>
 <script src="javascript/component-placement.js"></script>
-<script src="javascript/resize.js"></script>
+<script src="javascript/filter-tabs.js"></script>
 <script src="javascript/init.js"></script>
 </body>
 </html>
