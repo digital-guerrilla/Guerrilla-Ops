@@ -1514,4 +1514,6 @@ context._setEntityAssociation('document', documentRow, { key:'facilities', targe
 assert.strictEqual(context.db.documents.length, 1, 'removing one of several Document links must remove only that linkage row');
 assert.strictEqual(context.db.documents[0].SheetName, 'Floor');
 
+require('./qa-cause-regression.js');
+
 console.log('Regression checks passed');

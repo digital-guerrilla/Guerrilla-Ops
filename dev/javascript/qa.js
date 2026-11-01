@@ -577,6 +577,69 @@ function _qaNamedCheckResult(checkName, value, schema, column = null) {
   return handler ? handler({ text, normalized, isNA, isNumber, number, schema, formatName:column?.formatName || '' }) : false;
 }
 
+// Causes describe what kind of problem a finding is, so a check can be broken
+// down before its rows are listed. A cause never decides pass or fail and is
+// never counted by the score.
+const QA_CAUSE_BLANK = 'Blank';
+const QA_CAUSE_NA = 'Entered as "n/a"';
+const QA_CAUSE_REPEATED = 'Repeated key';
+const QA_CAUSE_OTHER = 'Other value';
+const QA_CAUSE_GROUP_LIMIT = 8;
+const QA_CAUSE_VALUE_LIMIT = 40;
+const _qaTargetPrefixCache = new WeakMap();
+
+// Reduces a value to its pattern so values written the same way group together:
+// 01/02/25 becomes ##/##/##. Letters collapse to a single "a".
+function _qaWrittenShape(value) {
+  return String(value).trim().replace(/[A-Za-z]+/g, 'a').replace(/\d/g, '#').slice(0, 24);
+}
+
+// Blank and n/a read the same whichever check failed, so they share one cause.
+function _qaEmptyCause(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return QA_CAUSE_BLANK;
+  return text.toLowerCase() === 'n/a' ? QA_CAUSE_NA : '';
+}
+
+// The cause of a failed column check, from the check's name and the value it saw.
+function _qaCheckCause(checkName, value) {
+  const emptyCause = _qaEmptyCause(value);
+  if (emptyCause) return emptyCause;
+  if (checkName === 'Format' || checkName === 'Valid') return `Written like ${_qaWrittenShape(value)}`;
+  if (checkName === 'ValidNumber' || checkName === 'ValidNumberOrNA') return 'Not a number';
+  if (checkName === 'ZeroOrGreater' || checkName === 'ZeroOrGreaterOrNA') {
+    return Number.isFinite(Number(String(value).trim().replace(/,/g, ''))) ? 'Negative number' : 'Not a number';
+  }
+  return QA_CAUSE_OTHER;
+}
+
+// The text before the first colon, lowercased, or '' if there is none. Picklist
+// values are often written "Pr_20_31 : Name", so a shared prefix is worth reporting.
+function _qaPrefixOf(text) {
+  const value = String(text);
+  const colon = value.indexOf(':');
+  return colon < 0 ? '' : value.slice(0, colon).trim().toLowerCase();
+}
+
+// Prefixes of a target column's values, cached per target set for large sheets.
+function _qaTargetPrefixes(targetSet) {
+  if (!_qaTargetPrefixCache.has(targetSet)) {
+    _qaTargetPrefixCache.set(targetSet, new Set([...targetSet].map(_qaPrefixOf).filter(Boolean)));
+  }
+  return _qaTargetPrefixCache.get(targetSet);
+}
+
+// The cause of an unresolved reference. The prefix wording states only what was
+// measured: a shared prefix does not prove the two values mean the same thing.
+function _qaReferenceCause(value, targetSet, ref) {
+  const target = `${ref.targetSheet}.${ref.targetColumn}`;
+  const emptyCause = _qaEmptyCause(value);
+  if (emptyCause) return emptyCause;
+  const prefix = _qaPrefixOf(value);
+  if (prefix && _qaTargetPrefixes(targetSet).has(prefix)) return `Text before ":" matches ${target}, the rest differs`;
+  return `Not found in ${target}`;
+}
+
 function _qaLogicalFacilityRows() {
   const representatives = new Map();
   (db.facilities || []).forEach(row => {
@@ -645,6 +708,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
       entityName: cfg.entityName || (cfg.sheet ? cfg.sheet + ' sheet' : 'Workbook'),
       facility: cfg.facility || '',
       detail: cfg.detail || '',
+      cause: cfg.cause || QA_CAUSE_OTHER,
+      value: cfg.value ?? '',
       fields: Array.isArray(cfg.fields) ? cfg.fields.filter(Boolean) : [],
       issueType: _qaIssueType(cfg.issueType),
       stage: _qaStage(cfg.stage, activeRuleStage || 'design'),
@@ -713,6 +778,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: `${sheetRule.name} sheet`,
           facility: scope.facility,
           detail: `${sheetRule.name}: ${ruleDescription || sheetRule.presenceRule} Scope: ${scope.label}.`,
+          cause: 'No rows in scope',
           label: `${sheetRule.name}.${sheetRule.presenceRule.split('.').pop()}`,
         });
       });
@@ -736,6 +802,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: `${sheetRule.name} sheet`,
           facility: scope.facility,
           detail: `${sheetRule.name}: ${ruleDescription || sheetRule.singleRowRule} Scope: ${scope.label}; found ${count}.`,
+          cause: 'Wrong number of rows',
           label: `${sheetRule.name}.${sheetRule.singleRowRule.split('.').pop()}`,
         });
       });
@@ -752,6 +819,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
         entityType: 'sheet',
         entityName: sheetRule.name + ' sheet',
         detail: `${sheetRule.name} sheet is required by schema but missing or empty in current scope.`,
+        cause: 'Worksheet missing or empty',
         label: 'Required COBie sheet is missing or empty',
       });
     }
@@ -783,6 +851,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
               entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
               facility: row._facility || '',
               detail: `${col.name}: ${ruleWording || checkName}. Value was ${value ? `"${value}"` : 'empty'}.`,
+              cause: _qaCheckCause(checkName, value),
+              value,
               fields: [col.name],
               label: `${sheetRule.name}.${col.name}.${checkName}`,
             });
@@ -807,6 +877,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
             entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Required column ${col.name} is blank.`,
+            cause: QA_CAUSE_BLANK,
             fields: [col.name],
             label: 'Required column value is missing',
           });
@@ -834,6 +905,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
             entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Column ${col.name} value "${v}" does not match ${col.formatRef}${altRx ? ` or ${col.allowAlternateFormatRef}` : ''}.`,
+            cause: _qaCheckCause('Format', v),
+            value: v,
             fields: [col.name],
             label: 'Column value has invalid format',
           });
@@ -871,6 +944,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: _qaRowIdentity(sheetRule.name, entry.row) || '(Unnamed row)',
           facility: entry.row._facility || '',
           detail: `${entry.count} rows share worksheet key [${rule.keys.join(', ')}] = "${entry.values.join(' | ')}".`,
+          cause: QA_CAUSE_REPEATED,
+          value: entry.values.join(' | '),
           fields: rule.keys,
           label: ruleDescription || rule.ruleId,
         });
@@ -914,6 +989,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: _qaRowIdentity(sheetRule.name, rec.row) || '(Unnamed row)',
           facility: rec.row._facility || '',
           detail: `${sheetRule.name} has ${rec.count} rows with same key [${uniqueKeys.join(', ')}] = "${rec.vals.join(' | ')}".`,
+          cause: QA_CAUSE_REPEATED,
+          value: rec.vals.join(' | '),
           fields: uniqueKeys,
           label: 'Duplicate value in unique key column(s)',
         });
@@ -945,6 +1022,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
             entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Reference column ${ref.column} is blank but required to resolve ${ref.targetSheet}.${ref.targetColumn}.`,
+            cause: QA_CAUSE_BLANK,
             fields: [ref.column],
             label: ref.ruleId || 'Cross-sheet reference is missing',
           });
@@ -967,6 +1045,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
             entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `${ref.column} value "${v}" does not resolve to ${ref.targetSheet}.${ref.targetColumn}.`,
+            cause: _qaReferenceCause(v, targetSet, ref),
+            value: v,
             fields: [ref.column],
             label: ref.ruleId || 'Cross-sheet reference is missing',
           });
@@ -996,6 +1076,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: name || '(Unnamed row)',
           facility: row._facility || '',
           detail: `${sheetRule.name} "${name}" has no matching ${rule.targetSheet}.${rule.targetColumn} row.`,
+          cause: `No matching ${rule.targetSheet}.${rule.targetColumn}`,
           fields: ['Name'],
           label: rule.ruleId,
         });
@@ -1290,6 +1371,8 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
       entityName,
       facility,
       detail: cfg.detail,
+      cause: cfg.cause || QA_CAUSE_OTHER,
+      value: cfg.value ?? '',
       fields: cfg.fields || [],
       issueType: _qaIssueType(cfg.issueType),
       stage: _qaStage(cfg.stage, sheetRule.stage || 'design'),
@@ -1315,6 +1398,8 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
             sev: _qaNamedCheckSeverity(checkName, col.severity, schema, col),
             issueType: checkName === 'Format' || checkName === 'Valid' ? 'format' : 'completeness',
             detail: `${col.name}: ${ruleWording || checkName}. Value was ${v ? `"${v}"` : 'empty'}.`,
+            cause: _qaCheckCause(checkName, v),
+            value: v,
             fields: [col.name],
             label: ruleId,
           });
@@ -1331,6 +1416,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
           issueType: col.issueType || 'completeness',
           icon: col.icon,
           detail: `Required column ${col.name} is blank.`,
+          cause: QA_CAUSE_BLANK,
           fields: [col.name],
           label: 'Required column value is missing',
         });
@@ -1348,6 +1434,8 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
             issueType: col.issueType || sheetRule.formatIssueType || 'format',
             icon: col.icon || sheetRule.formatIcon,
             detail: `Column ${col.name} value "${v}" does not match ${col.formatRef}${altRx ? ` or ${col.allowAlternateFormatRef}` : ''}.`,
+            cause: _qaCheckCause('Format', v),
+            value: v,
             fields: [col.name],
             label: 'Column value has invalid format',
           });
@@ -1384,6 +1472,8 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
             sev: rule.severity || resolveSeverity('unique-duplicate', sheetRule.uniqueSeverity || 'error', uniqueKeys[0] || ''),
             issueType: 'uniqueness',
             detail: `${sheetRule.name} has ${count} rows with same key [${uniqueKeys.join(', ')}] = "${keyVals.join(' | ')}".`,
+            cause: QA_CAUSE_REPEATED,
+            value: keyVals.join(' | '),
             fields: uniqueKeys,
             label: rule.ruleId || 'Duplicate value in unique key column(s)',
           });
@@ -1405,6 +1495,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
           issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
           icon: ref.icon || sheetRule.referenceIcon,
           detail: `Reference column ${ref.column} is blank but required to resolve ${ref.targetSheet}.${ref.targetColumn}.`,
+          cause: QA_CAUSE_BLANK,
           fields: [ref.column],
           label: 'Cross-sheet reference is missing',
         });
@@ -1423,6 +1514,8 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
           issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
           icon: ref.icon || sheetRule.referenceIcon,
           detail: `${ref.column} value "${value}" does not resolve to ${ref.targetSheet}.${ref.targetColumn}.`,
+          cause: _qaReferenceCause(value, targetSet, ref),
+          value,
           fields: [ref.column],
           label: 'Cross-sheet reference is missing',
         });
@@ -1443,6 +1536,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
           sev:rule.severity,
           issueType:'consistency',
           detail:`${sheetRule.name} "${name}" has no matching ${rule.targetSheet}.${rule.targetColumn} row.`,
+          cause: `No matching ${rule.targetSheet}.${rule.targetColumn}`,
           fields:['Name'],
           label:rule.ruleId,
         });
@@ -1709,13 +1803,16 @@ function _qaCheckBlocks(items, depth = 0) {
     const cfg = QA_CHECKS[check] || { label:check, sheet:'Multiple', sev:'warning', ico:'bi-list-check' };
     const checkItems = byCheck.get(check) || [];
     const cid = 'col_' + (collapseCounter++);
-    pendingGroups[cid] = { isQA: true, qaItems: checkItems };
+    pendingGroups[cid] = { isQA: true, qaItems: checkItems, qaCauses: true, depth: depth + 1 };
+    const causeCount = new Set(checkItems.map(item => item.cause)).size;
+    const causeLabel = causeCount > 1 ? causeCount + ' types of issue' : '';
     return `<div class="grp-block grp-d${depth}">
       <div class="grp-hdr grp-collapsed" data-cid="${cid}">
         <i class="bi bi-chevron-down grp-chev"></i>
         <i class="bi ${cfg.ico} me-1" style="opacity:.72;font-size:.82rem"></i>
         <span class="grp-name">${esc(cfg.label)}</span>
         <span class="grp-meta">${esc(cfg.sheet)} sheet</span>
+        ${causeLabel ? `<span class="grp-meta">${causeLabel}</span>` : ''}
         <span class="qa-sev qa-sev-${cfg.sev}">${cfg.sev}</span>
         <span class="grp-cnt">${checkItems.length}</span>
       </div>
@@ -1748,7 +1845,71 @@ function _qaGroupBlocks(items, dims, depth = 0) {
   }).join('');
 }
 
+// Answers "are these all the same?" for a group of findings, naming the value
+// when there is only one. Empty for a single row, where the row answers it.
+function _qaDistinctLabel(distinct, rows, sample = '') {
+  if (!distinct || rows < 2) return '';
+  if (distinct > 1) return `${distinct} distinct values`;
+  const text = String(sample).trim();
+  const shown = text.length > QA_CAUSE_VALUE_LIMIT ? text.slice(0, QA_CAUSE_VALUE_LIMIT) + '...' : text;
+  return 'all the same value: ' + shown;
+}
+
+// Splits a check's findings by cause, most common first. Rarer causes fold into
+// one group so a check can never produce an unreadable list.
+function _qaCauseGroups(items) {
+  const byCause = new Map();
+  items.forEach(item => {
+    const cause = item.cause || QA_CAUSE_OTHER;
+    if (!byCause.has(cause)) byCause.set(cause, []);
+    byCause.get(cause).push(item);
+  });
+  const toGroup = (cause, list) => ({
+    cause,
+    items: list,
+    distinct: cause === QA_CAUSE_NA
+      ? 0
+      : new Set(list.map(item => String(item.value ?? '').trim().toLowerCase()).filter(Boolean)).size,
+    sample: list[0]?.value ?? '',
+  });
+  const groups = [...byCause.entries()]
+    .map(([cause, list]) => toGroup(cause, list))
+    .sort((a, b) => b.items.length - a.items.length || a.cause.localeCompare(b.cause));
+  if (groups.length <= QA_CAUSE_GROUP_LIMIT) return groups;
+  const kept = groups.slice(0, QA_CAUSE_GROUP_LIMIT - 1);
+  const rest = groups.slice(QA_CAUSE_GROUP_LIMIT - 1);
+  return [...kept, toGroup(`${rest.length} other types`, rest.flatMap(group => group.items))];
+}
+
+// The level between a check and its rows. With only one cause there is nothing
+// to choose between, so a single line says so and the rows follow directly.
+function _qaCauseBlocks(items, depth = 0) {
+  const groups = _qaCauseGroups(items);
+  if (groups.length === 1) {
+    const [{ cause, distinct, sample }] = groups;
+    const distinctLabel = _qaDistinctLabel(distinct, items.length, sample);
+    const distinctNote = distinctLabel ? ', ' + esc(distinctLabel) : '';
+    const countNote = items.length > 1 ? 'All ' + items.length + ': ' : '';
+    return `<div class="qa-cause-note">${countNote}${esc(cause)}${distinctNote}</div>${qaGroupBody(items)}`;
+  }
+  return groups.map(({ cause, items: causeItems, distinct, sample }) => {
+    const cid = 'col_' + (collapseCounter++);
+    pendingGroups[cid] = { isQA: true, qaItems: causeItems };
+    const distinctLabel = _qaDistinctLabel(distinct, causeItems.length, sample);
+    return `<div class="grp-block grp-d${depth}">
+      <div class="grp-hdr grp-collapsed" data-cid="${cid}">
+        <i class="bi bi-chevron-down grp-chev"></i>
+        <span class="grp-name">${esc(cause)}</span>
+        ${distinctLabel ? `<span class="grp-meta">${esc(distinctLabel)}</span>` : ''}
+        <span class="grp-cnt">${causeItems.length}</span>
+      </div>
+      <div class="grp-body grp-closed" id="${cid}"></div>
+    </div>`;
+  }).join('');
+}
+
 function qaPendingGroupBody(pending) {
+  if (pending.qaCauses) return _qaCauseBlocks(pending.qaItems, pending.depth || 0);
   if (Object.prototype.hasOwnProperty.call(pending, 'qaDims')) {
     return pending.qaDims.length
       ? _qaGroupBlocks(pending.qaItems, pending.qaDims, pending.depth || 0)
@@ -1778,20 +1939,25 @@ function qaGroupBody(items) {
     : '');
 }
 
-function exportQAReport() {
-  if (!qaFindings.length) return;
+// One row per finding for the XLSX report, Cause beside the check it explains.
+function _qaReportRows() {
   const stageLabel = qaSelectedStage.charAt(0).toUpperCase() + qaSelectedStage.slice(1);
-  const rows = qaFindings.map(x => ({
+  return qaFindings.map(x => ({
     Stage: stageLabel,
     Severity: x.sev === 'info' ? 'Advisory' : x.sev.charAt(0).toUpperCase() + x.sev.slice(1),
     Check: (QA_CHECKS[x.check] || {}).label || x.check,
+    Cause: x.cause || QA_CAUSE_OTHER,
     Sheet: (QA_CHECKS[x.check] || {}).sheet || 'Multiple',
     Item: x.entityName,
     Facility: x.facility,
     Detail: x.detail,
   }));
+}
+
+function exportQAReport() {
+  if (!qaFindings.length) return;
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'QA Findings');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_qaReportRows()), 'QA Findings');
   XLSX.writeFile(wb, 'QA-Report_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
