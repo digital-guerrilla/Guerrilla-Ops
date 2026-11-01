@@ -1094,6 +1094,7 @@
 .grp-d1 { margin-bottom: .45rem; }
 .grp-d1 > .grp-hdr { background: var(--navy); border-radius: 5px 5px 0 0; }
 .grp-d1 > .grp-body { padding: .35rem .35rem .1rem; }
+.qa-cause-note { padding: .3rem .45rem .45rem; font-size: .78rem; font-weight: 600; opacity: .78; }
 .grp-d2 { margin-bottom: .35rem; }
 .grp-d2 > .grp-hdr { background: var(--grp-d2-bg); border-radius: 4px 4px 0 0; }
 .grp-d2 > .grp-body { padding: .25rem .25rem .05rem; }

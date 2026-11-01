@@ -18,6 +18,22 @@ QA View audits loaded COBie data for common completeness and relationship proble
 
 If no Facility is selected, every loaded Facility is audited.
 
+## See what kinds of issue a check found
+
+Opening a check shows the types of issue inside it before the individual records,
+each with its count. For example, a date check might split into values entered as
+`n/a` and values written like `##/##/##`.
+
+![A date check broken down by type of issue](../images/07a-qa-issue-types.png)
+
+Where several records share a type, it shows how many distinct values they hold, and
+names the value when they all match, so you can see at a glance that nothing else is
+hiding there. Single-record and `n/a` types stay compact. If everything in a check is
+the same type of issue, a single line says so and the records follow directly.
+
+The types are a reading aid: they do not change any count or score. The downloaded
+report carries the same type in its **Cause** column.
+
 ## Understand severity
 
 | Severity | Meaning | Suggested response |
