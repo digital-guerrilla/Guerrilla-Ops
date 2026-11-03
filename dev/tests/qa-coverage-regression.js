@@ -247,6 +247,155 @@ check('A12 the filename is shown only when more than one workbook is loaded', ()
     'with two workbooks the filename is what disambiguates: ' + text.slice(0, 200));
 });
 
+// ── A13-A19 follow-up to review of the merged coverage block ──────────────────
+// Each arm below pins one behaviour that was wrong, and fails if it is reverted.
+const fac = (name, id, key, file, sheets) =>
+  `{ _facility:'${name}', _facilityIdentifier:'${id}', _workbookKey:'${key}', _fileName:'${file}', _workbook:_wb(${sheets}) }`;
+
+// A13 an unreadable profile is "unavailable", never "describes 0 of N".
+check('A13 a schema parse error suppresses the classification', () => {
+  const context = makeContext();
+  vm.runInContext(`_qaSchemaCache = { error:'The QA XML could not be loaded.', sheets:[] };
+    db.facilities = [${fac('T', 't', 'wb', 'f.xlsx', "{ Facility:[_row('a')], Job:[_row('x')], Notes:[_row('n')] }")}];`, context);
+  const cov = JSON.parse(vm.runInContext('JSON.stringify(_qaCoverage())', context));
+  assert.strictEqual(cov.unavailable, true, 'coverage must report itself unavailable');
+  assert.strictEqual(cov.notAssessed, undefined, 'no worksheet may be classified under a failed profile');
+  const text = renderedText(context);
+  assert.ok(/unavailable/i.test(text), 'the block must say it is unavailable: ' + text);
+  assert.ok(!/describes \d+ of/.test(text) && !/Not assessed/.test(text),
+    'a failed profile must not be reported as describing no worksheets: ' + text);
+});
+
+// A14 workbooks follow the selected facility, but every workbook of a selected facility stays.
+check('A14 coverage is scoped to the selected facilities and keeps all their workbooks', () => {
+  const context = makeContext();
+  withSchema(context, ['Facility']);
+  const setup = `
+    db.facilities = [
+      ${fac('Alpha', 'a', 'w1', 'a-one.xlsx', "{ Facility:[_row('a')], Job:[_row('x')] }")},
+      ${fac('Alpha', 'a', 'w2', 'a-two.xlsx', "{ Facility:[_row('a')], Spare:[_row('y')] }")},
+      ${fac('Beta', 'b', 'w3', 'b-one.xlsx', "{ Facility:[_row('b')], Resource:[_row('z')] }")}];`;
+  const all = coverage(context, setup);
+  assert.strictEqual(all.workbooks, 3, 'with nothing selected every workbook is covered');
+  vm.runInContext("sel.facility.add('alpha');", context);
+  const scoped = JSON.parse(vm.runInContext('JSON.stringify(_qaCoverage())', context));
+  assert.strictEqual(scoped.workbooks, 2, 'both Alpha workbooks stay, Beta goes');
+  const names = scoped.notAssessed.map(e => e.sheet).sort();
+  assert.deepStrictEqual(names, ['Job', 'Spare'], 'Beta\'s Resource sheet must not appear: ' + names);
+});
+
+// A15 sheet matching follows readSheet(): case-insensitive, NOT trimmed.
+check('A15 a tab the parser would not load is never reported as covered', () => {
+  const context = makeContext();
+  withSchema(context, ['Component', 'Space']);
+  const cov = coverage(context, `
+    db.facilities = [${fac('T', 't', 'wb', 'f.xlsx', "{ 'Component ':[_row('x')], SPACE:[_row('s')] }")}];`);
+  // readSheet('Component') does not find 'Component ', so parseCOBieInto never loads it.
+  assert.strictEqual(vm.runInContext("readSheet(db.facilities[0]._workbook, 'Component').length", context), 0,
+    'precondition: the parser ignores a tab named with a trailing space');
+  assert.strictEqual(cov.covered, 1, 'only SPACE (case-insensitive) is loaded: ' + JSON.stringify(cov));
+  assert.ok(!cov.empty.some(e => e.sheet === 'Component'), 'an ignored tab cannot be "present, empty"');
+  assert.ok(cov.additional.some(e => e.sheet === 'Component'),
+    'an unloaded tab is outside the profile: ' + JSON.stringify(cov.additional));
+});
+
+// A16 the per-workbook counts are cached, and invalidated when the workbook changes.
+check('A16 repeated coverage does not re-read sheets; a changed workbook is re-read', () => {
+  const context = makeContext();
+  withSchema(context, ['Facility', 'Space']);
+  vm.runInContext(`
+    var _reads = 0;
+    var _origRead = readSheet;
+    readSheet = function (wb, name) { _reads += 1; return _origRead(wb, name); };
+    db.facilities = [${fac('T', 't', 'wb', 'f.xlsx', "{ Facility:[_row('a')], Space:[], Notes:[_row('n')] }")}];`, context);
+  const reads = () => vm.runInContext('_reads', context);
+  vm.runInContext('_qaCoverage();', context);
+  const first = reads();
+  assert.ok(first > 0, 'POSITIVE CONTROL: the first pass must read sheets, or this test counts nothing');
+  vm.runInContext('_qaCoverageHtml(_qaCoverage()); _qaCoverage(); _qaCoverage();', context);
+  assert.strictEqual(reads(), first, 'later renders re-read the workbook');
+  // A save reopens the file: the workbook object is replaced.
+  vm.runInContext("db.facilities[0]._workbook = _wb({ Facility:[_row('a')], Space:[_row('s')] });", context);
+  const cov = JSON.parse(vm.runInContext('JSON.stringify(_qaCoverage())', context));
+  assert.ok(reads() > first, 'a replaced workbook must be re-read');
+  assert.deepStrictEqual(cov.empty, [], 'and the stale "Space is empty" must be gone');
+  // A sheet resized in place (new !ref) also invalidates.
+  const before = reads();
+  vm.runInContext("db.facilities[0]._workbook.Sheets.Space['!ref'] = 'A1:B9';", context);
+  vm.runInContext('_qaCoverage();', context);
+  assert.ok(reads() > before, 'a changed sheet range must invalidate the cached counts');
+});
+
+// A17 additional tabs have no known header convention, so no row count.
+check('A17 an additional worksheet is listed without a row count', () => {
+  const context = makeContext();
+  withSchema(context, ['Facility']);
+  const cov = coverage(context, `
+    db.facilities = [${fac('T', 't', 'wb', 'f.xlsx', "{ Facility:[_row('a')], Notes:[] }")}];`);
+  assert.strictEqual(cov.additional.length, 1);
+  assert.strictEqual(cov.additional[0].rows, undefined, 'no row count may be computed for a Notes tab');
+  const text = renderedText(context);
+  assert.ok(/Notes(?! —)/.test(text) && !/Notes — \d/.test(text) && !/0 rows/.test(text),
+    'the Notes tab must not be shown with a row count: ' + text);
+  // A COBie sheet still gets its count.
+  const notAssessed = coverage(context, `
+    db.facilities = [${fac('T', 't', 'wb', 'f.xlsx', "{ Facility:[_row('a')], Job:[_row('x'), _row('y')] }")}];`);
+  assert.ok(/Job — 2 rows/.test(renderedText(context)), 'recognised sheets keep their counts');
+  assert.strictEqual(notAssessed.notAssessed[0].rows, 2);
+});
+
+// A18 the PDF cover's Workbooks field agrees with the coverage totals.
+function pdfCover(context, setup) {
+  vm.runInContext(`
+    ${setup}
+    qaRuleResults = []; qaFindings = []; qaAllFindings = [];
+    idx.facilityNames = db.facilities.map(r => r._facility);
+  `, context);
+  return vm.runInContext("_qaPdfReportHtml('')", context);
+}
+check('A18 the PDF Workbooks field lists every workbook that coverage counts', () => {
+  const context = makeContext();
+  vm.runInContext('globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });', context);
+  withSchema(context, ['Facility']);
+  const html = pdfCover(context, `
+    db.facilities = [
+      ${fac('Alpha', 'a', 'w1', 'a-one.xlsx', "{ Facility:[_row('a')] }")},
+      ${fac('Alpha', 'a', 'w2', 'a-two.xlsx', "{ Facility:[_row('a')] }")},
+      ${fac('Beta', 'b', 'w3', 'b-one.xlsx', "{ Facility:[_row('b')] }")}];`);
+  const field = /Workbooks<\/span><br>([^<]*)</.exec(html);
+  assert.ok(field, 'POSITIVE CONTROL: the cover must contain a Workbooks field');
+  assert.strictEqual(field[1], 'a-one.xlsx, a-two.xlsx, b-one.xlsx');
+  vm.runInContext("sel.facility.add('alpha');", context);
+  const scoped = pdfCover(context, '');
+  assert.strictEqual(/Workbooks<\/span><br>([^<]*)</.exec(scoped)[1], 'a-one.xlsx, a-two.xlsx',
+    'the facility filter and the de-duplication are kept');
+});
+
+// A19 the label says what the counts describe.
+check('A19 the block states that it describes the workbooks as loaded', () => {
+  const context = makeContext();
+  withSchema(context, ['Facility']);
+  vm.runInContext(`db.facilities = [${fac('T', 't', 'wb', 'f.xlsx', "{ Facility:[_row('a')] }")}];`, context);
+  assert.ok(/as loaded, not unsaved edits/.test(renderedText(context)),
+    'pending model edits are not tracked, so the block must say so');
+});
+
+// A20 scoping coverage by facility must still leave every scored value alone.
+check('A20 a facility-scoped coverage render changes no scored value', () => {
+  const context = makeContext();
+  withSchema(context, ['Facility']);
+  vm.runInContext(`
+    db.facilities = [${fac('Alpha', 'a', 'w1', 'a.xlsx', "{ Facility:[_row('a')], Notes:[] }")}];
+    sel.facility.add('alpha');
+    qaRuleResults = [{ check:'c1', pass:3, fail:1, sheet:'Facility', column:'Name' }];
+    qaAllRuleResults = qaRuleResults.slice(); qaFindings = [{ sev:'error' }]; qaAllFindings = qaFindings.slice();`, context);
+  const snap = () => vm.runInContext(`JSON.stringify({ tally:_qaScoreTally(qaRuleResults),
+    rules:qaRuleResults, findings:qaFindings, allRules:qaAllRuleResults, allFindings:qaAllFindings })`, context);
+  const before = snap();
+  vm.runInContext('_qaCoverageHtml(_qaCoverage());', context);
+  assert.strictEqual(snap(), before);
+});
+
 const failed = results.filter(([, ok]) => !ok);
 console.log(`\n  ${results.length - failed.length}/${results.length} coverage checks passed`);
 if (failed.length) { process.exitCode = 1; }
