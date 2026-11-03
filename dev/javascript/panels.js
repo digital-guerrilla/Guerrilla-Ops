@@ -12,21 +12,24 @@ function hydrateFilterControls() {
     const treeActions = filter.category
       ? `<span class="fp-hd-actions"><button class="fp-tree-step" data-filter-tree-step="collapse" data-dim="${esc(filter.dimension)}" title="Collapse one classification level"><i class="bi bi-chevron-up"></i></button><button class="fp-tree-step" data-filter-tree-step="expand" data-dim="${esc(filter.dimension)}" title="Expand one classification level"><i class="bi bi-chevron-down"></i></button><span class="fp-badge d-none" id="fb-${esc(filter.dimension)}"></span></span>`
       : `<span class="fp-badge d-none" id="fb-${esc(filter.dimension)}"></span>`;
-    const collapsedLabel = filter.dimension === documentCategoryDimension ? 'Doc Cat.' : label;
-    return `<div class="fp fp-${esc(filter.dimension)}">
+    return `<section class="fp fp-${esc(filter.dimension)} d-none" id="filter-drawer-${esc(filter.dimension)}" aria-labelledby="filter-title-${esc(filter.dimension)}">
       <div class="fp-inner">
-        <div class="fp-hd-top"><span>${esc(label)}</span>${treeActions}</div>
-        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" autocomplete="off"></div>
+        <div class="fp-hd-top"><span id="filter-title-${esc(filter.dimension)}">${esc(label)}</span><span class="fp-hd-actions">${treeActions}<button class="filter-drawer-close" type="button" data-filter-close title="Close filter" aria-label="Close ${esc(label)} filter"><i class="bi bi-x-lg"></i></button></span></div>
+        <div class="fp-search-wrap"><input type="search" class="fp-search" placeholder="Search…" aria-label="Search ${esc(label)} filter" autocomplete="off"></div>
         <div class="fp-body" id="fpl-${esc(filter.dimension)}"></div>
       </div>
-      <div class="fp-hd"><i class="bi bi-chevron-left fp-hd-arrow"></i><span class="fp-hd-label">${esc(collapsedLabel)}</span></div>
-    </div>`;
+    </section>`;
   }).join('');
 
   if (groupList) groupList.innerHTML = COBIE_FILTER_DIMENSIONS.map(filter => {
     const label = filter.dimension === documentCategoryDimension ? 'Doc Category' : labelFor(filter);
     const id = filter.dimension === documentCategoryDimension ? ' id="chip-doccat"' : '';
-    return `<li class="group-chip" data-dim="${esc(filter.dimension)}"${id}><i class="bi bi-grip-vertical gchip-grip"></i>${esc(label)}</li>`;
+    const colorSuffix = _cobieColorVariableSuffix(filter.colorToken);
+    return `<li class="group-chip filter-tab" data-dim="${esc(filter.dimension)}"${id} style="--tab-bg:var(--pill-${esc(colorSuffix)}-bg);--tab-text:var(--pill-${esc(colorSuffix)}-text)">
+      <button class="filter-tab-grip" type="button" title="Drag to reorder ${esc(label)}; Alt + Up/Down to reorder with keyboard" aria-label="Reorder ${esc(label)}" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"><i class="bi bi-grip-vertical"></i></button>
+      <button class="filter-tab-trigger" type="button" data-filter-open="${esc(filter.dimension)}" aria-expanded="false" aria-controls="filter-drawer-${esc(filter.dimension)}" aria-label="Open ${esc(label)} filter" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" title="${esc(label)}"><i class="bi ${esc(filter.icon)} filter-tab-icon" aria-hidden="true"></i><span class="filter-tab-count d-none" id="ftb-${esc(filter.dimension)}"></span></button>
+      <label class="filter-tab-group" title="Group by ${esc(label)}"><input type="checkbox" data-filter-group="${esc(filter.dimension)}" aria-label="Group by ${esc(label)}"></label>
+    </li>`;
   }).join('');
 }
 
@@ -36,6 +39,7 @@ function renderPanels(counts) {
     if (filter.category) renderPanelCat(...args);
     else renderPanel(args[0], args[1], idx[filter.listIndex] || [], args[2], args[3]);
   });
+  if (typeof syncFilterTabs === 'function') syncFilterTabs();
 }
 
 function renderPanel(listId, badgeId, names, dim, counts) {

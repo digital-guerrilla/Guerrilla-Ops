@@ -68,8 +68,8 @@ const _COBIE_WORKSHEET_KEYS = Object.freeze(COBIE_WORKSHEETS.map(name => name.to
 // Part of the COBie template, but guidance rather than project data. Calling Instruction
 // an "additional worksheet outside this profile" is false — it is COBie — and calling it
 // "not assessed" implies rules should have run against it. It carries nothing to assess,
-// so it is excluded from the data-coverage count entirely. Andy's own example workbook
-// ships it, which is how this surfaced.
+// so it is excluded from the data-coverage count entirely. The repository's example
+// workbook ships it, which is how this surfaced.
 const COBIE_TEMPLATE_SHEETS = Object.freeze(['Instruction']);
 const _COBIE_TEMPLATE_KEYS = Object.freeze(COBIE_TEMPLATE_SHEETS.map(name => name.toLowerCase()));
 let qaSelectedStage = 'operation';
@@ -1569,6 +1569,7 @@ function setQaResultsSheetFilter(sheetName = '', shouldRender = true) {
   document.querySelectorAll('#group-sortable .group-chip[data-dim]').forEach(chip => {
     chip.classList.toggle('gchip-active', groupState.active.has(chip.dataset.dim));
   });
+  if (typeof syncFilterTabs === 'function') syncFilterTabs();
   if (!shouldRender || viewMode !== 'qa') return;
   const list = document.getElementById('comp-list');
   if (list) renderQAMode(list, false);

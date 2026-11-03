@@ -86,23 +86,30 @@ Start from the [complete guide index](docs/guides/README.md) for suggested readi
 
 ## 2. Find the information you need
 
-Use the columns to narrow the results by **Facility**, **Floor**, **Space**,
+Use the right-hand filter tabs to narrow the results by **Facility**, **Floor**, **Zone**, **Space**,
 **Type**, **System** or **Document Category**. The numbers beside each option
 show matching components in Asset View or unique documents in Document View.
+Select a tab to open its filter drawer; select it again, the close button, or
+press **Escape** to close it without clearing your selections. Plan and 3D
+viewers sit to the left of the result hierarchy.
+Tabs use icons; hover over an icon to see its name.
 
 The search box checks names, descriptions, serial numbers, tags,
 manufacturers and other useful fields.
 
 ### Group and reorder results
 
-The **Group** controls above the results decide how records are arranged:
+The unlabelled checkboxes on the right-hand tabs decide how records are arranged
+(hover over a checkbox to see **Group by** and its dimension):
 
-1. **Turn on a group.** Click **Floor**, **Space**, **Type** or another group
-   name. Active groups have a dark background.
+1. **Turn on a group.** Check the checkbox on **Floor**, **Space**, **Type** or another
+   tab. Opening a filter drawer does not enable grouping.
 2. **Add more levels.** Turn on as many groups as you need. Click an active
-   group again to remove it.
-3. **Set the order.** Drag the group names left or right. The leftmost active
-   group becomes the outer level.
+   checkbox again to remove it.
+3. **Set the order.** Drag a tab's grip up or down. The highest enabled
+   tab becomes the outer level. Focus a grip and press **Alt + Up/Down** to
+   reorder with the keyboard.
+   Tabs shift out of the way as you drag; the hierarchy updates only on drop.
 4. **Open the results.** Select **Expand All** to open every group.
 
 > **Location-led example:** `Floor` → `Space` → `Type`<br>

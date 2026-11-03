@@ -16,18 +16,24 @@ The search box in the header checks component and document information, includin
 
 Global search works with the active filters. If a result is unexpectedly missing, clear search and filters before testing another term.
 
-## Use the six filter panels
+## Use the filter tabs
 
-The filter area contains:
+The vertical rail on the right contains icons for the following filters. Hover
+over an icon to see its name:
 
 - **Facility**
 - **Floor**
+- **Zone**
 - **Space**
 - **Type**
 - **System**
 - **Document Category**
 
-Select an item to add it to the active filter. Select it again, or remove its coloured pill, to clear it.
+Select a tab to open its drawer to the left of the rail. Only one drawer is open
+at a time. Select the same tab again, its close button, or press **Escape** to
+close it. Switching or closing drawers preserves selections and panel searches.
+
+Select an item to add it to the active filter. Select it again, or remove its coloured pill, to clear it. Closed tabs show their selected-item counts.
 
 The number beside an item is a cross-filter count. It shows what would remain under the other active selections. Counts in Document View represent unique documents, not repeated COBie Document rows.
 
@@ -38,14 +44,15 @@ Each filter panel has its own search field. This changes only the visible choice
 ### Clear active filters
 
 - Remove one filter with the **X** on its pill.
-- Select **Clear all** to remove every selected Facility, Floor, Space, Type, System, and Document Category.
+- Select **Clear all** to remove every selected Facility, Floor, Zone, Space, Type, System, and Document Category.
 
-### Resize the filter area
+### Work in a filter drawer
 
-- Drag the dark resize bar below the panels.
-- Use the up and down controls in the **Filters** header to maximise or minimise it.
-- Select the **Filters** header itself to toggle minimise/restore.
-- Select a panel's narrow heading to collapse or expand that panel.
+Drawers overlay the right side of the results without moving the viewers.
+Use the existing classification arrows to expand or collapse one level.
+Tab heights expand or shrink equally to fit the rail's available height.
+At shorter heights, the grip is hidden and the icon and grouping checkbox
+sit side by side; drag the icon to reorder. The drawer fits the available width.
 
 ## Understand relationship-aware document filtering
 
@@ -64,13 +71,21 @@ Selecting a **Document Category** from Asset View automatically opens Document V
 
 ## Group the results
 
-The **Group** row controls the hierarchy in the results panel.
+The unlabelled checkbox on each right-hand tab controls whether that dimension
+is used in the result hierarchy. Opening a drawer and selecting filters are
+independent of grouping. Hover over a checkbox to see **Group by** and its dimension.
 
 ![Floor, Space, and Type grouping example](../images/06-grouped-hierarchy.png)
 
-1. Select a group chip to activate it.
-2. Select more chips to add levels.
-3. Drag chips left or right to set the level order.
+1. Check a tab's checkbox to activate that level.
+2. Check more tabs to add levels; uncheck a tab to remove its level.
+3. Drag a tab's icon or grip up or down to set the level order. Other tabs animate
+   out of the way while you drag; the hierarchy is recomputed only when you drop.
+   The grabbed point stays under the pointer, including when you move left of
+   the rail. Press **Escape** to cancel a drag without changing the hierarchy.
+   The highest enabled tab
+   is the outermost group; unchecked tabs do not add levels. Alternatively,
+   focus an icon or grip and press **Alt + Up/Down**.
 4. Select a group header to open one level.
 5. Use **Expand All** to open every level.
 
@@ -89,6 +104,10 @@ Useful arrangements:
 | Organise document packs | Facility -> Document Category |
 
 A group such as **(No Type)** is meaningful. It means the document or record does not have that relationship; the result is retained rather than hidden.
+
+In QA View, entity Group controls retain their existing single-sheet scope
+behaviour rather than adding nested asset levels. Closing the workbook resets
+the tab order and grouping; they are not saved as preferences.
 
 ## Work across several facilities
 

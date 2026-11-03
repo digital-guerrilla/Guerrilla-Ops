@@ -60,7 +60,7 @@ function _viewer3dDesiredWidth() {
 
 function _viewer3dClampWidth(width) {
   const min = 280;
-  const max = Math.max(min + 40, window.innerWidth - 320);
+  const max = Math.max(min, _workspacePanelMaxWidth('viewer-3d-panel', window.innerWidth - 320));
   return Math.max(min, Math.min(max, Math.round(width)));
 }
 
@@ -106,14 +106,33 @@ function _viewer3dCoordPoint(row) {
   return _coordinateSourceToWorld(sourceX, sourceY, sourceZ);
 }
 
+// Normalizes both the explicit corner names (UpperRight/LowerLeft/...) and the
+// shorthand bounding-box variants (Upper/Lower, e.g. from "Box-upper"/"Box-lower"
+// categories) used by some coordinate exports to a canonical corner key.
+function _viewer3dCornerNameNormalize(raw) {
+  const value = String(raw || '').toLowerCase();
+  if (value.includes('upperright')) return 'upperright';
+  if (value.includes('lowerright')) return 'lowerright';
+  if (value.includes('upperleft')) return 'upperleft';
+  if (value.includes('lowerleft')) return 'lowerleft';
+  if (value.includes('upper')) return 'upperright';
+  if (value.includes('lower')) return 'lowerleft';
+  return '';
+}
+
 function _viewer3dCoordKeyParts(row) {
   const rowName = _cobieField(row, 'rowName').trim();
   if (!rowName) return null;
   const coordinateName = f(row, 'Name').replace(/[\s_-]+/g, '').toLowerCase();
-  const namedCorner = ['upperright', 'lowerright', 'upperleft', 'lowerleft']
-    .find(corner => coordinateName.endsWith(corner)) || '';
-  const suffixMatch = rowName.match(/^(.*?)(?:_(upperright|lowerright|upperleft|lowerleft))$/i);
-  const cornerName = namedCorner || (coordinateName === 'coordinate' ? '' : (suffixMatch?.[2] || '').toLowerCase());
+  const category = f(row, 'Category').replace(/[\s_-]+/g, '').toLowerCase();
+  // A generic "Coordinate" Name gives no reliable corner signal, so RowName
+  // suffixes (which may just be the linked entity's own name) can't be trusted either.
+  const isGenericName = coordinateName === 'coordinate';
+  const namedCorner = isGenericName ? '' : _viewer3dCornerNameNormalize(coordinateName);
+  const suffixMatch = rowName.match(/^(.*?)(?:_(upperright|lowerright|upperleft|lowerleft|upper|lower))$/i);
+  const suffixCorner = isGenericName ? '' : _viewer3dCornerNameNormalize(suffixMatch?.[2] || '');
+  const categoryCorner = _viewer3dCornerNameNormalize(category);
+  const cornerName = namedCorner || suffixCorner || categoryCorner;
   return {
     baseName: (cornerName && suffixMatch ? suffixMatch[1] : rowName).trim(),
     cornerName,
@@ -1279,6 +1298,7 @@ function _renderThreeDViewer() {
 function _viewer3dApplyCollapsedState(els) {
   els.panel.classList.toggle('viewer3d-collapsed', _viewer3dCollapsed);
   els.edgeToggle?.setAttribute('aria-expanded', _viewer3dCollapsed ? 'false' : 'true');
+  els.edgeToggle?.setAttribute('title', _viewer3dCollapsed ? 'Expand 3D viewer panel' : 'Resize or collapse 3D viewer panel');
   if (_viewer3dCollapsed) {
     _viewer3dLastWidth = _viewer3dWidth || _viewer3dDesiredWidth();
   } else if (!_viewer3dWidth) {
@@ -1305,7 +1325,7 @@ function _bindThreeDPanelToggle(els) {
     let dragged = false;
 
     const onMove = moveEvent => {
-      const delta = startX - moveEvent.clientX;
+      const delta = moveEvent.clientX - startX;
       if (Math.abs(delta) > 3) dragged = true;
       if (_viewer3dCollapsed) {
         _viewer3dCollapsed = false;

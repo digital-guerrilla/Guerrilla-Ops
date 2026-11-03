@@ -47,9 +47,6 @@
     return value || fallback;
   }
 
-  // Legacy CSS variable suffixes that predate colorToken naming (kept so existing rules need no changes).
-  const PILL_VAR_SUFFIX_OVERRIDES = { facility:'fac', doccat:'doc' };
-
   // Assigns each schema-declared colorToken its --sheet-NN color, so the XML ui@colorSheet is the single source of truth.
   function applyEntityColorTokens() {
     const entities = typeof COBIE_RUNTIME_MODEL === 'object' ? COBIE_RUNTIME_MODEL?.entities : null;
@@ -59,7 +56,7 @@
       const colorToken = entity?.ui?.colorToken;
       const colorSheet = entity?.ui?.colorSheet;
       if (!colorToken || !colorSheet) return;
-      const suffix = PILL_VAR_SUFFIX_OVERRIDES[colorToken] || colorToken;
+      const suffix = _cobieColorVariableSuffix(colorToken);
       root.style.setProperty(`--pill-${suffix}-bg`, `color-mix(in srgb, var(--sheet-${colorSheet}) 20%, var(--brand-surface))`);
       root.style.setProperty(`--pill-${suffix}-text`, 'var(--text-dark)');
     });

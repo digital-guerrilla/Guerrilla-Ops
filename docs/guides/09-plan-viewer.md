@@ -22,10 +22,10 @@ If a Floor has no SVG, its card shows **Missing**. Expand that floor and select
 
 ## Open and resize the panel
 
-The panel is on the right of the result list.
+The panel is on the left of the result hierarchy.
 
 - Select the vertical **Plan** edge control to collapse or reopen it.
-- On a wide desktop, drag the panel's left edge to change its width.
+- On a wide desktop, drag the panel's right edge to change its width; drag right to widen it.
 - Select a floor heading to make that drawing active.
 
 Filters control which floors remain available. If the expected floor is not
