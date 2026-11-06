@@ -29,9 +29,9 @@
   --sheet-10: #f97316; /* Contact   */
 
   /* type pill uses --brand-danger, system pill uses --brand-warn */
-  --cobie-required: color-mix(in srgb, #ffff99, white 30%); 
-  --cobie-reference: color-mix(in srgb, #ffcc99, white 30%);  
-  --cobie-external: color-mix(in srgb, #cc99ff, white 30%);   
+  --cobie-required: color-mix(in srgb, #ffff99, white 30%);
+  --cobie-reference: color-mix(in srgb, #ffcc99, white 30%);
+  --cobie-external: color-mix(in srgb, #cc99ff, white 30%);
   --cobie-requirable: color-mix(in srgb, #ccffcc, white 30%);
 }
 
