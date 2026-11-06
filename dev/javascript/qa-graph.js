@@ -46,6 +46,12 @@ function _bindQaGraphResizeAndToggle(els) {
   if (!edge || edge.dataset.bound === '1') return;
   edge.dataset.bound = '1';
 
+  edge.addEventListener('click', event => {
+    if (event.detail !== 0) return;
+    _qaGraphCollapsed = !_qaGraphCollapsed;
+    _qaGraphApplyCollapsedState(els);
+  });
+
   edge.addEventListener('mousedown', event => {
     if (event.button !== 0 || window.matchMedia('(max-width: 1200px)').matches) return;
     const startX = event.clientX;
@@ -60,7 +66,9 @@ function _bindQaGraphResizeAndToggle(els) {
         els.panel.classList.remove('qa-graph-collapsed');
         edge.setAttribute('aria-expanded', 'true');
       }
-      _qaGraphSetWidth(els, startWidth + delta);
+      if (typeof resizeWorkspacePanel !== 'function' || !resizeWorkspacePanel(els.panel.id, startWidth + delta, 'left')) {
+        _qaGraphSetWidth(els, startWidth + delta);
+      }
     };
 
     const onUp = () => {

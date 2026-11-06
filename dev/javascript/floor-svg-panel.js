@@ -1670,7 +1670,7 @@ function _saveFloorPlanAlignment() {
 function _applyFloorPanelCollapsedState(els) {
   els.panel.classList.toggle('svg-panel-collapsed', _floorSvgCollapsed);
   els.edgeToggle?.setAttribute('aria-expanded', _floorSvgCollapsed ? 'false' : 'true');
-  els.edgeToggle?.setAttribute('title', _floorSvgCollapsed ? 'Expand floor plan panel' : 'Resize or collapse floor plan panel');
+  els.edgeToggle?.setAttribute('title', _floorSvgCollapsed ? 'Expand floor plan panel' : 'Collapse floor plan panel');
   if (_floorSvgCollapsed) {
     _floorPanelLastWidth = _floorPanelWidth || _desiredDefaultPanelWidth();
   } else if (!_floorPanelWidth) {
@@ -1684,8 +1684,22 @@ function _bindEdgeDragAndToggle(els) {
   if (edge.dataset.bound === '1') return;
   edge.dataset.bound = '1';
 
-  edge.addEventListener('mousedown', event => {
+  edge.addEventListener('click', () => {
+    _floorSvgCollapsed = !_floorSvgCollapsed;
+    _applyFloorPanelCollapsedState(els);
+  });
+
+  const resizeHandle = els.panel.querySelector('.viewer-resize-handle');
+  resizeHandle?.addEventListener('keydown', event => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const width = els.panel.getBoundingClientRect().width + (event.key === 'ArrowRight' ? 20 : -20);
+    if (typeof resizeWorkspacePanel !== 'function' || !resizeWorkspacePanel(els.panel.id, width)) _setPanelWidth(els, width);
+    _floorPanelLastWidth = _floorPanelWidth;
+  });
+  resizeHandle?.addEventListener('mousedown', event => {
     if (event.button !== 0 || window.matchMedia('(max-width: 1200px)').matches) return;
+    event.preventDefault();
     const startX = event.clientX;
     const startW = els.panel.getBoundingClientRect().width;
     _isPanelDragging = false;
@@ -1698,18 +1712,13 @@ function _bindEdgeDragAndToggle(els) {
         els.panel.classList.remove('svg-panel-collapsed');
         els.edgeToggle?.setAttribute('aria-expanded', 'true');
       }
-      _setPanelWidth(els, startW + delta);
+      if (typeof resizeWorkspacePanel !== 'function' || !resizeWorkspacePanel(els.panel.id, startW + delta)) _setPanelWidth(els, startW + delta);
     };
 
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-      if (!_isPanelDragging) {
-        _floorSvgCollapsed = !_floorSvgCollapsed;
-        _applyFloorPanelCollapsedState(els);
-      } else {
-        _floorPanelLastWidth = _floorPanelWidth;
-      }
+      if (_isPanelDragging) _floorPanelLastWidth = _floorPanelWidth;
       _isPanelDragging = false;
     };
 

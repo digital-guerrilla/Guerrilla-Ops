@@ -74,6 +74,7 @@ def main() -> int:
         run([str(python), "-m", "pip", "install", "-r", str(REQUIREMENTS)], REPO_ROOT)
         run([npm, "ci"], DEV_ROOT)
         if not args.skip_tests:
+            run([str(python), str(DEV_ROOT / "build" / "build_release.py")], REPO_ROOT)
             run([npm, "test"], DEV_ROOT)
     except subprocess.CalledProcessError as exc:
         return exc.returncode or 1

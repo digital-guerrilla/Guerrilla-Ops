@@ -43,7 +43,7 @@ systems and documents. No installation. No account. No data upload.
 ## Get started
 
 1. **Open Guerrilla Ops.** Use the [live version](https://digital-guerrilla.github.io/Guerrilla-Ops/),
-   or download and double-click `Guerrilla-Ops.html`.
+   or download `Guerrilla-Ops.html` from the repository's **Releases** page and double-click it.
 2. **Choose your data.** Open one COBie workbook, several files, or a folder.
 3. **Start exploring.** Filter, search, group and open records.
 
@@ -236,16 +236,18 @@ python dev/setup_dev.py
 ```
 
 The setup script verifies Node.js, creates or reuses the repository `.venv`,
-installs the pinned Python and Node dependencies, and runs the regression
-suite. Use `python dev/setup_dev.py --skip-tests` when only installation is
+installs the pinned Python and Node dependencies, builds the standalone files,
+and runs the regression suite. Use `python dev/setup_dev.py --skip-tests` when only installation is
 needed.
 
-After setup, run the checks and rebuild from `dev/`:
+After setup, activate the repository `.venv`, then rebuild and run the checks
+from `dev/`. Tests inspect the generated files, so build before testing:
 
 ```powershell
+.\.venv\Scripts\Activate.ps1
 Set-Location dev
-npm test
 npm run build -- --offline
+npm test
 ```
 
 The build requires Python and the pinned packages in
@@ -253,11 +255,47 @@ The build requires Python and the pinned packages in
 `npm run build` without `--offline` when the manifest cache needs to be
 refreshed from the pinned CDN URLs.
 
-The build generates these committed application artifacts:
+The build generates these ignored application artifacts (not committed on
+`dev`, `main`, or feature branches):
 
 - `index.html` — the local-network release used by GitHub Pages
 - `release/Guerrilla-Ops.html` — the network-enabled release
 - `release/Guerrilla-Ops-Airgapped.html` — the fully embedded release
+
+Commit the modular source under `dev/`, not the generated HTML files.
+Pull requests targeting `dev`, `main`, or `master` run these CI gates:
+
+- Whitespace/conflict-marker checks, Python syntax checks, workflow linting,
+  and release-versioning tests.
+- `npm audit` for locked Node dependencies (high/critical findings block).
+- `pip-audit` for pinned Python build dependencies (all known findings block).
+- CodeQL's extended security queries for JavaScript and Python (all reported
+  findings block). Results are also available in GitHub's **Security** tab.
+- A fresh standalone build and the complete regression suite, including
+  JavaScript syntax, XML schema, runtime, filtering, UI, and QA coverage checks.
+- Retire.js scanning of cached browser libraries, including bundled/transitive
+  libraries not covered by the Node lockfile (high/critical findings block).
+  Signature-based scanning cannot guarantee every embedded dependency is detected.
+
+Every push to `main` repeats these checks on the merged source. Only after all
+gates pass does CI publish a GitHub release with both HTML files attached,
+deploy `index.html` to GitHub Pages, and upload the release files as workflow
+artifacts. The release tag increments the patch of the highest stable
+`vMAJOR.MINOR.PATCH` tag, ignoring prereleases and malformed tags; for example,
+`v1.1.5` becomes `v1.1.6`. A repository without stable tags starts at `v1.1.1`.
+Even documentation-only merges to `main` create a release. Manual workflow
+runs do not create releases; development and feature-branch pushes do not publish.
+CI never commits generated files back to the repository.
+
+CodeQL requires code scanning to be available (public repositories, or GitHub
+Code Security enabled for private repositories). Configure branch protection
+or repository rulesets for `dev` and `main` to require `validation`,
+`dependencies`, both `CodeQL` matrix checks, and `build` before merging.
+Adding a workflow alone does not prevent merging failed checks. Audit/scanning
+services require network access; scanner errors fail CI rather than bypassing it.
+
+When updating an older branch, merge the source-only change into it too; ignore
+rules do not stop Git tracking files that were already committed.
 
 Start the local development server from `dev/` with:
 

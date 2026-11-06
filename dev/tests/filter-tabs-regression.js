@@ -61,10 +61,48 @@ const dispatch = (element, type, fields = {}) => {
 };
 const order = () => JSON.parse(evaluate('JSON.stringify(groupState.order)'));
 const filterCss = readText(path.join(root, 'css', 'filter.css'));
+assert(filterCss.includes('#content:has(#btn-qa.active) #filter-tabs,')
+  && filterCss.includes('#content:has(#btn-qa.active) #filter-bar {'),
+  'QA view must hide both the tab stack and its drawers without clearing filter selections');
+const countCss = filterCss.match(/\.filter-tab-count\s*\{([^}]+)\}/)?.[1] || '';
+const groupCss = filterCss.match(/\.filter-tab-group\s*\{([^}]+)\}/)?.[1] || '';
+const controlsCss = filterCss.match(/\.filter-tab-controls\s*\{([^}]+)\}/)?.[1] || '';
+assert(controlsCss.includes('grid-template-columns: minmax(0, 1fr) auto;')
+  && controlsCss.includes('padding: 0 2px 0 6px;')
+  && groupCss.includes('grid-column: 2;')
+  && countCss.includes('overflow: hidden;')
+  && !countCss.includes('position: absolute'),
+  'counts and checkboxes must have separate columns with clearance for the 4px selection stripe');
+assert([...list.children].every(tab => tab.querySelector('.filter-tab-count').parentElement
+  === tab.querySelector('.filter-tab-group').parentElement),
+  'count and grouping control must share the bottom controls row');
+assert([...list.children].every(tab => tab.dataset.label === tab.querySelector('.filter-tab-trigger').title),
+  'each label must match the tab name');
+assert([...list.children].every(tab => tab.querySelector('.filter-tab-grip').textContent === tab.dataset.label)
+  && !list.querySelector('.bi-grip-vertical'),
+  'each tab must show its title in place of the grab icon');
+assert(!filterCss.includes('.filter-tab-grip { display: none; }'),
+  'tab titles must remain visible at compact heights');
+const railCss = filterCss.match(/#filter-tabs\s*\{([^}]+)\}/)?.[1] || '';
+assert(railCss.includes('position: relative; left: 1px;'),
+  'the filter rail must shift right by 1px to merge with the workspace border');
 const floatingTabCss = filterCss
   .match(/body > \.filter-tab-fallback\.filter-tab\s*\{([^}]+)\}/)?.[1] || '';
 assert(floatingTabCss.includes('position: fixed') && floatingTabCss.includes('transition: none'),
   'the floating tab must track viewport coordinates without the legacy chip transition');
+assert(filterCss.includes('background: transparent; color: var(--on-dark);')
+  && filterCss.includes('border: 0; border-radius: 8px 0 0 8px;'),
+  'the filter rail must have no background panel and only rounded left corners');
+assert(!document.querySelector('#filter-tabs .filter-tabs-title'),
+  'the filter tab rail must not contain a heading');
+assert(filterCss.includes('padding: .3rem 0 .3rem .3rem;')
+  && filterCss.includes('border-radius: 5px 0 0 5px;'),
+  'filter tabs must remain colored and sit flush against the right edge with rounded left corners');
+const resultsCss = readText(path.join(root, 'css', 'results.css'));
+const workspaceCss = resultsCss.match(/#results-workspace\s*\{([^}]+)\}/)?.[1] || '';
+assert(workspaceCss.includes('background: #fff;')
+  && workspaceCss.includes('border-radius: 0 0 9px 9px;'),
+  'the shared results workspace must extend its white surface beneath the filter rail');
 
 assert.strictEqual(list.children.length, dimensions.length, 'all schema dimensions must have tabs');
 assert(dimensions.every(dim => drawer(dim) && trigger(dim) && group(dim)), 'each tab needs independent filter and grouping controls');
@@ -99,7 +137,7 @@ assert.deepStrictEqual(['facilities','floors','spaces','types','comps','sys','do
 assert(dimensions.every(dim => trigger(dim).querySelector('.filter-tab-icon')
   && trigger(dim).getAttribute('title') && trigger(dim).getAttribute('aria-label')),
   'every icon-only tab must keep a hover name and accessible label');
-assert(dimensions.every(dim => trigger(dim).textContent === document.getElementById('ftb-' + dim).textContent
+assert(dimensions.every(dim => trigger(dim).textContent === ''
   && group(dim).parentElement.textContent === ''), 'tab names and Group text must not be visible');
 assert(list.querySelector('[data-dim="facility"]').getAttribute('style').includes('--pill-fac-bg'),
   'Facility tabs must reuse the existing colour alias');
@@ -109,6 +147,11 @@ assert(!document.getElementById('filter-resize') && !document.getElementById('gr
 assert.deepStrictEqual([...document.getElementById('results-layout').children].map(node => node.id),
   ['svg-floor-panel', 'viewer-3d-panel', 'results-main', 'qa-graph-panel'], 'viewers precede the hierarchy');
 const layout = document.getElementById('results-layout');
+assert.strictEqual(document.getElementById('active-bar').parentElement.id, 'results-main',
+  'selected filter pills must align with the results column rather than span the viewers');
+assert(document.querySelector('#mode-toggle #viewer-toggles #restore-plan-btn[aria-label]')
+  && document.querySelector('#mode-toggle #viewer-toggles #restore-3d-btn[aria-label]'),
+  'viewer toggles must be accessible in the main mode row rather than the filter pills');
 Object.defineProperty(layout, 'clientWidth', { value: 1200 });
 context.getComputedStyle = () => ({ paddingLeft:'12px', paddingRight:'12px', columnGap:'12px' });
 for (const id of ['svg-floor-panel', 'viewer-3d-panel']) {
@@ -250,4 +293,127 @@ for (const filename of ['floor-svg-panel.js', 'three-d-viewer.js']) {
   assert(readJavascript(filename).includes('const delta = moveEvent.clientX - startX;'),
     filename + ' must widen when the right edge moves right');
 }
+const savedLayouts = new Map();
+context.localStorage = {
+  getItem: key => savedLayouts.get(key) || null,
+  setItem: (key, value) => savedLayouts.set(key, value),
+};
+context.Event = Event;
+const workspaceEvents = document.createElement('div');
+context.window.addEventListener = workspaceEvents.addEventListener.bind(workspaceEvents);
+context.window.removeEventListener = workspaceEvents.removeEventListener.bind(workspaceEvents);
+context.window.dispatchEvent = workspaceEvents.dispatchEvent.bind(workspaceEvents);
+context.MutationObserver = class { observe() {} };
+Object.defineProperty(layout, 'clientHeight', { value:800 });
+for (const panel of layout.children) panel.getClientRects = () => [{}];
+document.getElementById('svg-floor-panel').classList.remove('d-none');
+document.getElementById('viewer-3d-panel').classList.remove('d-none');
+context.initWorkspacePanels();
+for (const id of ['restore-plan-btn', 'restore-3d-btn']) {
+  const button = document.getElementById(id);
+  assert.strictEqual(button.getAttribute('aria-pressed'), 'true');
+  assert(button.classList.contains('active') && !button.classList.contains('d-none'),
+    'available open viewers must have visible active mode-row toggles');
+}
+assert(!document.querySelector('[data-workspace-layout]'), 'edge docking replaces layout toggles');
+context.dockWorkspacePanel('viewer-3d-panel', 'svg-floor-panel', 'bottom');
+const tree = JSON.parse(savedLayouts.get('go:panelLayout')).tree;
+assert.deepStrictEqual(tree.first, {
+  axis:'column', ratio:.5, first:'svg-floor-panel', second:'viewer-3d-panel',
+}, 'bottom docking must stack viewers within the existing side-by-side layout');
+assert.strictEqual(tree.axis, 'row', 'the results must remain beside the stacked viewers');
+assert.strictEqual(document.getElementById('svg-floor-panel').style.gridColumn,
+  document.getElementById('viewer-3d-panel').style.gridColumn, 'stacked viewers must share a column');
+assert.notStrictEqual(document.getElementById('svg-floor-panel').style.gridRow,
+  document.getElementById('viewer-3d-panel').style.gridRow, 'stacked viewers need separate rows');
+const resizeHandle = (id, edge) => document.querySelector(`#${id} .workspace-resize-handle[data-edge="${edge}"]`);
+const planPanel = document.getElementById('svg-floor-panel');
+planPanel.getBoundingClientRect = () => ({ width:300, height:200 });
+assert(!resizeHandle('svg-floor-panel', 'right').hidden && !resizeHandle('svg-floor-panel', 'bottom').hidden,
+  'a panel above and beside neighbours must expose both resizing borders');
+assert(resizeHandle('viewer-3d-panel', 'bottom').hidden && resizeHandle('results-main', 'right').hidden,
+  'outside borders must not offer resizing');
+dispatch(resizeHandle('svg-floor-panel', 'bottom'), 'keydown', { key:'ArrowDown' });
+assert.strictEqual(evaluate('_workspaceDock.tree.first.ratio'), .525, 'Down must increase the top panel height');
+dispatch(resizeHandle('svg-floor-panel', 'bottom'), 'keydown', { key:'ArrowUp' });
+assert.strictEqual(evaluate('_workspaceDock.tree.first.ratio'), .5, 'Up must decrease the top panel height');
+const rightRatio = evaluate('_workspaceDock.tree.ratio');
+dispatch(resizeHandle('svg-floor-panel', 'right'), 'keydown', { key:'ArrowRight' });
+assert.strictEqual(evaluate('_workspaceDock.tree.ratio'), rightRatio + 20 / layout.clientWidth, 'Right must widen the left column');
+dispatch(resizeHandle('svg-floor-panel', 'right'), 'keydown', { key:'ArrowLeft' });
+const bottomHandle = resizeHandle('svg-floor-panel', 'bottom');
+let resizePointer;
+bottomHandle.setPointerCapture = pointer => { resizePointer = pointer; };
+bottomHandle.hasPointerCapture = pointer => resizePointer === pointer;
+bottomHandle.releasePointerCapture = () => { resizePointer = undefined; };
+const resizeStart = { button:0, pointerId:21, clientX:100, clientY:100 };
+dispatch(bottomHandle, 'pointerdown', resizeStart);
+dispatch(workspaceEvents, 'pointermove', { ...resizeStart, pointerId:22, clientY:260 });
+assert.strictEqual(evaluate('_workspaceDock.tree.first.ratio'), .5, 'unrelated pointers cannot resize the split');
+dispatch(workspaceEvents, 'pointermove', { ...resizeStart, clientY:260 });
+assert.strictEqual(evaluate('_workspaceDock.tree.first.ratio'), .7, 'bottom dragging must resize the vertical split');
+dispatch(workspaceEvents, 'pointerup', resizeStart);
+assert.strictEqual(JSON.parse(savedLayouts.get('go:panelLayout')).tree.first.ratio, .7, 'resized heights must persist');
+assert.strictEqual(resizePointer, undefined, 'finishing must release the resize pointer');
+for (const cancelEvent of ['pointercancel', 'lostpointercapture']) {
+  dispatch(bottomHandle, 'pointerdown', resizeStart);
+  dispatch(workspaceEvents, 'pointermove', { ...resizeStart, clientY:-9000 });
+  assert.strictEqual(evaluate('_workspaceDock.tree.first.ratio'), .15, 'resize must respect minimum split ratio');
+  dispatch(workspaceEvents, 'pointermove', { ...resizeStart, clientY:9000 });
+  assert.strictEqual(evaluate('_workspaceDock.tree.first.ratio'), .85, 'resize must respect maximum split ratio');
+  dispatch(cancelEvent === 'pointercancel' ? workspaceEvents : bottomHandle, cancelEvent, resizeStart);
+  assert.strictEqual(evaluate('_workspaceDock.tree.first.ratio'), .7, 'cancelled resizing must restore the starting ratio');
+  assert(!bottomHandle.classList.contains('workspace-resizing'));
+  dispatch(workspaceEvents, 'pointermove', { ...resizeStart, clientY:-9000 });
+  assert.strictEqual(evaluate('_workspaceDock.tree.first.ratio'), .7, 'cancel must remove pointer listeners');
+}
+context.dockWorkspacePanel('results-main', 'svg-floor-panel', 'top');
+assert(!resizeHandle('results-main', 'bottom').hidden, 'Results must support height resizing when above another panel');
+context.dockWorkspacePanel('results-main', 'viewer-3d-panel', 'left');
+assert(!resizeHandle('results-main', 'right').hidden && resizeHandle('results-main', 'bottom').hidden,
+  'Results must support width resizing and remove obsolete height resizing after redocking');
+evaluate(`_workspaceDock.tree = ${JSON.stringify(tree)}; _workspaceDock.render()`);
+dispatch(document.getElementById('svgp-edge-toggle'), 'keydown', { key:'ArrowRight', altKey:true });
+const keyboardTree = JSON.parse(savedLayouts.get('go:panelLayout')).tree;
+assert.strictEqual(resizeHandle('svg-floor-panel', 'bottom').hidden, true,
+  'docking must remove obsolete bottom resize handles');
+assert.deepStrictEqual(keyboardTree.first, {
+  axis:'row', ratio:.5, first:'viewer-3d-panel', second:'svg-floor-panel',
+}, 'keyboard right docking must replace the stack with side-by-side viewers');
+context.dockWorkspacePanel('svg-floor-panel', 'results-main', 'top');
+const idsInTree = node => typeof node === 'string' ? [node] : [...idsInTree(node.first), ...idsInTree(node.second)];
+assert.deepStrictEqual(idsInTree(JSON.parse(savedLayouts.get('go:panelLayout')).tree).sort(),
+  ['qa-graph-panel', 'results-main', 'svg-floor-panel', 'viewer-3d-panel'],
+  'repeated docking must retain every panel exactly once, including hidden panels');
+for (const edge of ['left', 'right', 'top', 'bottom']) {
+  for (const id of ['svg-floor-panel', 'viewer-3d-panel', 'results-main', 'qa-graph-panel']) {
+    for (const target of ['svg-floor-panel', 'viewer-3d-panel', 'results-main', 'qa-graph-panel']) {
+      if (id === target) continue;
+      context.dockWorkspacePanel(id, target, edge);
+      const saved = JSON.parse(savedLayouts.get('go:panelLayout'));
+      assert.strictEqual(saved.version, 2);
+      assert.deepStrictEqual(idsInTree(saved.tree).sort(),
+        ['qa-graph-panel', 'results-main', 'svg-floor-panel', 'viewer-3d-panel'],
+        `${edge} docking must not duplicate or lose panels`);
+    }
+  }
+}
+document.getElementById('svg-floor-panel').classList.add('svg-panel-collapsed');
+document.getElementById('viewer-3d-panel').classList.add('viewer3d-collapsed');
+evaluate('_workspaceDock.render()');
+assert.strictEqual(document.getElementById('results-main').style.gridColumn, '1 / 2');
+assert.strictEqual(document.getElementById('results-main').style.gridRow, '1 / 2',
+  'hidden or collapsed panels must not reserve grid tracks');
+assert(resizeHandle('results-main', 'right').hidden && resizeHandle('results-main', 'bottom').hidden,
+  'a lone visible panel must have no resize handles');
+for (const id of ['restore-plan-btn', 'restore-3d-btn']) {
+  const button = document.getElementById(id);
+  assert.strictEqual(button.getAttribute('aria-pressed'), 'false');
+  assert(!button.classList.contains('active') && !button.classList.contains('d-none'),
+    'collapsed viewers must retain visible inactive toggles for reopening');
+}
+document.getElementById('svg-floor-panel').classList.add('d-none');
+evaluate('_workspaceDock.render()');
+assert(document.getElementById('restore-plan-btn').classList.contains('d-none'),
+  'an unavailable viewer must not expose a nonfunctional toggle');
 console.log('Filter tab interaction and layout regressions passed.');
