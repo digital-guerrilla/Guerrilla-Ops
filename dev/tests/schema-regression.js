@@ -9,7 +9,20 @@ const root = path.resolve(__dirname, '..');
 const javascriptDir = path.join(root, 'javascript');
 const schemaPath = path.join(root, 'specification', 'guerrilla-ops-schema.xml');
 const schemaSource = fs.readFileSync(schemaPath, 'utf8');
-execFileSync(process.env.PYTHON || 'python', [
+// macOS has shipped no `python` since 12.3 (only `python3`), so the previous default
+// made `npm test` die at this file on every Mac with `spawnSync python ENOENT`. Probe
+// for a working interpreter instead of assuming the maintainer's platform; PYTHON=...
+// still overrides.
+function _pythonBin() {
+  for (const candidate of ['python3', 'python']) {
+    const probe = require('child_process').spawnSync(candidate, ['-c', ''], { stdio:'ignore' });
+    if (!probe.error && probe.status === 0) return candidate;
+  }
+  return 'python3';
+}
+
+
+execFileSync(process.env.PYTHON || _pythonBin(), [
   '-c',
   'import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])',
   schemaPath,
