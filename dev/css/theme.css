@@ -5,9 +5,9 @@
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 :root {
   /* ── Core brand ───────────────────────────────────────────── */
-  --brand-dark:    #323232;   /* slate-800: headers, navbars, buttons  */
+  --brand-dark:    #52616b;   /* slate blue-gray: headers, navbars, buttons */
   --brand-accent:  #0ea5e9;   /* sky-500:   interactive / links        */
-  --brand-surface: #dfdfdf;   /* slate-50:  page background            */
+  --brand-surface: #e6e6e6;   /* slate-50:  page background            */
   --brand-warn:    #f59e0b;   /* amber-500: unsaved changes / warning  */
   --brand-danger:  #ef4444;   /* red-500:   destructive / errors       */
 
