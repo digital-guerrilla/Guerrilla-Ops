@@ -39,6 +39,7 @@ function loadBuild(relativePath) {
     localStorage: anything(), sessionStorage: anything(), location: anything(),
     getComputedStyle: () => ({ getPropertyValue: () => '' }), setTimeout: () => 0,
     addEventListener() {}, requestAnimationFrame: () => 0, matchMedia: () => anything(),
+    MutationObserver: class { observe() {} },
   };
   context.globalThis = context;
   vm.createContext(context);
