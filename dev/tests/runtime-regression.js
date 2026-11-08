@@ -303,6 +303,7 @@ vm.runInContext(`
   _qaSchemaCache = {
     error:'',
     formats:{ email:/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/ },
+    causes:{ '':Object.fromEntries(Object.values(QA_CAUSE).map(id => [id, id])) },
     checkSeverities:Object.create(null),
     checkSeverityByField:Object.create(null),
     sheets:[{
