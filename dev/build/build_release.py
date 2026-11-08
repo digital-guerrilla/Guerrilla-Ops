@@ -646,6 +646,133 @@ def embed_schema_into_utils_js(source: str, embedded_schema_xml: str) -> str:
     return source
 
 
+# ============================================================================
+# Template-literal-safe JavaScript minification
+# ============================================================================
+#
+# rjsmin pairs backticks without understanding that a template literal can nest
+# inside the ${...} of another. The text of a nested template is therefore read
+# as code, and its whitespace is stripped: "`. ${n} additional`" becomes
+# "`.${n}additional`". Static text at nesting depth 2 and deeper is swapped for
+# opaque placeholders before minifying and restored afterwards, and the result
+# is checked chunk by chunk against the source.
+
+_REGEX_PRECEDERS = frozenset("(,=:[!&|?{};+-*%<>~^")
+_REGEX_KEYWORDS = frozenset(("return", "typeof", "case", "in", "of", "void", "delete", "throw", "new"))
+_IDENT_PATTERN = re.compile(r"[A-Za-z_$][\w$]*")
+
+
+def template_chunks(source: str) -> list[tuple[int, int, int]]:
+    """Return (depth, start, end) for the static text of every template literal.
+
+    Depth 1 is a top-level template; depth 2 is a template inside the ${...} of
+    another, and so on. Strings, comments and regular expression literals are
+    skipped so that backticks inside them are not mistaken for templates.
+    """
+    chunks: list[tuple[int, int, int]] = []
+    stack: list[str] = []
+    n = len(source)
+    i = 0
+    last = ""
+
+    def read_template(start: int) -> int:
+        depth = stack.count("t") + 1
+        j = start
+        while j < n:
+            ch = source[j]
+            if ch == "\\":
+                j += 2
+            elif ch == "`":
+                chunks.append((depth, start, j))
+                return j + 1
+            elif ch == "$" and source.startswith("{", j + 1):
+                chunks.append((depth, start, j))
+                stack.append("t")
+                return j + 2
+            else:
+                j += 1
+        raise ValueError("Unterminated template literal")
+
+    while i < n:
+        ch = source[i]
+        if ch.isspace():
+            i += 1
+        elif ch in "'\"":
+            j = i + 1
+            while source[j] != ch:
+                j += 2 if source[j] == "\\" else 1
+            i, last = j + 1, "s"
+        elif ch == "/" and source.startswith("/", i + 1):
+            j = source.find("\n", i)
+            i = n if j < 0 else j
+        elif ch == "/" and source.startswith("*", i + 1):
+            i = source.index("*/", i + 2) + 2
+        elif ch == "/" and (not last or last in _REGEX_PRECEDERS or last in _REGEX_KEYWORDS):
+            j, in_class = i + 1, False
+            while in_class or source[j] != "/":
+                if source[j] == "\\":
+                    j += 1
+                elif source[j] == "[":
+                    in_class = True
+                elif source[j] == "]":
+                    in_class = False
+                j += 1
+            j += 1
+            while j < n and source[j].isalpha():
+                j += 1
+            i, last = j, "r"
+        elif ch == "`":
+            i, last = read_template(i + 1), "s"
+        elif ch == "{":
+            stack.append("b")
+            i, last = i + 1, "{"
+        elif ch == "}":
+            if stack and stack.pop() == "t":
+                i, last = read_template(i + 1), "s"
+            else:
+                i, last = i + 1, "}"
+        else:
+            match = _IDENT_PATTERN.match(source, i)
+            if match:
+                last, i = match.group(0), match.end()
+            else:
+                last, i = ch, i + 1
+    return chunks
+
+
+def minify_js(source: str) -> str:
+    chunks = template_chunks(source)
+    nested = [(a, b) for depth, a, b in chunks if depth >= 2 and b > a]
+
+    protected: list[str] = []
+    pieces: list[str] = []
+    cursor = 0
+    for a, b in nested:
+        pieces.append(source[cursor:a])
+        pieces.append(f"__GOTPL{len(protected)}__")
+        protected.append(source[a:b])
+        cursor = b
+    pieces.append(source[cursor:])
+    guarded = "".join(pieces)
+
+    if re.search(r"__GOTPL\d+__", source):
+        fail("Source already contains a template placeholder name.")
+
+    minified = jsmin(guarded)
+    for index in range(len(protected) - 1, -1, -1):
+        token = f"__GOTPL{index}__"
+        if minified.count(token) != 1:
+            fail(f"Template placeholder {token} was lost or duplicated by the minifier.")
+        minified = minified.replace(token, protected[index])
+
+    before = [source[a:b] for _depth, a, b in chunks]
+    after = [minified[a:b] for _depth, a, b in template_chunks(minified)]
+    if before != after:
+        fail("Minification changed the static text of a template literal.")
+    return minified
+
+
+
 def bundle_css(
     stylesheet_refs: list[str],
     manifest_items: dict[str, ManifestAsset],
@@ -706,7 +833,7 @@ def bundle_js(
             source = strip_vendor_comments(source)
             section = source.rstrip("; \n\t\r")
         else:
-            section = jsmin(source).rstrip("; \n\t\r")
+            section = minify_js(source).rstrip("; \n\t\r")
 
         sections.append(section)
 
@@ -807,7 +934,17 @@ def build_html(
 
 def minify_html_document(html: str) -> str:
     # Collapse whitespace between tags while preserving text-node internals.
-    html = re.sub(r">\s+<", "><", html)
+    # <script> and <style> bodies are left alone: inside them a "> <" belongs to
+    # a string or template literal ("</b> <i>"), not to the document markup.
+    parts = re.split(
+        r"(<script\b[^>]*>[\s\S]*?</script\b[^>]*>|<style\b[^>]*>[\s\S]*?</style\b[^>]*>)",
+        html,
+        flags=re.IGNORECASE,
+    )
+    html = "".join(
+        part if index % 2 else re.sub(r">\s+<", "><", part)
+        for index, part in enumerate(parts)
+    )
 
     return html.strip()
 
