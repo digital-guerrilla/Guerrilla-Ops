@@ -444,9 +444,13 @@ function _qaParseSchema() {
   _qaChildren(_qaDirectChild(root, 'ruleDefinitions'), 'rule').forEach(rule => {
     const name = _qaNorm(_qaAttr(rule, 'name'));
     const text = _qaOwnText(rule);
-    if (!name || !text) return;
+    if (!name || !text) {
+      // Say why its causes go unread, rather than reporting the causes as missing.
+      if (name && _qaDirectChild(rule, 'causes')) causeProblems.push(`rule ${_qaAttr(rule, 'name')} defines causes but has no description`);
+      return;
+    }
     ruleDefinitions[name] = text;
-    causes[`rule:${_qaAttr(rule, 'name')}`] = _qaParseCauses(rule, `rule ${_qaAttr(rule, 'name')}`, causeProblems);
+    causes[_qaCauseOwnerKey(`rule:${name}`)] = _qaParseCauses(rule, `rule ${_qaAttr(rule, 'name')}`, causeProblems);
     const sev = _qaSeverity(_qaAttr(rule, 'criticality') || _qaAttr(rule, 'criticallity') || _qaAttr(rule, 'severity'), '');
     if (sev) ruleCriticalities[name] = sev;
   });
@@ -588,7 +592,7 @@ function _qaParseSchema() {
     .filter(name => !QA_CAUSE_DIAGNOSTICS[name])
     .forEach(name => unsupportedDiagnostics.push(`${sheet.name}.${reference.column}:${name}`))));
   Object.values(QA_CAUSE).forEach(id => {
-    const owner = QA_REFERENCE_CAUSES.includes(id) ? 'rule:Reference' : '';
+    const owner = QA_REFERENCE_CAUSES.includes(id) ? _qaCauseOwnerKey('rule:Reference') : '';
     if (!causes[owner]?.[id]) causeProblems.push(`${owner ? 'the Reference rule' : 'the shared causes'} must define "${id}"`);
   });
   const invalidStages = [...new Set(sheets.flatMap(sheet => [
@@ -672,8 +676,14 @@ function _qaParseCauses(node, owner, problems) {
 
 // The label for a cause id: the owning rule or format first ("rule:Reference",
 // "format:isoDate"), then the shared causes. An id the profile lacks is an error.
+// Rule names are matched case-insensitively everywhere else (_qaNorm), so a rule's
+// causes are keyed the same way; format names keep their exact spelling, as formats do.
+function _qaCauseOwnerKey(owner) {
+  return owner.startsWith('rule:') ? `rule:${_qaNorm(owner.slice(5))}` : owner;
+}
+
 function _qaCauseLabel(schema, causeId, owner = '') {
-  const label = schema.causes[owner]?.[causeId] ?? schema.causes[''][causeId];
+  const label = schema.causes[_qaCauseOwnerKey(owner)]?.[causeId] ?? schema.causes[''][causeId];
   if (label === undefined) throw new Error(`QA cause "${causeId}" is not defined in the XML profile`);
   return label;
 }

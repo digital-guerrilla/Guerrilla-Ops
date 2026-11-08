@@ -88,7 +88,7 @@ const parsed = runIn(context, `
   return {
     error:schema.error,
     shared:schema.causes[''],
-    reference:schema.causes['rule:Reference'],
+    reference:schema.causes[_qaCauseOwnerKey('rule:Reference')],
     isoDate:schema.causes['format:isoDate'],
     ruleDescriptions:schema.ruleDefinitions,
     formatDescriptions:schema.formatDescriptions,
@@ -140,7 +140,7 @@ const leaky = runIn(contextFor(edited(
     '<description>Must use ISO date format YYYY-MM-DD.</description>'],
 )), `
   const schema = _qaParseSchema();
-  return { error:schema.error, rules:schema.ruleDefinitions, formats:schema.formatDescriptions, notNullBlank:schema.causes['rule:NotNull']?.blank };
+  return { error:schema.error, rules:schema.ruleDefinitions, formats:schema.formatDescriptions, notNullBlank:schema.causes[_qaCauseOwnerKey('rule:NotNull')]?.blank };
 `);
 assert.strictEqual(leaky.error, '');
 assert.deepStrictEqual(leaky.rules, parsed.ruleDescriptions, 'nested causes must not change a rule description');
@@ -277,6 +277,10 @@ const unsupported = [
     /causes defines "blank" twice/],
   ['a cause without a label', edited(['<cause id="blank" label="Blank"/>', '<cause id="blank"/>']),
     /causes has a cause without an id or label/],
+  ['causes on a rule with no description', edited(
+    ['<rule name="NotNull" criticality="warning">Must have a text value that is not "n/a" or empty.</rule>',
+      '<rule name="NotNull" criticality="warning"><causes><cause id="blank" label="Blank"/></causes></rule>']),
+    /rule NotNull defines causes but has no description/],
 ];
 unsupported.forEach(([name, profile, expected]) => {
   const result = runIn(contextFor(profile), `${AUDIT}
@@ -436,5 +440,20 @@ assert.deepStrictEqual(prefix, {
   close:'prefix-match', noColon:'not-found', absent:'not-found', plain:'not-found',
   emptyPrefix:'not-found', spacePrefix:'not-found', off:'not-found', blank:'blank', na:'not-applicable',
 });
+
+// ---- A rule's own causes follow its name case-insensitively, as its description and
+// severity already do: a profile that spells the rule "notnull" keeps its own wording.
+const lowerCased = runIn(contextFor(edited(
+  ['<rule name="NotNull" criticality="warning">Must have a text value that is not "n/a" or empty.</rule>',
+    '<rule name="notnull" criticality="warning">Must have a text value that is not "n/a" or empty.' +
+    '<causes><cause id="blank" label="LOWER RULE BLANK"/></causes></rule>'],
+)), `${AUDIT}
+  return {
+    error:_qaParseSchema().error,
+    labels:[...new Set(qaFindings.filter(item => item.check.endsWith('.NotNull') && item.causeId === 'blank').map(item => item.causeLabel))],
+  };
+`);
+assert.strictEqual(lowerCased.error, '', `a lower-case rule name must still load: ${lowerCased.error}`);
+assert.deepStrictEqual(lowerCased.labels, ['LOWER RULE BLANK'], 'a rule spelled in another case must keep its own cause wording');
 
 console.log('QA cause checks passed');
