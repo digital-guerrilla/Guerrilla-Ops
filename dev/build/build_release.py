@@ -937,7 +937,7 @@ def minify_html_document(html: str) -> str:
     # <script> and <style> bodies are left alone: inside them a "> <" belongs to
     # a string or template literal ("</b> <i>"), not to the document markup.
     parts = re.split(
-        r"(<script\b[^>]*>[\s\S]*?</script>|<style\b[^>]*>[\s\S]*?</style>)",
+        r"(<script\b[^>]*>[\s\S]*?</script\b[^>]*>|<style\b[^>]*>[\s\S]*?</style\b[^>]*>)",
         html,
         flags=re.IGNORECASE,
     )

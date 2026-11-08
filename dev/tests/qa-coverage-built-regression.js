@@ -33,7 +33,7 @@ function anything() {
 
 function loadBuild(relativePath) {
   const html = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]);
+  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)].map(match => match[1]);
   const context = {
     console, DOMParser, document: anything(), window: anything(), navigator: anything(),
     localStorage: anything(), sessionStorage: anything(), location: anything(),
