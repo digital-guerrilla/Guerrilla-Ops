@@ -116,24 +116,16 @@
           <li><button class="dropdown-item" type="button" onclick="openCreateModal('document')"><i class="bi bi-file-earmark-text me-2"></i>Document</button></li>
         </ul>
       </div>
-    </div>
-
-    <div id="active-bar">
-      <span class="lbl">Filters:</span>
-      <div id="pills"></div>
-      <button id="clear-btn" class="d-none" onclick="clearAll()">Clear all</button>
-      <button id="clear-highlights-btn" class="d-none" onclick="clearAllHighlights()">Remove all highlights</button>
-      <div class="res-row">
-        <span id="res-count">-</span>
-        <button id="expand-all-btn" onclick="toggleExpandAll()">
-          <i class="bi bi-arrows-expand"></i>Expand All
-        </button>
+      <div id="viewer-toggles" role="group" aria-label="Viewer panels">
+        <button id="restore-plan-btn" class="mode-btn d-none" type="button" aria-label="Toggle Plan panel" aria-controls="svg-floor-panel" aria-pressed="false" onclick="document.getElementById('svgp-edge-toggle').click()"><i class="bi bi-map me-1" aria-hidden="true"></i>Plan</button>
+        <button id="restore-3d-btn" class="mode-btn d-none" type="button" aria-label="Toggle 3D panel" aria-controls="viewer-3d-panel" aria-pressed="false" onclick="document.getElementById('viewer3d-edge-toggle').click()"><i class="bi bi-box me-1" aria-hidden="true"></i>3D</button>
       </div>
     </div>
 
     <div id="results-workspace">
     <div id="results-layout">
       <aside id="svg-floor-panel" class="d-none" aria-label="Floor SVG panel">
+        <button class="viewer-resize-handle" type="button" aria-label="Resize Plan panel" title="Drag to resize Plan; use Left/Right arrows"></button>
         <button class="svgp-edge-toggle" id="svgp-edge-toggle" type="button" title="Collapse floor plan panel" aria-expanded="true">
           <i class="bi bi-chevron-left"></i>
           <span>Plan</span>
@@ -146,6 +138,7 @@
         </div>
       </aside>
       <aside id="viewer-3d-panel" class="d-none" aria-label="3D viewer panel">
+        <button class="viewer-resize-handle" type="button" aria-label="Resize 3D panel" title="Drag to resize 3D; use Left/Right arrows"></button>
         <button class="viewer3d-edge-toggle" id="viewer3d-edge-toggle" type="button" title="Collapse 3D viewer panel" aria-expanded="true">
           <i class="bi bi-chevron-left"></i>
           <span>3D</span>
@@ -167,6 +160,19 @@
         </div>
       </aside>
       <div id="results-main">
+        <div id="active-bar">
+          <button id="restore-qa-btn" class="viewer-restore-btn" type="button" title="Expand QA graph panel" aria-label="Expand QA graph panel" onclick="document.getElementById('qa-graph-edge-toggle').click()"><i class="bi bi-pie-chart" aria-hidden="true"></i></button>
+          <span class="lbl">Filters:</span>
+          <div id="pills"></div>
+          <button id="clear-btn" class="d-none" onclick="clearAll()">Clear all</button>
+          <button id="clear-highlights-btn" class="d-none" onclick="clearAllHighlights()">Remove all highlights</button>
+          <div class="res-row">
+            <span id="res-count">-</span>
+            <button id="expand-all-btn" onclick="toggleExpandAll()">
+              <i class="bi bi-arrows-expand"></i>Expand All
+            </button>
+          </div>
+        </div>
         <div id="comp-list"></div>
       </div>
       <aside id="qa-graph-panel" class="d-none" aria-label="QA graph panel">
@@ -185,7 +191,6 @@
     </div>
     <div id="filter-bar" aria-label="Filter drawers"></div>
     <nav id="filter-tabs" aria-label="Filters and grouping order">
-      <span class="filter-tabs-title"><i class="bi bi-funnel-fill"></i><span>Filters</span></span>
       <ul id="group-sortable" aria-label="Drag tabs vertically to order enabled groups"></ul>
     </nav>
     <span id="filter-order-status" class="visually-hidden" aria-live="polite"></span>

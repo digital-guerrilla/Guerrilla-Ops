@@ -4,3 +4,8 @@ excel/
 node_modules/
 dev/packages/cache/
 __pycache__/
+
+# Generated standalone application bundles; CI publishes these as artifacts.
+/index.html
+/release/Guerrilla-Ops.html
+/release/Guerrilla-Ops-Airgapped.html

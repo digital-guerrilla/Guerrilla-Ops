@@ -1298,7 +1298,7 @@ function _renderThreeDViewer() {
 function _viewer3dApplyCollapsedState(els) {
   els.panel.classList.toggle('viewer3d-collapsed', _viewer3dCollapsed);
   els.edgeToggle?.setAttribute('aria-expanded', _viewer3dCollapsed ? 'false' : 'true');
-  els.edgeToggle?.setAttribute('title', _viewer3dCollapsed ? 'Expand 3D viewer panel' : 'Resize or collapse 3D viewer panel');
+  els.edgeToggle?.setAttribute('title', _viewer3dCollapsed ? 'Expand 3D viewer panel' : 'Collapse 3D viewer panel');
   if (_viewer3dCollapsed) {
     _viewer3dLastWidth = _viewer3dWidth || _viewer3dDesiredWidth();
   } else if (!_viewer3dWidth) {
@@ -1318,8 +1318,22 @@ function _bindThreeDPanelToggle(els) {
   if (!edge || edge.dataset.bound === '1') return;
   edge.dataset.bound = '1';
 
-  edge.addEventListener('mousedown', event => {
+  edge.addEventListener('click', () => {
+    _viewer3dCollapsed = !_viewer3dCollapsed;
+    _viewer3dApplyCollapsedState(els);
+  });
+
+  const resizeHandle = els.panel.querySelector('.viewer-resize-handle');
+  resizeHandle?.addEventListener('keydown', event => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const width = els.panel.getBoundingClientRect().width + (event.key === 'ArrowRight' ? 20 : -20);
+    if (typeof resizeWorkspacePanel !== 'function' || !resizeWorkspacePanel(els.panel.id, width)) _viewer3dSetWidth(els, width);
+    _viewer3dLastWidth = _viewer3dWidth;
+  });
+  resizeHandle?.addEventListener('mousedown', event => {
     if (event.button !== 0 || window.matchMedia('(max-width: 1200px)').matches) return;
+    event.preventDefault();
     const startX = event.clientX;
     const startW = els.panel.getBoundingClientRect().width;
     let dragged = false;
@@ -1332,18 +1346,13 @@ function _bindThreeDPanelToggle(els) {
         els.panel.classList.remove('viewer3d-collapsed');
         els.edgeToggle?.setAttribute('aria-expanded', 'true');
       }
-      _viewer3dSetWidth(els, startW + delta);
+      if (typeof resizeWorkspacePanel !== 'function' || !resizeWorkspacePanel(els.panel.id, startW + delta)) _viewer3dSetWidth(els, startW + delta);
     };
 
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-      if (!dragged) {
-        _viewer3dCollapsed = !_viewer3dCollapsed;
-        _viewer3dApplyCollapsedState(els);
-      } else {
-        _viewer3dLastWidth = _viewer3dWidth;
-      }
+      if (dragged) _viewer3dLastWidth = _viewer3dWidth;
     };
 
     window.addEventListener('mousemove', onMove);
