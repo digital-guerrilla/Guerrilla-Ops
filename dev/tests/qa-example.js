@@ -10,7 +10,7 @@ const examplePath = path.join(root, '..', 'examples', 'EECC-DGC-ZZ-ZZ-LIE-Z-0000
 
 function sheetJs() {
   const release = readText(path.join(root, '..', 'release', 'Guerrilla-Ops-Airgapped.html'));
-  const library = [...release.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1])
+  const library = [...release.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)].map(match => match[1])
     .sort((a, b) => b.length - a.length)[0];
   const sandbox = { console, TextDecoder, TextEncoder, Uint8Array, ArrayBuffer, setTimeout };
   sandbox.globalThis = sandbox;
