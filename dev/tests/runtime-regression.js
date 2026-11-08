@@ -303,6 +303,7 @@ vm.runInContext(`
   _qaSchemaCache = {
     error:'',
     formats:{ email:/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/ },
+    causes:{ '':Object.fromEntries(Object.values(QA_CAUSE).map(id => [id, id])) },
     checkSeverities:Object.create(null),
     checkSeverityByField:Object.create(null),
     sheets:[{
@@ -1513,7 +1514,5 @@ assert(context.db.documents.some(row => row.SheetName === 'Floor' && row.RowName
 context._setEntityAssociation('document', documentRow, { key:'facilities', targetType:'facility' }, 'Facility A', 'Facility A', false);
 assert.strictEqual(context.db.documents.length, 1, 'removing one of several Document links must remove only that linkage row');
 assert.strictEqual(context.db.documents[0].SheetName, 'Floor');
-
-require('./qa-cause-regression.js');
 
 console.log('Regression checks passed');

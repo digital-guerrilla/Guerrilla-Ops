@@ -18,21 +18,40 @@ QA View audits loaded COBie data for common completeness and relationship proble
 
 If no Facility is selected, every loaded Facility is audited.
 
-## See what kinds of issue a check found
+## See why a check failed
 
-Opening a check shows the types of issue inside it before the individual records,
-each with its count. For example, a date check might split into values entered as
-`n/a` and values written like `##/##/##`.
+Opening a check shows the causes inside it before the individual records, each with
+its count. A cause says why the check failed, for example a value entered as `n/a`,
+or a date in the wrong format. Where a cause has an invalid format, the records are
+grouped one level further by how the value was written, such as `##/##/##`.
 
-![A date check broken down by type of issue](../images/07a-qa-issue-types.png)
+![A date check broken down by cause and by how the values were written](../images/07a-qa-issue-types.png)
 
-Where several records share a type, it shows how many distinct values they hold, and
-names the value when they all match, so you can see at a glance that nothing else is
-hiding there. Single-record and `n/a` types stay compact. If everything in a check is
-the same type of issue, a single line says so and the records follow directly.
+Where several records share a cause or a written pattern, it shows how many distinct
+values they hold, and names the value when they all match, so you can see at a glance
+that nothing else is hiding there. If everything in a check has the same cause, a
+single line says so and the records follow directly.
 
-The types are a reading aid: they do not change any count or score. The downloaded
-report carries the same type in its **Cause** column.
+A cause only explains a finding. Each finding has one cause and keeps its check's
+severity, and no cause adds a check or changes a count or score. The downloaded
+report carries the cause in its **Cause** column.
+
+The causes and their wording are defined in the XML profile, so a profile can reword
+them. **A profile must define the shared `<causes>` block** (a top-level `<causes>`
+element holding `blank`, `not-applicable`, `invalid-format`, `not-a-number`,
+`negative-number`, `repeated-key`, `no-rows`, `wrong-row-count`, `no-match` and
+`other`), and its `Reference` rule must define `not-found` and `prefix-match`. If a
+customised profile lacks any of them, QA does not fall back to built-in wording: the
+audit applies no rules and shows a profile error naming what is missing. Copy the
+`<causes>` block from the bundled profile into yours.
+
+A rule or format can add its own causes, or reword a shared one for its own findings,
+such as the `Reference` rule or a date format. A reference can also switch on an extra
+diagnostic with `causeDiagnostics`, for example `causeDiagnostics="colon-prefix"` on a picklist
+such as `Pr_20_31: Name`. A value whose text before the colon matches a listed value
+but whose wording differs is still an unresolved reference. The diagnostic says only
+that the prefix matches. A profile with an unknown `causeDiagnostics` value, or a
+missing or duplicated cause, stops the audit with an error that names the problem.
 
 ## Understand severity
 

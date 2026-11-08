@@ -22,10 +22,15 @@ If a Floor has no SVG, its card shows **Missing**. Expand that floor and select
 
 ## Open and resize the panel
 
-The panel is on the right of the result list.
+The panel is on the left of the result hierarchy.
 
-- Select the vertical **Plan** edge control to collapse or reopen it.
-- On a wide desktop, drag the panel's left edge to change its width.
+- Drag Plan, 3D, results, or QA headers onto another panel's left, right, top, or bottom edge. The blue preview shows the drop location.
+- Panels dock beside or above/below the target, allowing mixed layouts such as two stacked viewers beside the results. The arrangement is saved in this browser.
+- With a header focused, use Alt + Left/Right to dock beside a neighbouring panel, or Alt + Up/Down to stack it above/below one.
+- Select the **Plan** header above the drawing to collapse or reopen it.
+- When collapsed, the panel uses no column width. Use **Plan** at the right of the Asset/Document/QA tab row to show or hide it.
+- Drag a panel's right border when another panel is beside it, or its bottom border when another panel is below it. Shared borders resize the adjoining panels, including mixed layouts, and the sizes are saved in this browser.
+- Focus a border and use Left/Right arrows for width or Up/Down arrows for height. Outside borders without a neighbouring panel have no resize handle.
 - Select a floor heading to make that drawing active.
 
 Filters control which floors remain available. If the expected floor is not

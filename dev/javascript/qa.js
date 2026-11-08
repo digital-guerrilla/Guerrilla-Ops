@@ -21,7 +21,10 @@ const QA_CHECK_ICON_BY_ISSUE_TYPE = {
   consistency: 'bi-shuffle',
 };
 
-const QA_NAMED_CHECK_HANDLERS = Object.freeze({
+// Registries have no prototype, so a name from the profile such as "constructor" is never a handler.
+const _qaRegistry = entries => Object.freeze(Object.assign(Object.create(null), entries));
+
+const QA_NAMED_CHECK_HANDLERS = _qaRegistry({
   NotNull: ({ text, isNA }) => !!text && !isNA,
   NotEmpty: ({ text }) => !!text && !text.startsWith('svg'),
   Format: ({ text, isNA, schema, formatName }) => {
@@ -42,7 +45,7 @@ const QA_NAMED_CHECK_HANDLERS = Object.freeze({
   ZeroOrGreater: ({ text, isNumber, number }) => !text || (isNumber && number >= 0),
 });
 
-const QA_RELATION_RULE_HANDLERS = Object.freeze({
+const QA_RELATION_RULE_HANDLERS = _qaRegistry({
   atLeastOneTargetPerRow: true,
 });
 
@@ -53,6 +56,25 @@ let qaRuleResults = [];
 let qaAllRuleResults = [];
 let qaHasRun = false;
 const QA_STAGE_ORDER = Object.freeze(['design', 'construction', 'operation']);
+
+// The COBie worksheets this tool RECOGNISES, independent of which ones the active QA
+// profile happens to describe. Coverage needs both sets: without this inventory a
+// client's own tab ("Notes", "Revisions") would be reported as COBie work that failed
+// assessment, which is a false statement about their data.
+const COBIE_WORKSHEETS = Object.freeze([
+  'Contact', 'Facility', 'Floor', 'Space', 'Zone', 'Type', 'Component', 'System',
+  'Assembly', 'Connection', 'Spare', 'Resource', 'Job', 'Impact', 'Document',
+  'Attribute', 'Coordinate', 'Issue', 'Picklist',
+]);
+const _COBIE_WORKSHEET_KEYS = Object.freeze(COBIE_WORKSHEETS.map(name => name.toLowerCase()));
+
+// Part of the COBie template, but guidance rather than project data. Calling Instruction
+// an "additional worksheet outside this profile" is false — it is COBie — and calling it
+// "not assessed" implies rules should have run against it. It carries nothing to assess,
+// so it is excluded from the data-coverage count entirely. The repository's example
+// workbook ships it, which is how this surfaced.
+const COBIE_TEMPLATE_SHEETS = Object.freeze(['Instruction']);
+const _COBIE_TEMPLATE_KEYS = Object.freeze(COBIE_TEMPLATE_SHEETS.map(name => name.toLowerCase()));
 let qaSelectedStage = 'operation';
 let _qaSchemaCache = null;
 let _qaFilterScope = null;
@@ -330,6 +352,8 @@ function _qaSchemaError(message) {
     formats: {},
     formatDescriptions: {},
     formatCriticalities: {},
+    // The schema-error finding is itself the explicit report; it has no profile to take wording from.
+    causes: { '': { [QA_CAUSE.OTHER]:'Profile error' } },
     sheets: [],
     ruleDefinitions: Object.create(null),
     ruleCriticalities: Object.create(null),
@@ -369,6 +393,15 @@ function _qaRuleDescriptionForCheck(checkId, schemaObj = null) {
   return '';
 }
 
+// A rule or format's own description: its <description> child, or else its direct
+// text. Nested elements such as <causes> are never part of the description.
+function _qaOwnText(node) {
+  const description = _qaDirectChild(node, 'description');
+  if (description) return String(description.textContent || '').trim();
+  return [...(node.childNodes || [])].filter(child => child.nodeType === 3 || child.nodeType === 4)
+    .map(child => child.nodeValue).join('').trim();
+}
+
 function _qaParseSchema() {
   if (_qaSchemaCache) return _qaSchemaCache;
 
@@ -385,16 +418,20 @@ function _qaParseSchema() {
   const profile = _qaAttr(root, 'profile');
   const version = _qaAttr(root, 'version');
 
-  const formats = {};
-  const formatDescriptions = {};
-  const formatCriticalities = {};
+  const causeProblems = [];
+  const causes = Object.create(null);
+  causes[''] = _qaParseCauses(root, 'causes', causeProblems);
+  const formats = Object.create(null);
+  const formatDescriptions = Object.create(null);
+  const formatCriticalities = Object.create(null);
   _qaChildren(_qaDirectChild(root, 'formats'), 'format').forEach(fx => {
     const name = _qaAttr(fx, 'name');
     const regex = _qaAttr(fx, 'regex');
     if (!name || !regex) return;
     try {
       formats[name] = new RegExp(regex);
-      formatDescriptions[name] = String(fx.textContent || '').trim();
+      formatDescriptions[name] = _qaOwnText(fx);
+      causes[`format:${name}`] = _qaParseCauses(fx, `format ${name}`, causeProblems);
       const criticality = _qaSeverity(_qaAttr(fx, 'criticality') || _qaAttr(fx, 'criticallity'), '');
       if (criticality) formatCriticalities[name] = criticality;
     } catch (_) {
@@ -406,9 +443,14 @@ function _qaParseSchema() {
   const ruleCriticalities = Object.create(null);
   _qaChildren(_qaDirectChild(root, 'ruleDefinitions'), 'rule').forEach(rule => {
     const name = _qaNorm(_qaAttr(rule, 'name'));
-    const text = String(rule.textContent || '').trim();
-    if (!name || !text) return;
+    const text = _qaOwnText(rule);
+    if (!name || !text) {
+      // Say why its causes go unread, rather than reporting the causes as missing.
+      if (name && _qaDirectChild(rule, 'causes')) causeProblems.push(`rule ${_qaAttr(rule, 'name')} defines causes but has no description`);
+      return;
+    }
     ruleDefinitions[name] = text;
+    causes[_qaCauseOwnerKey(`rule:${name}`)] = _qaParseCauses(rule, `rule ${_qaAttr(rule, 'name')}`, causeProblems);
     const sev = _qaSeverity(_qaAttr(rule, 'criticality') || _qaAttr(rule, 'criticallity') || _qaAttr(rule, 'severity'), '');
     if (sev) ruleCriticalities[name] = sev;
   });
@@ -417,6 +459,7 @@ function _qaParseSchema() {
   const checkSeverities = Object.create(null);
   const checkSeverityByField = Object.create(null);
   const invalidReferences = [];
+  const unsupportedDiagnostics = [];
 
   _qaChildren(_qaDirectChild(root, 'globalRules'), 'rule').forEach(rule => {
     const sev = _qaSeverity(_qaAttr(rule, 'severity'), '');
@@ -515,6 +558,7 @@ function _qaParseSchema() {
           issueType:_qaIssueType(_qaAttr(reference, 'issueType') || _qaAttr(col, 'issueType'), ''),
           icon:_qaAttr(reference, 'icon') || _qaAttr(col, 'icon'),
           multiValueDelimiter:_qaAttr(reference, 'multiValueDelimiter') || ';',
+          causeDiagnostics:_qaAttr(reference, 'causeDiagnostics').split(/[\s|]+/).filter(Boolean),
           ruleId:_qaAttr(reference, 'ruleId') || `${sheet.name}.${column.name}.Reference`,
           stage,
         });
@@ -544,6 +588,13 @@ function _qaParseSchema() {
   const invalidFormats = sheets.flatMap(sheet => sheet.columns
     .filter(column => column.checks.includes('Format') && !formats[column.formatName])
     .map(column => `${sheet.name}.${column.name}:${column.formatName || '(missing)'}`));
+  sheets.forEach(sheet => sheet.references.forEach(reference => reference.causeDiagnostics
+    .filter(name => !QA_CAUSE_DIAGNOSTICS[name])
+    .forEach(name => unsupportedDiagnostics.push(`${sheet.name}.${reference.column}:${name}`))));
+  Object.values(QA_CAUSE).forEach(id => {
+    const owner = QA_REFERENCE_CAUSES.includes(id) ? _qaCauseOwnerKey('rule:Reference') : '';
+    if (!causes[owner]?.[id]) causeProblems.push(`${owner ? 'the Reference rule' : 'the shared causes'} must define "${id}"`);
+  });
   const invalidStages = [...new Set(sheets.flatMap(sheet => [
     ...sheet.stages.filter(stage => !QA_STAGE_ORDER.includes(stage)),
     ...sheet.columns.map(rule => rule.stage),
@@ -551,19 +602,22 @@ function _qaParseSchema() {
     ...sheet.uniqueRules.map(rule => rule.stage),
     ...sheet.relationRules.map(rule => rule.stage),
   ].filter(stage => !QA_STAGE_ORDER.includes(stage))))];
-  if (unsupportedChecks.length || unsupportedRelations.length || invalidFormats.length || invalidStages.length || invalidReferences.length) {
+  if (unsupportedChecks.length || unsupportedRelations.length || invalidFormats.length || invalidStages.length || invalidReferences.length
+    || unsupportedDiagnostics.length || causeProblems.length) {
     const details = [
       unsupportedChecks.length ? `checks: ${unsupportedChecks.join(', ')}` : '',
       unsupportedRelations.length ? `relation types: ${unsupportedRelations.join(', ')}` : '',
       invalidFormats.length ? `formats: ${invalidFormats.join(', ')}` : '',
       invalidStages.length ? `stages: ${invalidStages.join(', ')}` : '',
       invalidReferences.length ? `references without targetSheet/targetColumn: ${invalidReferences.join(', ')}` : '',
+      unsupportedDiagnostics.length ? `causeDiagnostics: ${unsupportedDiagnostics.join(', ')}` : '',
+      causeProblems.length ? `cause definitions: ${causeProblems.join(', ')}` : '',
     ].filter(Boolean).join('; ');
     _qaSchemaCache = _qaSchemaError(`The current QA XML profile uses unsupported ${details}. No rules were applied.`);
     return _qaSchemaCache;
   }
 
-  _qaSchemaCache = { error:'', profile, version, formats, formatDescriptions, formatCriticalities, sheets, ruleDefinitions, ruleCriticalities, checkSeverities, checkSeverityByField };
+  _qaSchemaCache = { error:'', profile, version, formats, formatDescriptions, formatCriticalities, causes, sheets, ruleDefinitions, ruleCriticalities, checkSeverities, checkSeverityByField };
   return _qaSchemaCache;
 }
 
@@ -577,16 +631,73 @@ function _qaNamedCheckResult(checkName, value, schema, column = null) {
   return handler ? handler({ text, normalized, isNA, isNumber, number, schema, formatName:column?.formatName || '' }) : false;
 }
 
-// Causes describe what kind of problem a finding is, so a check can be broken
-// down before its rows are listed. A cause never decides pass or fail and is
-// never counted by the score.
-const QA_CAUSE_BLANK = 'Blank';
-const QA_CAUSE_NA = 'Entered as "n/a"';
-const QA_CAUSE_REPEATED = 'Repeated key';
-const QA_CAUSE_OTHER = 'Other value';
-const QA_CAUSE_GROUP_LIMIT = 8;
+// A cause says why a finding failed. JavaScript keeps the diagnostic logic and returns
+// a stable id; the wording comes from the <causes> of the XML profile. A cause never
+// decides pass or fail and is never counted by the score.
+const QA_CAUSE = Object.freeze({
+  BLANK:'blank',
+  NOT_APPLICABLE:'not-applicable',
+  INVALID_FORMAT:'invalid-format',
+  NOT_A_NUMBER:'not-a-number',
+  NEGATIVE_NUMBER:'negative-number',
+  REPEATED_KEY:'repeated-key',
+  NO_ROWS:'no-rows',
+  WRONG_ROW_COUNT:'wrong-row-count',
+  NO_MATCH:'no-match',
+  NOT_FOUND:'not-found',
+  PREFIX_MATCH:'prefix-match',
+  OTHER:'other', // the cause of a finding whose check has no diagnostic of its own
+});
+// Defined by the Reference rule; every other id must be defined in the shared <causes>.
+const QA_REFERENCE_CAUSES = Object.freeze([QA_CAUSE.NOT_FOUND, QA_CAUSE.PREFIX_MATCH]);
+// Optional diagnostics a <reference causeDiagnostics="..."> may enable.
+const QA_CAUSE_DIAGNOSTICS = _qaRegistry({
+  'colon-prefix': (value, targetSet) => {
+    const prefix = _qaPrefixOf(value);
+    return prefix && _qaTargetPrefixes(targetSet).has(prefix) ? QA_CAUSE.PREFIX_MATCH : '';
+  },
+});
+const QA_SHAPE_GROUP_LIMIT = 8;
 const QA_CAUSE_VALUE_LIMIT = 40;
 const _qaTargetPrefixCache = new WeakMap();
+
+// Reads the <cause id label> children of a node. Problems are collected, never swallowed.
+function _qaParseCauses(node, owner, problems) {
+  const causes = Object.create(null);
+  _qaChildren(_qaDirectChild(node, 'causes'), 'cause').forEach(cause => {
+    const id = _qaAttr(cause, 'id');
+    const label = _qaAttr(cause, 'label');
+    if (!id || !label) problems.push(`${owner} has a cause without an id or label`);
+    else if (id in causes) problems.push(`${owner} defines "${id}" twice`);
+    else causes[id] = label;
+  });
+  return causes;
+}
+
+// The label for a cause id: the owning rule or format first ("rule:Reference",
+// "format:isoDate"), then the shared causes. An id the profile lacks is an error.
+// Rule names are matched case-insensitively everywhere else (_qaNorm), so a rule's
+// causes are keyed the same way; format names keep their exact spelling, as formats do.
+function _qaCauseOwnerKey(owner) {
+  return owner.startsWith('rule:') ? `rule:${_qaNorm(owner.slice(5))}` : owner;
+}
+
+function _qaCauseLabel(schema, causeId, owner = '') {
+  const label = schema.causes[_qaCauseOwnerKey(owner)]?.[causeId] ?? schema.causes[''][causeId];
+  if (label === undefined) throw new Error(`QA cause "${causeId}" is not defined in the XML profile`);
+  return label;
+}
+
+// The cause fields of a finding. A finding has exactly one cause.
+function _qaFindingCause(schema, cfg) {
+  const causeId = cfg.causeId || QA_CAUSE.OTHER;
+  return {
+    causeId,
+    causeLabel: _qaCauseLabel(schema, causeId, cfg.causeOwner),
+    valuePattern: cfg.valuePattern || '',
+    value: cfg.value ?? '',
+  };
+}
 
 // Reduces a value to its pattern so values written the same way group together:
 // 01/02/25 becomes ##/##/##. Letters collapse to a single "a".
@@ -597,20 +708,26 @@ function _qaWrittenShape(value) {
 // Blank and n/a read the same whichever check failed, so they share one cause.
 function _qaEmptyCause(value) {
   const text = String(value ?? '').trim();
-  if (!text) return QA_CAUSE_BLANK;
-  return text.toLowerCase() === 'n/a' ? QA_CAUSE_NA : '';
+  if (!text) return QA_CAUSE.BLANK;
+  return text.toLowerCase() === 'n/a' ? QA_CAUSE.NOT_APPLICABLE : '';
 }
 
-// The cause of a failed column check, from the check's name and the value it saw.
-function _qaCheckCause(checkName, value) {
+// Why a named column check failed, from the check's name and the value it saw. The
+// owner is the format for a Format check and the rule otherwise, so wording the
+// profile gives that rule or format reaches every finding, empty values included.
+function _qaCheckDiagnosis(checkName, value, column = null) {
+  const causeOwner = checkName === 'Format' && column?.formatName ? `format:${column.formatName}` : `rule:${checkName}`;
   const emptyCause = _qaEmptyCause(value);
-  if (emptyCause) return emptyCause;
-  if (checkName === 'Format' || checkName === 'Valid') return `Written like ${_qaWrittenShape(value)}`;
-  if (checkName === 'ValidNumber' || checkName === 'ValidNumberOrNA') return 'Not a number';
-  if (checkName === 'ZeroOrGreater' || checkName === 'ZeroOrGreaterOrNA') {
-    return Number.isFinite(Number(String(value).trim().replace(/,/g, ''))) ? 'Negative number' : 'Not a number';
+  if (emptyCause) return { causeId:emptyCause, causeOwner };
+  if (checkName === 'Format' || checkName === 'Valid') {
+    return { causeId:QA_CAUSE.INVALID_FORMAT, causeOwner, valuePattern:_qaWrittenShape(value) };
   }
-  return QA_CAUSE_OTHER;
+  if (checkName === 'ValidNumber' || checkName === 'ValidNumberOrNA') return { causeId:QA_CAUSE.NOT_A_NUMBER, causeOwner };
+  if (checkName === 'ZeroOrGreater' || checkName === 'ZeroOrGreaterOrNA') {
+    const isNumber = Number.isFinite(Number(String(value).trim().replace(/,/g, '')));
+    return { causeId:isNumber ? QA_CAUSE.NEGATIVE_NUMBER : QA_CAUSE.NOT_A_NUMBER, causeOwner };
+  }
+  return { causeId:QA_CAUSE.OTHER, causeOwner };
 }
 
 // The text before the first colon, lowercased, or '' if there is none. Picklist
@@ -629,15 +746,18 @@ function _qaTargetPrefixes(targetSet) {
   return _qaTargetPrefixCache.get(targetSet);
 }
 
-// The cause of an unresolved reference. The prefix wording states only what was
-// measured: a shared prefix does not prove the two values mean the same thing.
-function _qaReferenceCause(value, targetSet, ref) {
-  const target = `${ref.targetSheet}.${ref.targetColumn}`;
+// Why a reference did not resolve. Optional diagnostics run only where the profile
+// enables them with causeDiagnostics. A prefix match is still a failed reference:
+// its label states what was measured, not that the two values are equivalent.
+function _qaReferenceDiagnosis(value, targetSet, ref) {
+  const causeOwner = 'rule:Reference';
   const emptyCause = _qaEmptyCause(value);
-  if (emptyCause) return emptyCause;
-  const prefix = _qaPrefixOf(value);
-  if (prefix && _qaTargetPrefixes(targetSet).has(prefix)) return `Text before ":" matches ${target}, the rest differs`;
-  return `Not found in ${target}`;
+  if (emptyCause) return { causeId:emptyCause, causeOwner };
+  for (const name of ref.causeDiagnostics || []) {
+    const causeId = QA_CAUSE_DIAGNOSTICS[name](value, targetSet);
+    if (causeId) return { causeId, causeOwner };
+  }
+  return { causeId:QA_CAUSE.NOT_FOUND, causeOwner };
 }
 
 function _qaLogicalFacilityRows() {
@@ -708,8 +828,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
       entityName: cfg.entityName || (cfg.sheet ? cfg.sheet + ' sheet' : 'Workbook'),
       facility: cfg.facility || '',
       detail: cfg.detail || '',
-      cause: cfg.cause || QA_CAUSE_OTHER,
-      value: cfg.value ?? '',
+      ..._qaFindingCause(schema, cfg),
       fields: Array.isArray(cfg.fields) ? cfg.fields.filter(Boolean) : [],
       issueType: _qaIssueType(cfg.issueType),
       stage: _qaStage(cfg.stage, activeRuleStage || 'design'),
@@ -778,7 +897,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: `${sheetRule.name} sheet`,
           facility: scope.facility,
           detail: `${sheetRule.name}: ${ruleDescription || sheetRule.presenceRule} Scope: ${scope.label}.`,
-          cause: 'No rows in scope',
+          causeId: QA_CAUSE.NO_ROWS,
+          causeOwner: `rule:${sheetRule.presenceRule.split('.').pop()}`,
           label: `${sheetRule.name}.${sheetRule.presenceRule.split('.').pop()}`,
         });
       });
@@ -802,7 +922,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: `${sheetRule.name} sheet`,
           facility: scope.facility,
           detail: `${sheetRule.name}: ${ruleDescription || sheetRule.singleRowRule} Scope: ${scope.label}; found ${count}.`,
-          cause: 'Wrong number of rows',
+          causeId: QA_CAUSE.WRONG_ROW_COUNT,
+          causeOwner: `rule:${sheetRule.singleRowRule.split('.').pop()}`,
           label: `${sheetRule.name}.${sheetRule.singleRowRule.split('.').pop()}`,
         });
       });
@@ -819,7 +940,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
         entityType: 'sheet',
         entityName: sheetRule.name + ' sheet',
         detail: `${sheetRule.name} sheet is required by schema but missing or empty in current scope.`,
-        cause: 'Worksheet missing or empty',
+        causeId: QA_CAUSE.NO_ROWS,
         label: 'Required COBie sheet is missing or empty',
       });
     }
@@ -851,7 +972,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
               entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
               facility: row._facility || '',
               detail: `${col.name}: ${ruleWording || checkName}. Value was ${value ? `"${value}"` : 'empty'}.`,
-              cause: _qaCheckCause(checkName, value),
+              ..._qaCheckDiagnosis(checkName, value, col),
               value,
               fields: [col.name],
               label: `${sheetRule.name}.${col.name}.${checkName}`,
@@ -877,7 +998,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
             entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Required column ${col.name} is blank.`,
-            cause: QA_CAUSE_BLANK,
+            causeId: QA_CAUSE.BLANK,
+            causeOwner: 'rule:NotNull',
             fields: [col.name],
             label: 'Required column value is missing',
           });
@@ -905,7 +1027,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
             entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Column ${col.name} value "${v}" does not match ${col.formatRef}${altRx ? ` or ${col.allowAlternateFormatRef}` : ''}.`,
-            cause: _qaCheckCause('Format', v),
+            ..._qaCheckDiagnosis('Format', v, { formatName:col.formatRef }),
             value: v,
             fields: [col.name],
             label: 'Column value has invalid format',
@@ -944,7 +1066,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: _qaRowIdentity(sheetRule.name, entry.row) || '(Unnamed row)',
           facility: entry.row._facility || '',
           detail: `${entry.count} rows share worksheet key [${rule.keys.join(', ')}] = "${entry.values.join(' | ')}".`,
-          cause: QA_CAUSE_REPEATED,
+          causeId: QA_CAUSE.REPEATED_KEY,
+          causeOwner: 'rule:Unique',
           value: entry.values.join(' | '),
           fields: rule.keys,
           label: ruleDescription || rule.ruleId,
@@ -989,7 +1112,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: _qaRowIdentity(sheetRule.name, rec.row) || '(Unnamed row)',
           facility: rec.row._facility || '',
           detail: `${sheetRule.name} has ${rec.count} rows with same key [${uniqueKeys.join(', ')}] = "${rec.vals.join(' | ')}".`,
-          cause: QA_CAUSE_REPEATED,
+          causeId: QA_CAUSE.REPEATED_KEY,
+          causeOwner: 'rule:Unique',
           value: rec.vals.join(' | '),
           fields: uniqueKeys,
           label: 'Duplicate value in unique key column(s)',
@@ -1022,7 +1146,8 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
             entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `Reference column ${ref.column} is blank but required to resolve ${ref.targetSheet}.${ref.targetColumn}.`,
-            cause: QA_CAUSE_BLANK,
+            causeId: QA_CAUSE.BLANK,
+            causeOwner: 'rule:Reference',
             fields: [ref.column],
             label: ref.ruleId || 'Cross-sheet reference is missing',
           });
@@ -1045,7 +1170,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
             entityName: _qaRowIdentity(sheetRule.name, row) || '(Unnamed row)',
             facility: row._facility || '',
             detail: `${ref.column} value "${v}" does not resolve to ${ref.targetSheet}.${ref.targetColumn}.`,
-            cause: _qaReferenceCause(v, targetSet, ref),
+            ..._qaReferenceDiagnosis(v, targetSet, ref),
             value: v,
             fields: [ref.column],
             label: ref.ruleId || 'Cross-sheet reference is missing',
@@ -1076,7 +1201,7 @@ function* _qaRunSteps(selectedStage = qaSelectedStage) {
           entityName: name || '(Unnamed row)',
           facility: row._facility || '',
           detail: `${sheetRule.name} "${name}" has no matching ${rule.targetSheet}.${rule.targetColumn} row.`,
-          cause: `No matching ${rule.targetSheet}.${rule.targetColumn}`,
+          causeId: QA_CAUSE.NO_MATCH,
           fields: ['Name'],
           label: rule.ruleId,
         });
@@ -1371,8 +1496,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
       entityName,
       facility,
       detail: cfg.detail,
-      cause: cfg.cause || QA_CAUSE_OTHER,
-      value: cfg.value ?? '',
+      ..._qaFindingCause(schema, cfg),
       fields: cfg.fields || [],
       issueType: _qaIssueType(cfg.issueType),
       stage: _qaStage(cfg.stage, sheetRule.stage || 'design'),
@@ -1398,7 +1522,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
             sev: _qaNamedCheckSeverity(checkName, col.severity, schema, col),
             issueType: checkName === 'Format' || checkName === 'Valid' ? 'format' : 'completeness',
             detail: `${col.name}: ${ruleWording || checkName}. Value was ${v ? `"${v}"` : 'empty'}.`,
-            cause: _qaCheckCause(checkName, v),
+            ..._qaCheckDiagnosis(checkName, v, col),
             value: v,
             fields: [col.name],
             label: ruleId,
@@ -1416,7 +1540,8 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
           issueType: col.issueType || 'completeness',
           icon: col.icon,
           detail: `Required column ${col.name} is blank.`,
-          cause: QA_CAUSE_BLANK,
+          causeId: QA_CAUSE.BLANK,
+          causeOwner: 'rule:NotNull',
           fields: [col.name],
           label: 'Required column value is missing',
         });
@@ -1434,7 +1559,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
             issueType: col.issueType || sheetRule.formatIssueType || 'format',
             icon: col.icon || sheetRule.formatIcon,
             detail: `Column ${col.name} value "${v}" does not match ${col.formatRef}${altRx ? ` or ${col.allowAlternateFormatRef}` : ''}.`,
-            cause: _qaCheckCause('Format', v),
+            ..._qaCheckDiagnosis('Format', v, { formatName:col.formatRef }),
             value: v,
             fields: [col.name],
             label: 'Column value has invalid format',
@@ -1472,7 +1597,8 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
             sev: rule.severity || resolveSeverity('unique-duplicate', sheetRule.uniqueSeverity || 'error', uniqueKeys[0] || ''),
             issueType: 'uniqueness',
             detail: `${sheetRule.name} has ${count} rows with same key [${uniqueKeys.join(', ')}] = "${keyVals.join(' | ')}".`,
-            cause: QA_CAUSE_REPEATED,
+            causeId: QA_CAUSE.REPEATED_KEY,
+            causeOwner: 'rule:Unique',
             value: keyVals.join(' | '),
             fields: uniqueKeys,
             label: rule.ruleId || 'Duplicate value in unique key column(s)',
@@ -1495,7 +1621,8 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
           issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
           icon: ref.icon || sheetRule.referenceIcon,
           detail: `Reference column ${ref.column} is blank but required to resolve ${ref.targetSheet}.${ref.targetColumn}.`,
-          cause: QA_CAUSE_BLANK,
+          causeId: QA_CAUSE.BLANK,
+          causeOwner: 'rule:Reference',
           fields: [ref.column],
           label: 'Cross-sheet reference is missing',
         });
@@ -1514,7 +1641,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
           issueType: ref.issueType || sheetRule.referenceIssueType || 'reference',
           icon: ref.icon || sheetRule.referenceIcon,
           detail: `${ref.column} value "${value}" does not resolve to ${ref.targetSheet}.${ref.targetColumn}.`,
-          cause: _qaReferenceCause(value, targetSet, ref),
+          ..._qaReferenceDiagnosis(value, targetSet, ref),
           value,
           fields: [ref.column],
           label: 'Cross-sheet reference is missing',
@@ -1536,7 +1663,7 @@ function _qaValidateEntityFields(entityType, entityName, facility, fields = [], 
           sev:rule.severity,
           issueType:'consistency',
           detail:`${sheetRule.name} "${name}" has no matching ${rule.targetSheet}.${rule.targetColumn} row.`,
-          cause: `No matching ${rule.targetSheet}.${rule.targetColumn}`,
+          causeId: QA_CAUSE.NO_MATCH,
           fields:['Name'],
           label:rule.ruleId,
         });
@@ -1644,6 +1771,7 @@ function setQaResultsSheetFilter(sheetName = '', shouldRender = true) {
   document.querySelectorAll('#group-sortable .group-chip[data-dim]').forEach(chip => {
     chip.classList.toggle('gchip-active', groupState.active.has(chip.dataset.dim));
   });
+  if (typeof syncFilterTabs === 'function') syncFilterTabs();
   if (!shouldRender || viewMode !== 'qa') return;
   const list = document.getElementById('comp-list');
   if (list) renderQAMode(list, false);
@@ -1667,6 +1795,130 @@ function _qaVisibleFindings() {
   });
 }
 
+// Coverage is descriptive, never evaluative: it reports what was looked at, and is
+// deliberately kept out of qaFindings/qaRuleResults so it cannot reach _qaScoreTally()
+// and move the score or the donut.
+//
+// Deliberate choices, several of which are wrong the obvious way round:
+//   * the DESCRIBED set is the profile's full sheet list, NOT the stage-filtered one.
+//     A sheet excluded by the selected stage is described; calling it unassessed would
+//     make coverage change every time a user switches stage.
+//   * iteration is per SOURCE WORKBOOK, not per logical facility.
+//     _qaLogicalFacilityRows() keeps one representative per facility identity, so a
+//     second file describing the same facility would vanish from the report.
+//   * workbooks are scoped by the selected facilities exactly as _qaRunSteps() scopes
+//     rows, so a facility outside the audit never appears in its coverage.
+//   * sheet names are matched the way readSheet()/parseCOBieInto() match them
+//     (case-insensitive, NOT trimmed). A tab the parser does not load is never
+//     reported as covered.
+//   * it describes the workbook files as loaded. Edits made in the session since then
+//     live in the model, not in the workbook, and are not reflected here.
+function _qaFacilityInScope(row) {
+  const facSel = sel.facility;
+  return !facSel.size || facSel.has((row._facility || '').toLowerCase());
+}
+
+// Per-workbook sheet inventory, cached so renders, filters and stage switches do not
+// re-parse every worksheet. The workbook object is replaced when a save reopens the
+// file; the signature also covers a sheet added, removed or resized in place.
+let _qaCoverageSheetCache = new WeakMap();
+
+function _qaWorkbookInventory(wb) {
+  const names = wb?.SheetNames || [];
+  const signature = names.map(name => `${name}\u0001${wb.Sheets?.[name]?.['!ref'] || ''}`).join('\u0002');
+  const cached = _qaCoverageSheetCache.get(wb);
+  if (cached && cached.signature === signature) return cached.sheets;
+
+  const recognised = new Set(_COBIE_WORKSHEET_KEYS);
+  const sheets = [];
+  names.forEach(sheetName => {
+    const key = String(sheetName).toLowerCase();
+    if (!String(sheetName).trim()) return;
+    if (_COBIE_TEMPLATE_KEYS.includes(key)) return;   // guidance, not project data
+    const entry = { sheet: String(sheetName).trim(), key };
+    // Row counts only exist for COBie worksheets, whose first row is a header by
+    // convention. An additional tab has no known header convention, so it gets none.
+    if (recognised.has(key)) entry.rows = readSheet(wb, sheetName).length;
+    sheets.push(entry);
+  });
+  if (wb && typeof wb === 'object') _qaCoverageSheetCache.set(wb, { signature, sheets });
+  return sheets;
+}
+
+function _qaCoverage() {
+  const schema = _qaParseSchema();
+
+  const workbooks = new Map();
+  (db.facilities || []).filter(_qaFacilityInScope).forEach(row => {
+    const key = String(row._workbookKey || row._fileName || '');
+    if (key && row._workbook && !workbooks.has(key)) workbooks.set(key, row);
+  });
+
+  // An unreadable profile describes nothing we can know. Saying it describes none of
+  // the worksheets would be a claim about the data that the failure does not support.
+  if (schema?.error) return { unavailable: true, error: String(schema.error), workbooks: workbooks.size };
+
+  const described = new Set((schema?.sheets || []).map(sheet => String(sheet.name).toLowerCase()));
+  const notAssessed = [], additional = [], empty = [];
+  let recognisedPresent = 0, coveredPresent = 0;
+
+  workbooks.forEach(row => {
+    const fileName = String(row._fileName || '').trim();
+    _qaWorkbookInventory(row._workbook).forEach(item => {
+      const entry = { sheet: item.sheet, file: fileName };
+      if (item.rows === undefined) { additional.push(entry); return; }
+      entry.rows = item.rows;
+      recognisedPresent += 1;
+      if (!described.has(item.key)) { notAssessed.push(entry); return; }
+      coveredPresent += 1;
+      if (item.rows === 0) empty.push(entry);
+    });
+  });
+
+  const order = (a, b) => a.sheet.localeCompare(b.sheet) || a.file.localeCompare(b.file);
+  return {
+    covered: coveredPresent, recognisedPresent,
+    notAssessed: notAssessed.sort(order),
+    additional: additional.sort(order),
+    empty: empty.sort(order),
+    workbooks: workbooks.size,
+  };
+}
+
+// Rendered identically in the QA view and the PDF cover so the two can never disagree.
+function _qaCoverageHtml(coverage) {
+  if (coverage?.unavailable) {
+    if (!coverage.workbooks) return '';
+    return `<div class="qa-coverage">
+    <span class="qa-coverage-head">Coverage and scope</span>
+    <p class="qa-coverage-line">Worksheet coverage is unavailable because the active QA profile could not be read. Does not affect QA score.</p>
+  </div>`;
+  }
+  if (!coverage || !coverage.recognisedPresent && !coverage.additional.length) return '';
+  // The filename only earns its place when more than one workbook is loaded; repeating
+  // it on every entry of a single-file report is noise, not provenance.
+  const showFile = coverage.workbooks > 1;
+  const where = item => showFile && item.file ? ` (${esc(item.file)})` : '';
+  const line = items => items
+    .map(item => `${esc(item.sheet)}${where(item)}${typeof item.rows === 'number' ? ` — ${item.rows.toLocaleString()} row${item.rows === 1 ? '' : 's'}` : ''}`)
+    .join('; ');
+  const parts = [];
+  if (coverage.notAssessed.length) {
+    parts.push(`<li><strong>Not assessed</strong> — recognised COBie worksheets this profile does not describe: ${line(coverage.notAssessed)}</li>`);
+  }
+  if (coverage.empty.length) {
+    parts.push(`<li><strong>Present, empty</strong> — described, but no data rows to assess: ${coverage.empty.map(item => esc(item.sheet) + where(item)).join('; ')}</li>`);
+  }
+  if (coverage.additional.length) {
+    parts.push(`<li><strong>Additional worksheets outside this COBie profile</strong>: ${line(coverage.additional)}</li>`);
+  }
+  return `<div class="qa-coverage">
+    <span class="qa-coverage-head">Coverage and scope</span>
+    <p class="qa-coverage-line">The active profile describes ${coverage.covered} of ${coverage.recognisedPresent} recognised COBie worksheet${coverage.recognisedPresent === 1 ? '' : 's'} present${coverage.additional.length ? `. ${coverage.additional.length} additional worksheet${coverage.additional.length === 1 ? ' was' : 's were'} outside this profile` : ''}. Counts describe the workbook files as loaded, not unsaved edits. Does not affect QA score.</p>
+    ${parts.length ? `<ul class="qa-coverage-list">${parts.join('')}</ul>` : ''}
+  </div>`;
+}
+
 function renderQAMode(list) {
   const visibleFindings = _qaVisibleFindings();
   const bySev = { error:0, warning:0, info:0 };
@@ -1687,7 +1939,7 @@ function renderQAMode(list) {
     ${_qaResultsSelectedSheet ? `<span class="qa-scope">Sheet: ${esc(_qaResultsSelectedSheet)}</span>` : ''}
     ${visibleFindings.length?`<button class="xbtn" onclick="exportQAReport()"><i class="bi bi-download me-1"></i>Download XLSX</button>`:''}
     ${qaRuleResults.length?`<button class="xbtn" onclick="exportQAPdf()"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</button>`:''}
-  </div>`;
+  </div>` + _qaCoverageHtml(_qaCoverage());
 
   if (!visibleFindings.length) {
     list.innerHTML = summary + `<div class="qa-clear"><i class="bi bi-patch-check"></i>
@@ -1804,8 +2056,8 @@ function _qaCheckBlocks(items, depth = 0) {
     const checkItems = byCheck.get(check) || [];
     const cid = 'col_' + (collapseCounter++);
     pendingGroups[cid] = { isQA: true, qaItems: checkItems, qaCauses: true, depth: depth + 1 };
-    const causeCount = new Set(checkItems.map(item => item.cause)).size;
-    const causeLabel = causeCount > 1 ? causeCount + ' types of issue' : '';
+    const causeCount = new Set(checkItems.map(item => item.causeId)).size;
+    const causeLabel = causeCount > 1 ? causeCount + ' causes' : '';
     return `<div class="grp-block grp-d${depth}">
       <div class="grp-hdr grp-collapsed" data-cid="${cid}">
         <i class="bi bi-chevron-down grp-chev"></i>
@@ -1855,61 +2107,92 @@ function _qaDistinctLabel(distinct, rows, sample = '') {
   return 'all the same value: ' + shown;
 }
 
-// Splits a check's findings by cause, most common first. Rarer causes fold into
-// one group so a check can never produce an unreadable list.
-function _qaCauseGroups(items) {
-  const byCause = new Map();
-  items.forEach(item => {
-    const cause = item.cause || QA_CAUSE_OTHER;
-    if (!byCause.has(cause)) byCause.set(cause, []);
-    byCause.get(cause).push(item);
-  });
-  const toGroup = (cause, list) => ({
-    cause,
-    items: list,
-    distinct: cause === QA_CAUSE_NA
+// A labelled group of findings that knows how many distinct values it holds, so
+// "are these all the same?" needs no reading of rows.
+function _qaFindingGroup(key, label, items, skipDistinct = false) {
+  return {
+    key,
+    label,
+    items,
+    distinct: skipDistinct
       ? 0
-      : new Set(list.map(item => String(item.value ?? '').trim().toLowerCase()).filter(Boolean)).size,
-    sample: list[0]?.value ?? '',
-  });
-  const groups = [...byCause.entries()]
-    .map(([cause, list]) => toGroup(cause, list))
-    .sort((a, b) => b.items.length - a.items.length || a.cause.localeCompare(b.cause));
-  if (groups.length <= QA_CAUSE_GROUP_LIMIT) return groups;
-  const kept = groups.slice(0, QA_CAUSE_GROUP_LIMIT - 1);
-  const rest = groups.slice(QA_CAUSE_GROUP_LIMIT - 1);
-  return [...kept, toGroup(`${rest.length} other types`, rest.flatMap(group => group.items))];
+      : new Set(items.map(item => String(item.value ?? '').trim().toLowerCase()).filter(Boolean)).size,
+    sample: items[0]?.value ?? '',
+  };
 }
 
-// The level between a check and its rows. With only one cause there is nothing
-// to choose between, so a single line says so and the rows follow directly.
-function _qaCauseBlocks(items, depth = 0) {
-  const groups = _qaCauseGroups(items);
+// Splits findings into labelled groups, most common first.
+function _qaSplitFindings(items, keyOf, labelOf, skipDistinct = () => false) {
+  const byKey = new Map();
+  items.forEach(item => {
+    const key = keyOf(item);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(item);
+  });
+  return [...byKey.entries()]
+    .map(([key, list]) => _qaFindingGroup(key, labelOf(list[0]), list, skipDistinct(key)))
+    .sort((a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label));
+}
+
+// Each finding has one cause; its label came from the XML profile.
+function _qaCauseGroups(items) {
+  return _qaSplitFindings(items, item => item.causeId, item => item.causeLabel,
+    causeId => causeId === QA_CAUSE.NOT_APPLICABLE);
+}
+
+// Within a cause, values written the same way group together. Rarer patterns fold
+// into one group so a check can never produce an unreadable list.
+function _qaShapeGroups(items) {
+  const groups = _qaSplitFindings(items, item => item.valuePattern || '',
+    item => item.valuePattern ? `Written like ${item.valuePattern}` : 'Other values');
+  if (groups.length <= QA_SHAPE_GROUP_LIMIT) return groups;
+  const rest = groups.slice(QA_SHAPE_GROUP_LIMIT - 1);
+  return [...groups.slice(0, QA_SHAPE_GROUP_LIMIT - 1),
+    _qaFindingGroup('', `${rest.length} other patterns`, rest.flatMap(group => group.items))];
+}
+
+// One level of the breakdown. With a single group there is nothing to choose
+// between, so one line says so and the next level follows directly.
+function _qaLevelBlocks(items, groups, depth, singleBody, pendingFor) {
   if (groups.length === 1) {
-    const [{ cause, distinct, sample }] = groups;
+    const [{ label, distinct, sample }] = groups;
     const distinctLabel = _qaDistinctLabel(distinct, items.length, sample);
     const distinctNote = distinctLabel ? ', ' + esc(distinctLabel) : '';
     const countNote = items.length > 1 ? 'All ' + items.length + ': ' : '';
-    return `<div class="qa-cause-note">${countNote}${esc(cause)}${distinctNote}</div>${qaGroupBody(items)}`;
+    return `<div class="qa-cause-note">${countNote}${esc(label)}${distinctNote}</div>${singleBody(items)}`;
   }
-  return groups.map(({ cause, items: causeItems, distinct, sample }) => {
+  return groups.map(({ label, items: groupItems, distinct, sample }) => {
     const cid = 'col_' + (collapseCounter++);
-    pendingGroups[cid] = { isQA: true, qaItems: causeItems };
-    const distinctLabel = _qaDistinctLabel(distinct, causeItems.length, sample);
+    pendingGroups[cid] = pendingFor(groupItems);
+    const distinctLabel = _qaDistinctLabel(distinct, groupItems.length, sample);
     return `<div class="grp-block grp-d${depth}">
       <div class="grp-hdr grp-collapsed" data-cid="${cid}">
         <i class="bi bi-chevron-down grp-chev"></i>
-        <span class="grp-name">${esc(cause)}</span>
+        <span class="grp-name">${esc(label)}</span>
         ${distinctLabel ? `<span class="grp-meta">${esc(distinctLabel)}</span>` : ''}
-        <span class="grp-cnt">${causeItems.length}</span>
+        <span class="grp-cnt">${groupItems.length}</span>
       </div>
       <div class="grp-body grp-closed" id="${cid}"></div>
     </div>`;
   }).join('');
 }
 
+// Check -> cause -> written pattern -> rows. The cause level.
+function _qaCauseBlocks(items, depth = 0) {
+  return _qaLevelBlocks(items, _qaCauseGroups(items), depth, list => _qaShapeBlocks(list, depth + 1),
+    list => ({ isQA:true, qaItems:list, qaShapes:true, depth:depth + 1 }));
+}
+
+// The written-pattern level, shown only where the cause recorded a pattern.
+function _qaShapeBlocks(items, depth = 0) {
+  if (!items.some(item => item.valuePattern)) return qaGroupBody(items);
+  return _qaLevelBlocks(items, _qaShapeGroups(items), depth, qaGroupBody,
+    list => ({ isQA:true, qaItems:list }));
+}
+
 function qaPendingGroupBody(pending) {
   if (pending.qaCauses) return _qaCauseBlocks(pending.qaItems, pending.depth || 0);
+  if (pending.qaShapes) return _qaShapeBlocks(pending.qaItems, pending.depth || 0);
   if (Object.prototype.hasOwnProperty.call(pending, 'qaDims')) {
     return pending.qaDims.length
       ? _qaGroupBlocks(pending.qaItems, pending.qaDims, pending.depth || 0)
@@ -1946,7 +2229,7 @@ function _qaReportRows() {
     Stage: stageLabel,
     Severity: x.sev === 'info' ? 'Advisory' : x.sev.charAt(0).toUpperCase() + x.sev.slice(1),
     Check: (QA_CHECKS[x.check] || {}).label || x.check,
-    Cause: x.cause || QA_CAUSE_OTHER,
+    Cause: x.causeLabel,
     Sheet: (QA_CHECKS[x.check] || {}).sheet || 'Multiple',
     Item: x.entityName,
     Facility: x.facility,
@@ -2030,7 +2313,9 @@ function _qaPdfReportHtml(logoMarkup = '') {
   const selectedFacilities = sel?.facility?.size
     ? [...sel.facility].map(key => idx.facilityNames.find(name => name.toLowerCase() === key) || key)
     : [];
-  const workbookFiles = [...new Set(_qaLogicalFacilityRows()
+  // Every source workbook of the selected facilities, so this field agrees with the
+  // coverage totals; a second file for the same facility is not dropped.
+  const workbookFiles = [...new Set((db.facilities || [])
     .filter(row => !selectedFacilityKeys || selectedFacilityKeys.has(_qaNorm(row._facility)))
     .map(row => String(row._fileName || '').trim())
     .filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -2154,6 +2439,12 @@ function _qaPdfReportHtml(logoMarkup = '') {
     .meta { display:grid; grid-template-columns:1fr 1.5fr 1.5fr; gap:6px 14px; margin:12px 0; padding:9px 10px; background:#f1f5f8; border-left:4px solid #00a9a5; }
     .meta-label { color:#607080; font-weight:700; }
     .cover { break-after:page; }
+    /* Coverage and scope: descriptive, not evaluative — no severity colour, no icon. */
+    .qa-coverage { margin:14px 0 0; padding:9px 11px; border:1px solid #d8e0e6; border-radius:4px; background:#f7f9fa; font-size:11px; }
+    .qa-coverage-head { display:block; font-weight:600; margin-bottom:3px; }
+    .qa-coverage-line { margin:0; }
+    .qa-coverage-list { margin:5px 0 0; padding-left:16px; }
+    .qa-coverage-list li { margin:2px 0; }
     .hero { display:flex; align-items:center; gap:14px; margin:0 0 10px; padding:10px 12px; border:1px solid #d9e1e8; border-radius:8px; background:linear-gradient(135deg,#f6fafc 0%,#eef4f8 100%); }
     .hero-headline { flex:1 1 auto; }
     .hero-title { display:block; color:#16324f; font-size:13pt; font-weight:800; }
@@ -2212,6 +2503,7 @@ function _qaPdfReportHtml(logoMarkup = '') {
           </div>
         </div>
       </div>
+      ${_qaCoverageHtml(_qaCoverage())}
       <h2 class="section-title">Sheet scores</h2>
       <table class="sheet-summary"><thead><tr><th>Sheet</th><th class="num">Rules</th><th class="num">Passed</th><th class="num">Advisory</th><th class="num">Warning</th><th class="num">Error</th><th class="num">Score</th></tr></thead><tbody>${sheetSummaryRows || '<tr><td colspan="7">No QA rule results are available.</td></tr>'}</tbody></table>
     </div>

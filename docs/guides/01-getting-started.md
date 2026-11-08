@@ -60,12 +60,18 @@ Existing filters and unsaved edits remain in memory. The newly loaded workbook i
 
 The screen is arranged from top to bottom:
 
-1. **Header**: workbook count, global search, unsaved-change count, Close, and the matching append action.
-2. **Summary**: totals for facilities, types, components, spaces, systems, and documents.
-3. **Filter panels**: Facility, Floor, Space, Type, System, and Document Category.
-4. **Results toolbar**: Asset View, Document View, QA View, Create, active filters, highlights, and grouping controls.
-5. **Results panel**: grouped components, documents, or QA findings, with Plan and 3D side panels when spatial data is available.
-6. **Footer**: project attribution, license reference, and **Terms of use** popup link.
+1. **Header**: Guerrilla Ops branding followed by a compact workbook summary, global search, unsaved-change count, Close, and the matching append action. The summary includes the facility name and description plus totals for facilities, floors, spaces, systems, types, components, and documents.
+2. **Results toolbar**: Asset View, Document View, QA View, Create, active filters, highlights, and Expand All.
+3. **Workspace**: Plan and 3D viewers on the left when spatial data is available, with the grouped component, document, or QA result hierarchy to their right.
+4. **Right-hand filter tabs**: icons for Facility, Floor, Zone, Space, Type, System, and Document Category; hover to see their names. Open a tab to use its filter drawer; use its unlabelled grouping checkbox and drag grip to configure the hierarchy.
+5. **Footer**: project attribution, license reference, and **Terms of use** popup link.
+
+The summary is always visible within the existing header height. Its count
+boxes keep their space; the facility name and description use the remaining
+width and are truncated with an ellipsis when needed. Hover over the facility
+text to read both in full. There is no duplicate project label or hide/show
+control. On narrow screens, the header itself scrolls horizontally to keep
+the summary and actions accessible.
 
 ## Privacy and session safety
 
