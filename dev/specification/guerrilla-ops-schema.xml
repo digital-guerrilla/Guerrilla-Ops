@@ -6,11 +6,37 @@
     <date>2026-08-08</date>
     <author>Digital Guerrilla</author>
   </meta>
+  <!-- Causes say why a finding failed. They are labels only: they never change a rule, severity, count or score.
+       A rule or format may define its own causes, or give a shared cause more specific wording. -->
+  <causes>
+    <cause id="blank" label="Blank"/>
+    <cause id="not-applicable" label='Entered as "n/a"'/>
+    <cause id="invalid-format" label="Invalid format"/>
+    <cause id="not-a-number" label="Not a number"/>
+    <cause id="negative-number" label="Negative number"/>
+    <cause id="repeated-key" label="Repeated key"/>
+    <cause id="no-rows" label="No rows in scope"/>
+    <cause id="wrong-row-count" label="Wrong number of rows"/>
+    <cause id="no-match" label="No matching row"/>
+    <cause id="other" label="Other"/>
+  </causes>
   <formats>
-    <format name="email" criticality="warning" regex="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$">Must have a valid email address.</format>
-    <format name="isoDate" criticality="warning" regex="^\d{4}-\d{2}-\d{2}$">Must use ISO date format YYYY-MM-DD.</format>
-    <format name="isoDateTime" criticality="warning" regex="^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:?\d{2})?$">Must use an ISO date and time with an optional timezone.</format>
-    <format name="GUID" criticality="info" regex="^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9A-Za-z_$]{22})$">Must be a valid GUID.</format>
+    <format name="email" criticality="warning" regex="^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$">
+      <description>Must have a valid email address.</description>
+      <causes><cause id="invalid-format" label="Invalid email address"/></causes>
+    </format>
+    <format name="isoDate" criticality="warning" regex="^\d{4}-\d{2}-\d{2}$">
+      <description>Must use ISO date format YYYY-MM-DD.</description>
+      <causes><cause id="invalid-format" label="Invalid date format"/></causes>
+    </format>
+    <format name="isoDateTime" criticality="warning" regex="^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:?\d{2})?$">
+      <description>Must use an ISO date and time with an optional timezone.</description>
+      <causes><cause id="invalid-format" label="Invalid date and time format"/></causes>
+    </format>
+    <format name="GUID" criticality="info" regex="^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9A-Za-z_$]{22})$">
+      <description>Must be a valid GUID.</description>
+      <causes><cause id="invalid-format" label="Invalid GUID"/></causes>
+    </format>
   </formats>
   <stages>
     <stage name="Design"/>
@@ -21,7 +47,13 @@
     <rule name="NotNull" criticality="warning">Must have a text value that is not "n/a" or empty.</rule>
     <rule name="NotEmpty" criticality="info">Must have a text value; "n/a" is acceptable.</rule>
     <rule name="Unique" criticality="error">Must be unique within the scope of the worksheet.</rule>
-    <rule name="Reference" criticality="error">Must match the referenced Name or key column in another worksheet.</rule>
+    <rule name="Reference" criticality="error">
+      <description>Must match the referenced Name or key column in another worksheet.</description>
+      <causes>
+        <cause id="not-found" label="Not found in the referenced column"/>
+        <cause id="prefix-match" label="Text before &quot;:&quot; matches a listed value, the rest differs"/>
+      </causes>
+    </rule>
     <rule name="OneAndOnlyOneFacilityFound" criticality="error">Only one Facility row is allowed.</rule>
     <rule name="ValidNumber" criticality="warning">Must represent a valid number; "n/a" is not acceptable.</rule>
     <rule name="ValidNumberOrNA" criticality="warning">If text is provided, it must represent a valid number or "n/a".</rule>
@@ -194,7 +226,7 @@
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
-            <reference targetSheet="Picklist" targetColumn="Category-Facility" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="Category-Facility" required="true" causeDiagnostics="colon-prefix"/>
           </qa>
           <ui groupTitle="Identification" colorToken="cobie-required"/>
         </column>
@@ -430,7 +462,7 @@
         <column name="Category">
           <qa>
             <rule name="NotNull"/>
-            <reference targetSheet="Picklist" targetColumn="Category-Space" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="Category-Space" required="true" causeDiagnostics="colon-prefix"/>
           </qa>
           <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
@@ -593,7 +625,7 @@
         <column name="Category">
           <qa stage="Design">
             <rule name="NotNull"/>
-            <reference targetSheet="Picklist" targetColumn="Category-Product" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="Category-Product" required="true" causeDiagnostics="colon-prefix"/>
           </qa>
           <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>
@@ -955,7 +987,7 @@
         <column name="Category">
           <qa stage="Design">
             <rule name="NotNull"/>
-            <reference targetSheet="Picklist" targetColumn="Category-Element" required="true"/>
+            <reference targetSheet="Picklist" targetColumn="Category-Element" required="true" causeDiagnostics="colon-prefix"/>
           </qa>
           <ui groupTitle="Identification" colorToken="cobie-reference"/>
         </column>

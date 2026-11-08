@@ -1,0 +1,62 @@
+{
+  "design": {
+    "checks": 199,
+    "findings": 318,
+    "severities": {
+      "info": 17,
+      "error": 251,
+      "warning": 50
+    },
+    "tally": {
+      "pass": 1048697,
+      "advisory": 17,
+      "warning": 50,
+      "error": 251,
+      "fail": 301,
+      "total": 1049015
+    },
+    "score": 100,
+    "findingsSha256": "7821828fb83e3bd6f6072c8c73ea03c866cb1c4227ca92e284fab76e0042a2ff",
+    "checksSha256": "a2aca01d5023c1144746255bc96b66f7fee61f2782b265812e1d82b3fee32c62"
+  },
+  "construction": {
+    "checks": 238,
+    "findings": 35033,
+    "severities": {
+      "info": 19,
+      "error": 377,
+      "warning": 34637
+    },
+    "tally": {
+      "pass": 1235725,
+      "advisory": 19,
+      "warning": 34637,
+      "error": 377,
+      "fail": 35014,
+      "total": 1270758
+    },
+    "score": 97,
+    "findingsSha256": "dd824c2808c981c6ac08f7f9239164751fb1d2f1ea5a9c832ea41a18db883ffe",
+    "checksSha256": "0b8a22a95b5f31bd4360ad301e34458cffb8188892157d2fb032d66ab23c0e49"
+  },
+  "operation": {
+    "checks": 258,
+    "findings": 35080,
+    "severities": {
+      "info": 20,
+      "error": 402,
+      "warning": 34658
+    },
+    "tally": {
+      "pass": 1306516,
+      "advisory": 20,
+      "warning": 34658,
+      "error": 402,
+      "fail": 35060,
+      "total": 1341596
+    },
+    "score": 97,
+    "findingsSha256": "d81b224251f1e742bab908a2a65d2513a3a78ea5ef5a0c20f5570c6b4ab89df8",
+    "checksSha256": "3de6de23df08cde4f78ab7aaa03a88c4766bc9fcae27bfbb85b3952902dc6c9d"
+  }
+}
