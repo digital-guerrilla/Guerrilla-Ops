@@ -73,8 +73,8 @@ function runDevChannelRegression({ assert, fs, path, javascriptDir, devIndexSour
     'the QA graph must default to half width and support a collapsed state');
   assert(qaGraphSource.includes('_qaGraphDesiredWidth') && qaGraphSource.includes('_bindQaGraphResizeAndToggle'),
     'the QA graph must bind desktop drag resizing and click collapse behavior');
-  assert(qaSchemaSource.includes('profile="NBIMS-US-V3-current-rules"'),
-    'QA must use the current named NBIMS rule profile');
+  assert(qaSchemaSource.includes('profile="COBie-2.4-current-rules"'),
+    'QA must identify the COBie 2.4 rule profile');
 }
 
 module.exports = { runDevChannelRegression };

@@ -97,14 +97,16 @@ function openChangesModal() {
 // ── Workbook reconstruction and style preservation ────────────
 function _exportSheetData(facObj) {
   const fac     = facObj._facility;
-  const cleanRows = (arr) => arr
-    .filter(r => r._facility === fac)
+  const cleanRows = (arr, descriptor) => arr
+    .filter(r => r._facility === fac && (
+      !(descriptor.workbookOwned || (typeof _ppmOwnsAttribute === 'function' && descriptor.type === 'attribute' && _ppmOwnsAttribute(r))) ||
+      r._workbookKey === facObj._workbookKey))
     .map(r => { const o={}; Object.entries(r).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return o; });
   const cleanFac = () => { const o={}; Object.entries(facObj).forEach(([k,v])=>{ if(!k.startsWith('_')) o[k]=v; }); return [o]; };
   return [...COBIE_RUNTIME_MODEL.entities.values()]
     .filter(descriptor => descriptor.type !== 'picklist')
     .map(descriptor => [descriptor.sheet,
-      descriptor.scopeIdentity ? cleanFac() : cleanRows(db[descriptor.bucket] || [])]);
+      descriptor.scopeIdentity ? cleanFac() : cleanRows(db[descriptor.bucket] || [], descriptor)]);
 }
 
 async function _buildPreservedXlsx(facObj, onProgress) {

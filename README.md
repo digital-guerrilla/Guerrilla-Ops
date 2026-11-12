@@ -68,6 +68,7 @@ The guides below provide step-by-step help beyond this quick introduction.
 | [3D viewer](docs/guides/10-3d-viewer.md) | Coordinate geometry, navigation, selection and floor overlays |
 | [Align Plan and 3D](docs/guides/11-align-plan-3d.md) | Match an SVG floor plan to Space coordinate geometry and save the transform |
 | [Locate components](docs/guides/12-locate-components.md) | Place Components on floor plans, set height and verify the position in 3D |
+| [PPM View](docs/guides/13-ppm-view.md) | Schedule maintenance, review Gantt/calendar dates and record completion |
 
 Start from the [complete guide index](docs/guides/README.md) for suggested reading paths.
 
@@ -117,7 +118,7 @@ The unlabelled checkboxes on the right-hand tabs decide how records are arranged
 
 ## 3. Choose a working mode
 
-The buttons above the results let you look at the same workbook in three
+The buttons above the results let you look at the same workbook in four
 different ways. Your active filters continue to apply when you move between
 views.
 
@@ -126,6 +127,19 @@ views.
 | **Asset View** | Finding equipment | Components, locations, types, systems and full asset records |
 | **Document View** | Finding information files | Manuals, certificates, drawings, links and network file paths |
 | **QA View** | Checking data quality | Missing references, unresolved relationships and incomplete records |
+| **PPM View** | Planned preventive maintenance | Summary cards, dependency-aware Gantt and calendar, per-Component schedules and completion history |
+
+### PPM View
+
+Use **PPM View** to create maintenance Jobs, give each installed Component its
+own fixed-cycle schedule, and track completion. Switch between Gantt and calendar,
+or drag unfinished work to preview a move and its dependent tasks. Choose one
+occurrence or this and future unfinished cycles.
+
+The XML specification generates the COBie 2.4 Job fields, picklists and date
+controls. New Jobs receive generated external identifiers. Schedules and history
+are saved as Job-linked Attribute records using the normal workbook save actions;
+no V3 worksheets are generated. See the [PPM guide](docs/guides/13-ppm-view.md).
 
 ### Asset View
 

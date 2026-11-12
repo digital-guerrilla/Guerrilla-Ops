@@ -235,6 +235,9 @@ function closeWorkbooks() {
   document.getElementById('btn-asset').classList.add('active');
   document.getElementById('btn-document').classList.remove('active');
   document.getElementById('btn-qa').classList.remove('active');
+  document.getElementById('btn-ppm')?.classList.remove('active');
+  document.getElementById('expand-all-btn')?.classList.remove('d-none');
+  if (typeof resetPpm === 'function') resetPpm();
   document.getElementById('app').style.display = 'none';
   document.getElementById('hdr').style.display = 'none';
   document.getElementById('upload').style.display = 'flex';

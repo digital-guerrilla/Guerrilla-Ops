@@ -35,7 +35,7 @@ Direct updates require the File System Access API. Use a current Chrome or Edge 
 
 1. Clear global search.
 2. Select **Clear all**.
-3. Confirm the correct Asset, Document, or QA View.
+3. Confirm the correct Asset, Document, QA, or PPM View.
 4. Expand grouped results.
 5. Check whether the source COBie relationship uses the expected row and sheet names.
 
@@ -92,9 +92,23 @@ Unsaved changes exist only in browser memory. Browser refresh cannot recover the
 | Document | Document metadata, category, complete Directory link, and linked row |
 | Contact | People and organisations, including `CreatedBy` references |
 | Coordinates | Geometry used for 3D view |
-| Attributes | used to store floor plan svgs and any other attributes |
+| Attributes | Floor plan SVGs, PPM schedules/completions linked to Jobs, and other attributes |
+| Job | Maintenance templates, recurrence, task numbers, predecessors and resources |
+| Resource | Referenced maintenance materials, equipment and labour descriptions |
 
 Other workbook sheets are not used by the dashboard but are retained in supported `.xlsx` save flows.
+
+### PPM needs attention
+
+Use **Jobs** to inspect and edit source tasks. Invalid intervals,
+unsupported units, duplicate task identities, missing predecessors, dependency
+cycles and unresolved Component targets are reported explicitly. A missing anchor
+leaves a Job unscheduled; numeric `Start` values are not calendar dates.
+
+PPM uses COBie 2.4 Job fields only. Picklist entries such as "as required" do not
+define a fixed recurrence; choose a supported time unit before scheduling.
+Corrupt or duplicated PPM Attribute records are reported, not silently replaced.
+See [PPM View](13-ppm-view.md) for compatibility and dependency rules.
 
 ## Document relationship rules
 

@@ -2,6 +2,7 @@
 hydrateFilterControls();
 initFilterTabs();
 initWorkspacePanels();
+initPpm();
 
 // ── Workbook upload and drag-and-drop ─────────────────────────
 document.getElementById('fileInput').addEventListener('change', e => { if(e.target.files.length) loadFiles(e.target.files); });

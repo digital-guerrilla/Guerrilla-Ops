@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<cobieWorkbookSpecification xmlns="https://digital-guerrilla.scot/schemas/cobie-workbook-validation/2.0" version="2.0" profile="NBIMS-US-V3-current-rules" mode="validation">
+<cobieWorkbookSpecification xmlns="https://digital-guerrilla.scot/schemas/cobie-workbook-validation/2.0" version="2.0" profile="COBie-2.4-current-rules" mode="validation">
   <meta>
-    <title>COBie Current Validation Rules</title>
+    <title>COBie 2.4 Validation Rules</title>
     <description>Named worksheet validation rules for Contact, Facility, Floor, Space, Zone, Type, Component, and System.</description>
     <date>2026-08-08</date>
     <author>Digital Guerrilla</author>
@@ -29,7 +29,82 @@
     <rule name="ZeroOrGreaterOrNA" criticality="warning">If text is provided, it must represent zero or a positive number, or "n/a".</rule>
     <rule name="ZeroOrGreater" criticality="warning">If text is provided, it must represent zero or a positive number.</rule>
   </ruleDefinitions>
+  <ppm maxOccurrences="20000" defaultView="gantt" dependency="finish-to-start" recurrence="fixed" attributeCategory="Guerrilla-PPM">
+    <statuses>
+      <status name="Planned" initial="true"/>
+      <status name="In progress"/>
+      <status name="Completed" completed="true"/>
+    </statuses>
+    <units>
+      <unit name="minute" aliases="minute|minutes|min" minutes="1"/>
+      <unit name="hour" aliases="hour|hours|hr|hrs" minutes="60"/>
+      <unit name="day" aliases="day|days" minutes="1440"/>
+      <unit name="week" aliases="week|weeks" minutes="10080"/>
+      <unit name="month" aliases="month|months" months="1"/>
+      <unit name="quarter" aliases="quarter|quarters" months="3"/>
+      <unit name="year" aliases="year|years" months="12"/>
+    </units>
+    <records attributePrefix="PPM.Record.">
+      <column name="Name"><ppm role="name"/></column>
+      <column name="JobName"><ppm role="job"/></column>
+      <column name="ComponentName"><ppm role="component"/></column>
+      <column name="StartDate"><ppm role="start"/></column>
+      <column name="EndDate"><ppm role="end"/></column>
+    </records>
+    <attributes>
+      <attribute role="record" name="PPM.Record" label="Record kind"/>
+      <attribute role="schedule" name="PPM.Schedule" label="Schedule identifier"/>
+      <attribute role="task" name="PPM.Task" label="Task identifier"/>
+      <attribute role="component" name="PPM.Component" label="Component"/>
+      <attribute role="anchor" name="PPM.Anchor" label="Recurrence anchor"/>
+      <attribute role="segments" name="PPM.Segments" label="Future series changes"/>
+      <attribute role="cycle" name="PPM.Cycle" label="Cycle number"/>
+      <attribute role="nominal" name="PPM.Nominal" label="Original planned start"/>
+      <attribute role="requested" name="PPM.Requested" label="Requested start"/>
+      <attribute role="status" name="PPM.Status" label="Status"/>
+      <attribute role="actual" name="PPM.ActualCompletion" label="Actual completion"/>
+    </attributes>
+  </ppm>
   <sheets>
+    <sheet name="Job" bucket="jobs" identityField="Name">
+      <runtime modal="true" attributes="true" workbookOwned="true"/>
+      <ui label="Job" pluralLabel="Jobs" icon="bi-calendar-check" colorToken="type" modalTitle="Maintenance Job"/>
+      <columns>
+        <column name="Name"><ui groupTitle="Identification"/><ppm role="name" search="true"/></column>
+        <column name="CreatedBy"><qa><reference targetSheet="Contact" targetColumn="Email" required="false"/></qa><ui groupTitle="Audit"/><ppm input="select" lookup="Contact" valueField="Email" scope="workbook"/></column>
+        <column name="CreatedOn"><ui groupTitle="Audit"/><ppm input="datetime-local" generate="timestamp"/></column>
+        <column name="Category"><ui groupTitle="Identification"/><ppm search="true" input="select" picklist="JobType" values="Adjustment|Calibration|Emergency|Inspection|Operation|PM|Safety" default="PM"/></column>
+        <column name="Status"><ui groupTitle="Identification"/><ppm input="select" picklist="JobStatus" values="Not Yet Started|Started|Completed|OTHER|NOTKNOWN|UNSET" default="Not Yet Started"/></column>
+        <column name="TypeName"><ui groupTitle="Target"/><ppm role="type" input="select" lookup="Type" valueField="Name" scope="facility"/></column>
+        <column name="Description"><ui groupTitle="Identification"/><ppm search="true" input="textarea"/></column>
+        <column name="Duration"><ui groupTitle="Schedule"/><ppm role="duration" input="number" min="0" step="any"/></column>
+        <column name="DurationUnit"><ui groupTitle="Schedule"/><ppm role="durationUnit" input="select" picklist="DurationUnit" units="true"/></column>
+        <column name="Start"><ui groupTitle="Schedule"/><ppm input="number" min="0" step="any" hint="Numeric offset, not a calendar date."/></column>
+        <column name="TaskStartUnit"><ui groupTitle="Schedule"/><ppm input="select" picklist="DurationUnit" units="true"/></column>
+        <column name="Frequency"><ui groupTitle="Schedule"/><ppm role="interval" input="number" min="0" step="any"/></column>
+        <column name="FrequencyUnit"><ui groupTitle="Schedule"/><ppm role="intervalUnit" input="select" picklist="DurationUnit" units="true"/></column>
+        <column name="ExtSystem"><ui groupTitle="External"/></column>
+        <column name="ExtObject"><ui groupTitle="External"/><ppm input="select" picklist="objJob" values="IfcProcedure|IfcTask"/></column>
+        <column name="ExtIdentifier"><ui groupTitle="External"/><ppm role="identifier" generate="guid"/></column>
+        <column name="TaskNumber"><ui groupTitle="Tasks"/><ppm role="number" input="number" min="0" step="1"/></column>
+        <column name="Priors"><ui groupTitle="Tasks"/><ppm role="priors" input="multiselect" lookup="Job" valueField="TaskNumber" scope="series"/></column>
+        <column name="ResourceNames"><ui groupTitle="Resources"/><ppm role="resources" input="multiselect" lookup="Resource" valueField="Name" scope="workbook"/></column>
+      </columns>
+    </sheet>
+    <sheet name="Resource" bucket="resources" identityField="Name">
+      <runtime modal="true" workbookOwned="true"/>
+      <ui label="Resource" pluralLabel="Resources" icon="bi-wrench" colorToken="type" modalTitle="Resource Information"/>
+      <columns>
+        <column name="Name"><ui groupTitle="Identification"/></column>
+        <column name="CreatedBy"><qa><reference targetSheet="Contact" targetColumn="Email" required="false"/></qa><ui groupTitle="Audit"/></column>
+        <column name="CreatedOn"><ui groupTitle="Audit"/></column>
+        <column name="Category"><ui groupTitle="Identification"/></column>
+        <column name="Description"><ui groupTitle="Identification"/></column>
+        <column name="ExtSystem"><ui groupTitle="External"/></column>
+        <column name="ExtObject"><ui groupTitle="External"/></column>
+        <column name="ExtIdentifier"><ui groupTitle="External"/></column>
+      </columns>
+    </sheet>
     <sheet name="Contact" bucket="contacts" identityField="Email">
       <runtime modal="true" attributes="true"/>
       <ui label="Contact" pluralLabel="Contacts" icon="bi-person-fill" colorToken="contact" colorSheet="10" modalTitle="Contact Information"/>
@@ -1241,6 +1316,11 @@
         <column name="CoordinateType"/>
         <column name="DocumentType"/>
         <column name="DurationUnit"/>
+        <column name="JobStatus"/>
+        <column name="JobType"/>
+        <column name="objJob"/>
+        <column name="objResource"/>
+        <column name="ResourceType"/>
         <column name="FloorType"/>
         <column name="objAttribute"/>
         <column name="objComponent"/>

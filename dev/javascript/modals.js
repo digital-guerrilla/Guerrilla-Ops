@@ -57,6 +57,7 @@ function _cascadeReferenceRename(relationship, oldName, newName, facility) {
 
 function _cascadeEntityRename(entityType, oldName, newName, facility) {
   if (!newName || oldName === newName) return facility;
+  if (typeof _ppmCascadeRename === 'function') _ppmCascadeRename(entityType, oldName, newName, facility);
   _renameDocumentRows(entityType, oldName, newName, facility);
   db.attributes.forEach(attribute => {
     if (facility && attribute._facility !== facility) return;
@@ -194,6 +195,10 @@ function restoreTypeModalView(context) {
 
 function openGroupInfo(dim, name, facility) {
   const entityType = String(dim || '').toLowerCase();
+  if (typeof _ppmInspect === 'function' && entityType === 'job') {
+    _ppmInspect();
+    return;
+  }
   _typeModalReturnContext = null;
   _setTypeModalCloseReturns(false);
   _typeModalViewContext = { kind:'group', entityType, entityName:name, facility:facility || '' };

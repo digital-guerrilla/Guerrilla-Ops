@@ -126,6 +126,7 @@ function _buildCobieRuntimeModel() {
       bucket:String(node.getAttribute('bucket') || '').trim() || _cobieDefaultBucket(type),
       identityField:String(node.getAttribute('identityField') || 'Name').trim(),
       mergeRows:runtime.getAttribute('mergeRows') === 'true',
+      workbookOwned:runtime.getAttribute('workbookOwned') === 'true',
       scopeIdentity:runtime.getAttribute('scopeIdentity') === 'true',
       modal:runtime.getAttribute('modal') === 'true',
       attributes:runtime.getAttribute('attributes') === 'true',

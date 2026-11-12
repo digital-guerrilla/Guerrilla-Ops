@@ -118,8 +118,8 @@ assert(resultsCssSource.includes('width: 50vw;') && resultsCssSource.includes('.
   'the QA graph must default to half width and support a collapsed state');
 assert(qaGraphSource.includes('_qaGraphDesiredWidth') && qaGraphSource.includes('_bindQaGraphResizeAndToggle'),
   'the QA graph must bind desktop drag resizing and click collapse behavior');
-assert(qaSchemaSource.includes('profile="NBIMS-US-V3-current-rules"'),
-  'QA must use the current named NBIMS rule profile');
+assert(qaSchemaSource.includes('profile="COBie-2.4-current-rules"'),
+  'QA must identify the COBie 2.4 rule profile');
 const categorizedSchema = new DOMParser().parseFromString(qaSchemaSource, 'application/xml');
 const schemaColumn = (sheetName, columnName) => [...categorizedSchema.querySelectorAll('sheets > sheet')]
   .find(sheet => sheet.getAttribute('name') === sheetName)
@@ -1196,6 +1196,12 @@ const createdByCoverage = JSON.parse(vm.runInContext(`JSON.stringify(
   }))
 )`, context));
 createdByCoverage.forEach(({ type, field }) => {
+  const sheet = [...categorizedSchema.querySelectorAll('sheets > sheet')]
+    .find(node => node.getAttribute('name').toLowerCase() === type);
+  if (!sheet.querySelector(':scope > columns > column[name="CreatedBy"]')) {
+    assert(!field, `${type} must not invent a CreatedBy field absent from its XML profile`);
+    return;
+  }
   assert(field, `${type} must expose CreatedBy`);
   assert.strictEqual(field.lookupSource, 'contact');
 });
