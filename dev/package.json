@@ -11,7 +11,8 @@
     "test:schema": "node tests/schema-regression.js",
     "test:build": "python build/build_release.py --offline",
     "build": "python build/build_release.py",
-    "test:coverage": "node tests/qa-coverage-regression.js"
+    "test:coverage": "node tests/qa-coverage-regression.js",
+    "test:coverage-built": "node tests/qa-coverage-built-regression.js"
   },
   "devDependencies": {
     "linkedom": "^0.18.13",

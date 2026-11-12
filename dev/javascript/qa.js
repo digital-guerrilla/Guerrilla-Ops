@@ -1597,41 +1597,79 @@ function _qaVisibleFindings() {
 // deliberately kept out of qaFindings/qaRuleResults so it cannot reach _qaScoreTally()
 // and move the score or the donut.
 //
-// Two deliberate choices, both of which are wrong the obvious way round:
+// Deliberate choices, several of which are wrong the obvious way round:
 //   * the DESCRIBED set is the profile's full sheet list, NOT the stage-filtered one.
 //     A sheet excluded by the selected stage is described; calling it unassessed would
 //     make coverage change every time a user switches stage.
 //   * iteration is per SOURCE WORKBOOK, not per logical facility.
 //     _qaLogicalFacilityRows() keeps one representative per facility identity, so a
 //     second file describing the same facility would vanish from the report.
+//   * workbooks are scoped by the selected facilities exactly as _qaRunSteps() scopes
+//     rows, so a facility outside the audit never appears in its coverage.
+//   * sheet names are matched the way readSheet()/parseCOBieInto() match them
+//     (case-insensitive, NOT trimmed). A tab the parser does not load is never
+//     reported as covered.
+//   * it describes the workbook files as loaded. Edits made in the session since then
+//     live in the model, not in the workbook, and are not reflected here.
+function _qaFacilityInScope(row) {
+  const facSel = sel.facility;
+  return !facSel.size || facSel.has((row._facility || '').toLowerCase());
+}
+
+// Per-workbook sheet inventory, cached so renders, filters and stage switches do not
+// re-parse every worksheet. The workbook object is replaced when a save reopens the
+// file; the signature also covers a sheet added, removed or resized in place.
+let _qaCoverageSheetCache = new WeakMap();
+
+function _qaWorkbookInventory(wb) {
+  const names = wb?.SheetNames || [];
+  const signature = names.map(name => `${name}\u0001${wb.Sheets?.[name]?.['!ref'] || ''}`).join('\u0002');
+  const cached = _qaCoverageSheetCache.get(wb);
+  if (cached && cached.signature === signature) return cached.sheets;
+
+  const recognised = new Set(_COBIE_WORKSHEET_KEYS);
+  const sheets = [];
+  names.forEach(sheetName => {
+    const key = String(sheetName).toLowerCase();
+    if (!String(sheetName).trim()) return;
+    if (_COBIE_TEMPLATE_KEYS.includes(key)) return;   // guidance, not project data
+    const entry = { sheet: String(sheetName).trim(), key };
+    // Row counts only exist for COBie worksheets, whose first row is a header by
+    // convention. An additional tab has no known header convention, so it gets none.
+    if (recognised.has(key)) entry.rows = readSheet(wb, sheetName).length;
+    sheets.push(entry);
+  });
+  if (wb && typeof wb === 'object') _qaCoverageSheetCache.set(wb, { signature, sheets });
+  return sheets;
+}
+
 function _qaCoverage() {
   const schema = _qaParseSchema();
-  const described = new Set((schema?.sheets || []).map(sheet => _qaNorm(sheet.name)));
-  const recognised = new Set(_COBIE_WORKSHEET_KEYS);
 
   const workbooks = new Map();
-  (db.facilities || []).forEach(row => {
+  (db.facilities || []).filter(_qaFacilityInScope).forEach(row => {
     const key = String(row._workbookKey || row._fileName || '');
     if (key && row._workbook && !workbooks.has(key)) workbooks.set(key, row);
   });
 
+  // An unreadable profile describes nothing we can know. Saying it describes none of
+  // the worksheets would be a claim about the data that the failure does not support.
+  if (schema?.error) return { unavailable: true, error: String(schema.error), workbooks: workbooks.size };
+
+  const described = new Set((schema?.sheets || []).map(sheet => String(sheet.name).toLowerCase()));
   const notAssessed = [], additional = [], empty = [];
   let recognisedPresent = 0, coveredPresent = 0;
 
   workbooks.forEach(row => {
-    const wb = row._workbook;
     const fileName = String(row._fileName || '').trim();
-    (wb?.SheetNames || []).forEach(sheetName => {
-      const key = _qaNorm(sheetName);
-      if (!key) return;
-      if (_COBIE_TEMPLATE_KEYS.includes(key)) return;   // guidance, not project data
-      const rows = readSheet(wb, sheetName).length;
-      const entry = { sheet: String(sheetName).trim(), file: fileName, rows };
-      if (!recognised.has(key)) { additional.push(entry); return; }
+    _qaWorkbookInventory(row._workbook).forEach(item => {
+      const entry = { sheet: item.sheet, file: fileName };
+      if (item.rows === undefined) { additional.push(entry); return; }
+      entry.rows = item.rows;
       recognisedPresent += 1;
-      if (!described.has(key)) { notAssessed.push(entry); return; }
+      if (!described.has(item.key)) { notAssessed.push(entry); return; }
       coveredPresent += 1;
-      if (rows === 0) empty.push(entry);
+      if (item.rows === 0) empty.push(entry);
     });
   });
 
@@ -1647,26 +1685,34 @@ function _qaCoverage() {
 
 // Rendered identically in the QA view and the PDF cover so the two can never disagree.
 function _qaCoverageHtml(coverage) {
+  if (coverage?.unavailable) {
+    if (!coverage.workbooks) return '';
+    return `<div class="qa-coverage">
+    <span class="qa-coverage-head">Coverage and scope</span>
+    <p class="qa-coverage-line">Worksheet coverage is unavailable because the active QA profile could not be read. Does not affect QA score.</p>
+  </div>`;
+  }
   if (!coverage || !coverage.recognisedPresent && !coverage.additional.length) return '';
   // The filename only earns its place when more than one workbook is loaded; repeating
   // it on every entry of a single-file report is noise, not provenance.
   const showFile = coverage.workbooks > 1;
+  const where = item => showFile && item.file ? ` (${esc(item.file)})` : '';
   const line = items => items
-    .map(item => `${esc(item.sheet)}${showFile && item.file ? ` (${esc(item.file)})` : ''} — ${item.rows.toLocaleString()} row${item.rows === 1 ? '' : 's'}`)
+    .map(item => `${esc(item.sheet)}${where(item)}${typeof item.rows === 'number' ? ` — ${item.rows.toLocaleString()} row${item.rows === 1 ? '' : 's'}` : ''}`)
     .join('; ');
   const parts = [];
   if (coverage.notAssessed.length) {
     parts.push(`<li><strong>Not assessed</strong> — recognised COBie worksheets this profile does not describe: ${line(coverage.notAssessed)}</li>`);
   }
   if (coverage.empty.length) {
-    parts.push(`<li><strong>Present, empty</strong> — described, but no data rows to assess: ${coverage.empty.map(item => esc(item.sheet) + (showFile && item.file ? ` (${esc(item.file)})` : '')).join('; ')}</li>`);
+    parts.push(`<li><strong>Present, empty</strong> — described, but no data rows to assess: ${coverage.empty.map(item => esc(item.sheet) + where(item)).join('; ')}</li>`);
   }
   if (coverage.additional.length) {
     parts.push(`<li><strong>Additional worksheets outside this COBie profile</strong>: ${line(coverage.additional)}</li>`);
   }
   return `<div class="qa-coverage">
     <span class="qa-coverage-head">Coverage and scope</span>
-    <p class="qa-coverage-line">The active profile describes ${coverage.covered} of ${coverage.recognisedPresent} recognised COBie worksheet${coverage.recognisedPresent === 1 ? '' : 's'} present${coverage.additional.length ? `. ${coverage.additional.length} additional worksheet${coverage.additional.length === 1 ? ' was' : 's were'} outside this profile` : ''}. Does not affect QA score.</p>
+    <p class="qa-coverage-line">The active profile describes ${coverage.covered} of ${coverage.recognisedPresent} recognised COBie worksheet${coverage.recognisedPresent === 1 ? '' : 's'} present${coverage.additional.length ? `. ${coverage.additional.length} additional worksheet${coverage.additional.length === 1 ? ' was' : 's were'} outside this profile` : ''}. Counts describe the workbook files as loaded, not unsaved edits. Does not affect QA score.</p>
     ${parts.length ? `<ul class="qa-coverage-list">${parts.join('')}</ul>` : ''}
   </div>`;
 }
@@ -1962,7 +2008,9 @@ function _qaPdfReportHtml(logoMarkup = '') {
   const selectedFacilities = sel?.facility?.size
     ? [...sel.facility].map(key => idx.facilityNames.find(name => name.toLowerCase() === key) || key)
     : [];
-  const workbookFiles = [...new Set(_qaLogicalFacilityRows()
+  // Every source workbook of the selected facilities, so this field agrees with the
+  // coverage totals; a second file for the same facility is not dropped.
+  const workbookFiles = [...new Set((db.facilities || [])
     .filter(row => !selectedFacilityKeys || selectedFacilityKeys.has(_qaNorm(row._facility)))
     .map(row => String(row._fileName || '').trim())
     .filter(Boolean))].sort((a, b) => a.localeCompare(b));

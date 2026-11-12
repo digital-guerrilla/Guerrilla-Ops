@@ -1331,7 +1331,7 @@
         <column name="objProject"/>
         <column name="objSite"/>
         <column name="objSpace"/>
-        <column name="objSystem"/>        
+        <column name="objSystem"/>
         <column name="objType"/>
         <column name="objZone"/>
         <column name="SheetType"/>
