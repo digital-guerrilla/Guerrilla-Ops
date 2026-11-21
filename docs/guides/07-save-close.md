@@ -61,6 +61,18 @@ For standard `.xlsx` files, Guerrilla Ops updates managed COBie sheets while pre
 
 Legacy `.xls` and macro-enabled `.xlsm` files use a compatibility export path. Review those outputs carefully.
 
+### Maintenance schedules
+
+PPM schedules, series changes and completed occurrences use COBie 2.4
+**Attribute** records linked to **Job** rows. They are saved and discarded through
+these same controls. Chart browsing does not generate workbook changes.
+
+Untouched future maintenance is projected from the saved schedule anchor.
+Rescheduled and completed occurrences are saved explicitly. Keep the Job and
+Attribute sheets together when exchanging the workbook, and verify a completion
+after reopening the saved file. PPM records retain their owning source workbook
+even when multiple loaded files describe the same Facility.
+
 ## Refresh and browser close warnings
 
 Refreshing or closing the browser tab discards in-memory changes. A browser warning appears when changes are recorded, but the browser may use its own generic wording.

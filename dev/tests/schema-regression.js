@@ -154,7 +154,7 @@ assert.strictEqual(extensionResult.row.FutureColumn, 'Preserved', 'new schema co
 
 const futureSchemaSource = schemaSource
   .replace('version="2.0"', 'version="3.0"')
-  .replace('profile="NBIMS-US-V3-current-rules"', 'profile="COBie-future-compatible"');
+  .replace('profile="COBie-2.4-current-rules"', 'profile="COBie-future-compatible"');
 class FutureSchemaRequest {
   open() {}
   send() {

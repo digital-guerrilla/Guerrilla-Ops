@@ -93,6 +93,11 @@ function _documentContextEntry(context) {
 // ── Filter application and user actions ──────────────────────
 // Single-pass: builds filtered component list + cross-counts simultaneously.
 function applyFilters() {
+  if (viewMode === 'ppm') {
+    applyPpmFilters();
+    return;
+  }
+  document.getElementById('expand-all-btn')?.classList.remove('d-none');
   const dimensions = COBIE_FILTER_DIMENSIONS.map(filter => filter.dimension);
   const c = Object.fromEntries(dimensions.map(dimension => [dimension, {}]));
   const comps = [];
@@ -222,6 +227,7 @@ function setMode(mode) {
   document.getElementById('btn-asset')   .classList.toggle('active', mode==='asset');
   document.getElementById('btn-document').classList.toggle('active', mode==='document');
   document.getElementById('btn-qa')      .classList.toggle('active', mode==='qa');
+  document.getElementById('btn-ppm')?.classList.toggle('active', mode==='ppm');
   applyFilters();
 }
 

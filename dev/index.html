@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/upload.css">
   <link rel="stylesheet" href="css/filter.css">
   <link rel="stylesheet" href="css/results.css">
+  <link rel="stylesheet" href="css/ppm.css">
 </head>
 <body>
 
@@ -102,6 +103,9 @@
       </button>
       <button class="mode-btn" id="btn-qa" onclick="setMode('qa')">
         <i class="bi bi-clipboard-check me-1"></i>QA View
+      </button>
+      <button class="mode-btn" id="btn-ppm" onclick="setMode('ppm')">
+        <i class="bi bi-calendar-check me-1"></i>PPM View
       </button>
       <div class="dropdown">
         <button class="mode-btn dropdown-toggle" id="btn-create" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -373,6 +377,7 @@
 </div>
 
 <!-- JS modules loaded in dependency order -->
+<dialog id="ppm-dialog" aria-labelledby="ppm-dialog-title"></dialog>
 <script src="javascript/state.js"></script>
 <script src="javascript/utils.js"></script>
 <script src="javascript/logo-theme.js"></script>
@@ -393,6 +398,9 @@
 <script src="javascript/export.js"></script>
 <script src="javascript/component-placement.js"></script>
 <script src="javascript/filter-tabs.js"></script>
+<script src="javascript/ppm-scheduler.js"></script>
+<script src="javascript/ppm-data.js"></script>
+<script src="javascript/ppm.js"></script>
 <script src="javascript/init.js"></script>
 </body>
 </html>

@@ -55,7 +55,7 @@ function renderPills() {
   });
 
   document.getElementById('pills').innerHTML =
-    html || '<span style="font-size:.76rem;color:#ccc;font-style:italic">None - showing all components</span>';
+    html || `<span style="font-size:.76rem;color:#ccc;font-style:italic">None - showing all ${viewMode === 'ppm' ? 'maintenance' : 'components'}</span>`;
 }
 
 function toggleExpandAll() {

@@ -18,6 +18,7 @@ These guides expand on the quick introduction in the [project README](../../READ
 | [10. 3D viewer](10-3d-viewer.md) | Explore Space and Component coordinate geometry and floor overlays |
 | [11. Align Plan and 3D](11-align-plan-3d.md) | Position, rotate, scale, and save a plan against coordinate room boxes |
 | [12. Locate components](12-locate-components.md) | Place Components on a floor plan, set their height, and verify them in 3D |
+| [13. PPM View](13-ppm-view.md) | Schedule fixed-cycle maintenance, reschedule dependent tasks, and record Component-specific completion |
 
 ## Suggested reading paths
 
