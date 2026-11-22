@@ -3,8 +3,8 @@
 // The source suite (qa-coverage-regression.js) reads dev/javascript. The release is
 // that source after a minifier, and the minifier is where whitespace inside nested
 // template literals used to be lost ("present.1additional worksheet wasoutside this
-// profile"), so a source-only check cannot see it. This suite loads the checked-in
-// index.html and both release files, runs their own bundled code, and reads the
+// profile"), so a source-only check cannot see it. This suite loads the built
+// index.html and both release files (build first), runs their own bundled code, and reads the
 // sentences the user would read.
 const assert = require('assert');
 const fs = require('fs');
@@ -78,16 +78,33 @@ function check(name, fn) {
   catch (err) { fails.push(name); console.log(`  FAIL  ${name}\n        ${err.message}`); }
 }
 
+// A recognised COBie worksheet the shipped profile does not describe, read from the build
+// itself. A fixed name goes stale when the profile grows: Job was the example until the
+// PPM work described it.
+function undescribedSheet(context) {
+  const recognised = JSON.parse(run(context, 'JSON.stringify(COBIE_WORKSHEETS)'));
+  const described = JSON.parse(run(context, 'JSON.stringify((_qaParseSchema().sheets || []).map(s => s.name))'))
+    .map(name => String(name).toLowerCase());
+  return recognised.find(name => !described.includes(name.toLowerCase()));
+}
+
 BUILDS.forEach(build => {
   const { html, context } = loadBuild(build);
   const real = installWorkbooks(context);
   console.log(`\n${build} (${real ? 'real SheetJS' : 'stand-in sheets'})`);
 
+  const outside = undescribedSheet(context);
+  check('POSITIVE CONTROL: the shipped profile leaves a recognised COBie worksheet undescribed', () => {
+    assert.ok(outside, 'every recognised COBie worksheet is described, so the "Not assessed" checks below cannot run');
+    assert.ok(!['Facility', 'Space'].includes(outside), 'the fixture needs Facility and Space described');
+  });
+  if (!outside) return;
+
   const two = [
     facilityRow(context, 'Tower', 'tower', 'w1', 'one.xlsx', {
       Facility: { rows: [{ Name: 'Tower' }] },
       Space: { rows: [{ Name: 's1' }, { Name: 's2' }] },
-      Job: { rows: [{ Name: 'j1' }] },
+      [outside]: { rows: [{ Name: 'x1' }] },
     }),
     facilityRow(context, 'Tower', 'tower', 'w2', 'two.xlsx', {
       Facility: { rows: [{ Name: 'Tower' }] },
@@ -120,7 +137,7 @@ BUILDS.forEach(build => {
   });
 
   check('the built list spaces filenames and keeps counts only on COBie sheets', () => {
-    assert.ok(rendered.includes('Job (one.xlsx) — 1 row'), 'filename spacing / row count: ' + rendered);
+    assert.ok(rendered.includes(`${outside} (one.xlsx) — 1 row`), 'filename spacing / row count: ' + rendered);
     assert.ok(/Additional worksheets outside this COBie profile : Notes \(two\.xlsx\); Revisions \(two\.xlsx\)/.test(rendered),
       'additional entries must read "Notes (two.xlsx); Revisions (two.xlsx)" with no row count: ' + rendered);
     assert.ok(!/\w\(/.test(rendered), 'a filename is glued to its sheet name: ' + rendered);
