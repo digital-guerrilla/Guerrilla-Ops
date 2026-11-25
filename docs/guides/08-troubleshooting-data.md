@@ -49,7 +49,7 @@ The document has no relationship at that level. Change the active grouping or co
 
 ### Counts are lower than Document-sheet row counts
 
-Document counts represent logical unique documents. Repeated rows with the same Facility and Directory link are deduplicated for display.
+The result and group counts represent logical unique documents. Repeated rows with the same Facility and Directory link are deduplicated for display. Asset filter counts also include related components without documents.
 
 ## Document links
 

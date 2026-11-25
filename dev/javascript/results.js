@@ -309,7 +309,7 @@ function _toggleGroupHeader(header, forceOpen) {
       body.innerHTML = qaPendingGroupBody(pending);
     } else if (pending.isDocMode) {
       body.innerHTML = pending.isDocCategory
-        ? groupDocsByClassification(pending.docEntries, pending.dims || [], pending.depth || 0, pending.categoryKey)
+        ? groupDocsByClassification(pending.docEntries, pending.dims || [], pending.depth || 0, pending.categoryKey, pending.parentPath || '')
         : groupDocsNested(pending.docEntries, pending.dims || [], pending.depth || 0, pending.parentPath || '');
     } else {
       body.innerHTML = groupNested(pending.comps, pending.dims, pending.depth, pending.parentPath || '');

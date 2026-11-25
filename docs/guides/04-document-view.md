@@ -16,9 +16,9 @@ The result counter shows unique documents. Repeated COBie rows that point to the
 
 You can combine Document Category with Facility, Floor, Space, Type, or System.
 
-The available choices reflect the document's real relationship context. For example, a Type document can filter its Facility and Type, but does not automatically make every component, Space, Floor, or System a match.
-
-This distinction is important when checking whether documentation has been attached at the correct COBie level.
+Asset filters follow component relationships, so selecting a Space can also find
+documents attached to its components, their Types and Systems, Floor, and Facility.
+Filter choices include related assets even when they have no documents.
 
 ## Group documents
 
@@ -28,8 +28,13 @@ Use the same draggable group controls as Asset View. Useful arrangements include
 - System -> Document Category
 - Floor -> Space -> Document Category
 - Type -> Document Category
+- Space -> Type
 
-Groups such as **(No Type)** or **(No System)** mean the document is not related at that level. The document remains visible under that heading.
+Each group restricts the context for the groups below it. When the last group is
+an asset level, its cards show documents attached directly to that level; for
+example, Space -> Type shows Type documents for Types used in each Space.
+When Document Category is last, it shows related documents from all attachment
+levels. Groups without documents can still appear with a count of zero.
 
 ## Read a document card
 

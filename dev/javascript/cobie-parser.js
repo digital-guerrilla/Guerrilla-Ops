@@ -337,6 +337,7 @@ function _rebuildDocumentIndexes() {
   });
   idx.docCatFacilityOnly = new Set([...facilityCategories].filter(category => !entityCategories.has(category)));
   idx.documentContexts = _buildDocumentContexts();
+  idx.documentLinkContexts = _buildDocumentContexts(true);
   idx.docCatByComp = {};
   idx.documentContexts.forEach(context => context.components.forEach(componentKey => {
     const values = idx.docCatByComp[componentKey] ||= new Set();
@@ -451,7 +452,7 @@ function docsFor(sheet, name, facility) {
   return Object.entries(idx.docs).filter(([key]) => key.endsWith(suffix)).flatMap(([,docs]) => docs);
 }
 
-function _buildDocumentContexts() {
+function _buildDocumentContexts(byLink = false) {
   const contexts = new Map();
   const contextDimensions = [...new Set(COBIE_RUNTIME_MODEL.documents.contexts.map(rule => rule.dimension).filter(Boolean))];
   const rowsByType = new Map();
@@ -489,7 +490,9 @@ function _buildDocumentContexts() {
     const linkedName = _cobieField(doc, 'rowName');
     const facility = (doc._facility || '').toLowerCase();
     const category = f(doc,'Category').toLowerCase();
-    const contextKey = _docUniqueKey(doc);
+    const contextKey = byLink
+      ? JSON.stringify([_docUniqueKey(doc), linkedType, linkedName.toLowerCase()])
+      : _docUniqueKey(doc);
     let context = contexts.get(contextKey);
     if (!context) {
       context = {
