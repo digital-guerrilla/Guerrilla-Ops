@@ -1,16 +1,52 @@
 // ── Document result grouping and cards ───────────────────────
 
 function renderDocumentMode(list, entries) {
-  if(!entries.length){
+  const dims = groupState.order.filter(d => groupState.active.has(d));
+  if(!entries.length || (!dims.length && !_documentEntriesForLeaf(entries, []).length)){
     list.innerHTML=`<div class="empty"><i class="bi bi-folder-x"></i><p>No documents found for the current filters.</p></div>`;
     return;
   }
-  const dims = groupState.order.filter(d => groupState.active.has(d));
   list.innerHTML = dims.length ? groupDocsNested(entries, dims) : renderDocumentCards(entries);
 }
 
 function renderDocumentCards(entries) {
-  return entries.map(entry => docCard(entry)).join('');
+  const unique = new Map();
+  _documentEntriesForLeaf(entries, []).forEach(entry => {
+    const key = _docUniqueKey(entry.doc);
+    if (!unique.has(key)) unique.set(key, entry);
+  });
+  return [...unique.values()].map(entry => docCard(entry)).join('');
+}
+
+const _documentGroupsByType = new WeakMap();
+
+function _documentEntriesForLeaf(entries, dims) {
+  const categoryDimension = _cobieDocumentCategoryDimension();
+  const finalDimension = dims[dims.length - 1];
+  const last = finalDimension === categoryDimension && dims.length > 1
+    ? dims[dims.length - 2] : finalDimension;
+  const groups = new Set();
+  const documents = [];
+  const add = entry => {
+    if (entry.doc && (!last || last === _cobieDocumentCategoryDimension() || entry.linkedType === last)) {
+      documents.push(entry);
+    }
+  };
+  entries.forEach(entry => {
+    if (entry.docGroups) entry.docGroups.forEach(group => groups.add(group));
+    else add(entry);
+  });
+  groups.forEach(group => {
+    if (!last || last === _cobieDocumentCategoryDimension()) {
+      group.forEach(add);
+      return;
+    }
+    let byType = _documentGroupsByType.get(group);
+    if (!byType) _documentGroupsByType.set(group, byType = new Map());
+    if (!byType.has(last)) byType.set(last, group.filter(entry => entry.linkedType === last));
+    byType.get(last).forEach(add);
+  });
+  return documents;
 }
 
 function _docEntryValues(entry, dimension) {
@@ -24,7 +60,7 @@ function groupDocsNested(entries, dims, depth = 0, parentPath = '') {
   if (!entries.length) return '';
   if (!dims.length) return renderDocumentCards(entries);
   const [dim,...rest] = dims;
-  if (dim === _cobieDocumentCategoryDimension()) return groupDocsByClassification(entries, rest, depth);
+  if (dim === _cobieDocumentCategoryDimension()) return groupDocsByClassification(entries, rest, depth, '', parentPath);
   const map = new Map();
   entries.forEach(e => {
     const ks = _docEntryValues(e, dim);
@@ -40,9 +76,14 @@ function groupDocsNested(entries, dims, depth = 0, parentPath = '') {
     const isOpen = _groupNodeIsOpen(gkey);
     if (!isOpen) pendingGroups[cid]={docEntries:grpE,dims:rest,depth:depth+1,parentPath:gkey,isDocMode:true};
     const sub=dim!=='doccat'?getGroupSubtitle(dim,name):'';
-    const bodyHtml = isOpen ? groupDocsNested(grpE, rest, depth + 1, gkey) : '';
+    const directLevel = !rest.length || (rest.length === 1 && rest[0] === _cobieDocumentCategoryDimension());
+    const leafEntries = directLevel
+      ? _documentEntriesForLeaf(grpE, [dim]).filter(entry => entry.linkedName.toLowerCase() === name.toLowerCase())
+      : grpE;
+    if (!isOpen) pendingGroups[cid].docEntries = leafEntries;
+    const bodyHtml = isOpen ? groupDocsNested(leafEntries, rest, depth + 1, gkey) : '';
     return `<div class="grp-block grp-d${lvl}">
-      ${buildGroupHeader({ dim, name, facility, count:grpE.length, subtitle:sub, icon:ico, cid, gkey, isOpen })}
+      ${buildGroupHeader({ dim, name, facility, count:new Set((directLevel ? leafEntries : _documentEntriesForLeaf(grpE, dims)).map(entry => _docUniqueKey(entry.doc))).size, subtitle:sub, icon:ico, cid, gkey, isOpen })}
       <div class="grp-body${isOpen ? '' : ' grp-closed'}" id="${cid}">${bodyHtml}</div>
     </div>`;
   }).join('');
@@ -66,43 +107,60 @@ function _isDocumentUnsaved(doc) {
   });
 }
 
-function groupDocsByClassification(entries, remainingDims = [], depth = 0, parentKey = '') {
-  if (!entries.length) return '';
+function groupDocsByClassification(entries, remainingDims = [], depth = 0, parentKey = '', parentPath = '') {
+  const documents = _documentEntriesForLeaf(entries, []).filter(entry => {
+    if (!parentKey) return true;
+    const code = classificationParts(f(entry.doc,'Category') || '(Uncategorised)').code.toLowerCase();
+    return code === parentKey || code.startsWith(parentKey + '_');
+  });
+  if (!documents.length) return '';
   const entryCode = entry => classificationParts(f(entry.doc,'Category') || '(Uncategorised)').code.toLowerCase();
-  const directEntries = parentKey ? entries.filter(entry => entryCode(entry) === parentKey) : [];
-  const childKeys = new Set();
-  entries.forEach(entry => {
-    const ancestors = classificationAncestors(entryCode(entry));
+  const filterDirectCategory = categoryKey => {
+    const cache = new Map();
+    const matches = entry => entryCode(entry) === categoryKey;
+    return entries.flatMap(entry => {
+      if (!entry.docGroups) return entry.doc && matches(entry) ? [entry] : [];
+      const groups = entry.docGroups.map(group => {
+        if (!cache.has(group)) cache.set(group, group.filter(matches));
+        return cache.get(group);
+      }).filter(group => group.length);
+      return groups.length ? [{ ...entry, docGroups:groups }] : [];
+    });
+  };
+  const directDocuments = [];
+  const children = new Map();
+  documents.forEach(entry => {
+    const code = entryCode(entry);
+    if (code === parentKey) directDocuments.push(entry);
+    const ancestors = classificationAncestors(code);
     const parentIndex = parentKey ? ancestors.indexOf(parentKey) : -1;
     const child = ancestors[parentIndex + 1];
-    if (child && child !== parentKey) childKeys.add(child);
+    if (child && child !== parentKey) {
+      if (!children.has(child)) children.set(child, []);
+      children.get(child).push(entry);
+    }
   });
-  const directHtml = directEntries.length
-    ? (remainingDims.length ? groupDocsNested(directEntries, remainingDims, depth) : directEntries.map(entry => docCard(entry)).join(''))
+  const directHtml = directDocuments.length
+    ? (remainingDims.length ? groupDocsNested(filterDirectCategory(parentKey), remainingDims, depth, parentPath) : renderDocumentCards(directDocuments))
     : '';
-  const nodes = [...childKeys].sort((a,b) => a.localeCompare(b, undefined, { numeric:true })).map(categoryKey => {
-    const categoryEntries = entries.filter(entry => {
-      const code = entryCode(entry);
-      return code === categoryKey || code.startsWith(categoryKey + '_');
-    });
+  const nodes = [...children.entries()].sort(([a],[b]) => a.localeCompare(b, undefined, { numeric:true })).map(([categoryKey, categoryDocuments]) => {
     const categoryDimension = _cobieDocumentCategoryDimension();
     const categoryNode = idx.categoryTrees?.[categoryDimension]?.find(node => node.key === categoryKey);
-    const categoryLabel = categoryNode?.label || classificationParts(f(categoryEntries[0]?.doc,'Category')).label || categoryKey;
+    const categoryLabel = categoryNode?.label || classificationParts(f(categoryDocuments[0]?.doc,'Category')).label || categoryKey;
     const cid='col_'+(collapseCounter++);
-    const scopeDimension = _cobieScopeFilterDimension();
-    const facilityNames = [...new Set(categoryEntries.flatMap(entry => entry.valuesByDimension?.[scopeDimension] || []).filter(Boolean))];
+    const facilityNames = [...new Set(categoryDocuments.map(entry => entry.doc._facility).filter(Boolean))];
     const facility = facilityNames.length === 1 ? facilityNames[0] : '';
-    const gkey = _groupNodeKey(categoryDimension, categoryKey, facility, depth, parentKey);
+    const gkey = _groupNodeKey(categoryDimension, categoryKey, facility, depth, parentPath);
     const isOpen = _groupNodeIsOpen(gkey);
     if (!isOpen) pendingGroups[cid]={
-      docEntries:categoryEntries, dims:remainingDims, depth:depth+1, parentPath:gkey,
+      docEntries:entries, dims:remainingDims, depth:depth+1, parentPath:gkey,
       isDocMode:true, isDocCategory:true, categoryKey,
     };
     const bodyHtml = isOpen
-      ? groupDocsByClassification(categoryEntries, remainingDims, depth + 1, categoryKey)
+      ? groupDocsByClassification(entries, remainingDims, depth + 1, categoryKey, gkey)
       : '';
     return `<div class="grp-block grp-d${Math.min(depth,4)}" style="margin-bottom:.3rem">
-      ${buildGroupHeader({ dim:'doccat', name:categoryKey, facility, count:categoryEntries.length, icon:'bi-folder2-open', cid, gkey, isOpen, displayName:categoryLabel })}
+      ${buildGroupHeader({ dim:'doccat', name:categoryKey, facility, count:new Set(_documentEntriesForLeaf(categoryDocuments, remainingDims).map(entry => _docUniqueKey(entry.doc))).size, icon:'bi-folder2-open', cid, gkey, isOpen, displayName:categoryLabel })}
       <div class="grp-body${isOpen ? '' : ' grp-closed'}" id="${cid}">${bodyHtml}</div>
     </div>`;
   }).join('');

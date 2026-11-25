@@ -88,7 +88,9 @@ Start from the [complete guide index](docs/guides/README.md) for suggested readi
 
 Use the right-hand filter tabs to narrow the results by **Facility**, **Floor**, **Zone**, **Space**,
 **Type**, **System** or **Document Category**. The numbers beside each option
-show matching components in Asset View or unique documents in Document View.
+show matching components; in Document View they also include separately linked
+documents without a related component. Document Category counts show unique
+documents.
 Select a tab to open its filter drawer; select it again, the close button, or
 press **Escape** to close it without clearing your selections. Plan and 3D
 viewers sit to the left of the result hierarchy.

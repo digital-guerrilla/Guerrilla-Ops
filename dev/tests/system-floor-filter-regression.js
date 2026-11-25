@@ -94,6 +94,35 @@ updateIdxForEntities('component');
 assert.deepStrictEqual(componentFilterValues('system'), ['ventilation'],
   'incremental Component changes must rebuild dependent System indexes');
 
+vm.runInContext(`
+db.spaces.push({ Name:'Room 102', FloorName:'Level 01', _facility:'Facility A' });
+db.components[0].Space = 'Room 101, Room 102';
+buildIdx();
+sel.space.add('room 101');
+sel.floor.add('level 01');
+`, context);
+let filteredComponents;
+let filterCounts;
+Object.assign(context, {
+  renderPanels:counts => { filterCounts = counts; },
+  reapplyPanelSearches:() => {},
+  renderPills:() => {},
+  renderComps:components => { filteredComponents = components; },
+  document:{ getElementById:() => ({}) },
+});
+context.applyFilters();
+assert.strictEqual(filteredComponents.length, 0,
+  'a Floor reachable only through an unselected Space must not match a shared component');
+assert.strictEqual(filterCounts.space['room 102'], 1,
+  'Space cross-counts must ignore the Space selection when matching the other Floor');
+assert.strictEqual(filterCounts.floor['level 02'], 1,
+  'Floor cross-counts must use the selected Space while ignoring the Floor selection');
+vm.runInContext('sel.floor.clear()', context);
+context.applyFilters();
+assert.strictEqual(filteredComponents.length, 1);
+assert.deepStrictEqual(Object.keys(filterCounts.floor), ['level 02'],
+  'Floor choices must not include Floors connected only through unselected Spaces');
+
 const manyDimensionState = JSON.parse(vm.runInContext(`JSON.stringify((() => {
   const dimensions = Array.from({ length:40 }, (_, index) => 'dimension-' + index);
   const state = _filterMatchState(dimensions, dimension => dimension !== 'dimension-35');
