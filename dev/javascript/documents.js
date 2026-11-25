@@ -21,7 +21,10 @@ function renderDocumentCards(entries) {
 const _documentGroupsByType = new WeakMap();
 
 function _documentEntriesForLeaf(entries, dims) {
-  const last = dims[dims.length - 1];
+  const categoryDimension = _cobieDocumentCategoryDimension();
+  const finalDimension = dims[dims.length - 1];
+  const last = finalDimension === categoryDimension && dims.length > 1
+    ? dims[dims.length - 2] : finalDimension;
   const groups = new Set();
   const documents = [];
   const add = entry => {
@@ -73,12 +76,14 @@ function groupDocsNested(entries, dims, depth = 0, parentPath = '') {
     const isOpen = _groupNodeIsOpen(gkey);
     if (!isOpen) pendingGroups[cid]={docEntries:grpE,dims:rest,depth:depth+1,parentPath:gkey,isDocMode:true};
     const sub=dim!=='doccat'?getGroupSubtitle(dim,name):'';
-    const leafEntries = rest.length ? grpE : _documentEntriesForLeaf(grpE, [dim])
-      .filter(entry => entry.linkedName.toLowerCase() === name.toLowerCase());
+    const directLevel = !rest.length || (rest.length === 1 && rest[0] === _cobieDocumentCategoryDimension());
+    const leafEntries = directLevel
+      ? _documentEntriesForLeaf(grpE, [dim]).filter(entry => entry.linkedName.toLowerCase() === name.toLowerCase())
+      : grpE;
     if (!isOpen) pendingGroups[cid].docEntries = leafEntries;
     const bodyHtml = isOpen ? groupDocsNested(leafEntries, rest, depth + 1, gkey) : '';
     return `<div class="grp-block grp-d${lvl}">
-      ${buildGroupHeader({ dim, name, facility, count:new Set((rest.length ? _documentEntriesForLeaf(grpE, dims) : leafEntries).map(entry => _docUniqueKey(entry.doc))).size, subtitle:sub, icon:ico, cid, gkey, isOpen })}
+      ${buildGroupHeader({ dim, name, facility, count:new Set((directLevel ? leafEntries : _documentEntriesForLeaf(grpE, dims)).map(entry => _docUniqueKey(entry.doc))).size, subtitle:sub, icon:ico, cid, gkey, isOpen })}
       <div class="grp-body${isOpen ? '' : ' grp-closed'}" id="${cid}">${bodyHtml}</div>
     </div>`;
   }).join('');

@@ -19,6 +19,8 @@ You can combine Document Category with Facility, Floor, Space, Type, or System.
 Asset filters follow component relationships, so selecting a Space can also find
 documents attached to its components, their Types and Systems, Floor, and Facility.
 Filter choices include related assets even when they have no documents.
+If a component belongs to several Spaces, a Space filter includes only the
+selected Spaces and their Floors, not documents belonging to the other Spaces.
 
 ## Group documents
 
@@ -33,8 +35,10 @@ Use the same draggable group controls as Asset View. Useful arrangements include
 Each group restricts the context for the groups below it. When the last group is
 an asset level, its cards show documents attached directly to that level; for
 example, Space -> Type shows Type documents for Types used in each Space.
-When Document Category is last, it shows related documents from all attachment
-levels. Groups without documents can still appear with a count of zero.
+When Document Category is last, it classifies documents attached directly to
+the preceding asset group. Document Category on its own shows related documents
+from all attachment levels. Groups without documents can still appear with a
+count of zero.
 
 ## Read a document card
 

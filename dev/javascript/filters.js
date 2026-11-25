@@ -12,7 +12,13 @@ const _SUPPORTED_DOC_SHEETS = _cobieDocumentTargetTypes();
 const _DOC_CONTEXT_DIMENSIONS = Object.fromEntries(COBIE_FILTER_DIMENSIONS
   .filter(filter => filter.contextProperty).map(filter => [filter.dimension, filter.contextProperty]));
 
-function _componentFilterValues(component, filter) {
+function _selectedSpaceValues(values) {
+  return sel.space?.size
+    ? values.filter(value => sel.space.has(String(value).trim().toLowerCase()))
+    : values;
+}
+
+function _componentFilterValues(component, filter, restrictSpace = false) {
   if (!component || !filter) return [];
   const componentKey = _rowKey(component, _cobieEntityIdentity('component', component));
   let values = [];
@@ -20,7 +26,9 @@ function _componentFilterValues(component, filter) {
     const indexed = idx[filter.valueIndex]?.[componentKey];
     values = indexed instanceof Set ? [...indexed] : (Array.isArray(indexed) ? indexed : [indexed]);
   } else if (filter.throughField && filter.throughIndex) {
-    values = _cobieReferenceValues('component', component, filter.throughField).flatMap(throughValue => {
+    let throughValues = _cobieReferenceValues('component', component, filter.throughField);
+    if (restrictSpace && filter.throughField === 'Space') throughValues = _selectedSpaceValues(throughValues);
+    values = throughValues.flatMap(throughValue => {
       const indexed = idx[filter.throughIndex]?.[_rowKey(component, throughValue)];
       return indexed instanceof Set ? [...indexed] : (Array.isArray(indexed) ? indexed : [indexed]);
     });
@@ -29,6 +37,7 @@ function _componentFilterValues(component, filter) {
   } else if (filter.valueField) {
     values = _cobieReferenceValues('component', component, filter.valueField);
   }
+  if (restrictSpace && filter.dimension === 'space') values = _selectedSpaceValues(values);
   return [...new Set(values.map(value => String(value || '').trim().toLowerCase()).filter(Boolean))];
 }
 
@@ -120,30 +129,40 @@ function _documentViewEntries(counts) {
       (!category || _setHasAny(sel[categoryDimension], context.categories))));
     return variants.get(key);
   };
-  const addCandidate = (values, componentKey, groups, identity) => {
+  const addCandidate = (values, groupValues, componentKey, groups, identity, allGroups = groups) => {
     const componentMatch = !!componentKey && (!searchQuery ||
       (idx.searchText?.[componentKey] || '').includes(searchQuery));
     const searchGroups = groups.map(group => filterGroup(group, !!searchQuery && !componentMatch, false))
       .filter(group => group.length);
-    if (searchQuery && !componentMatch && !searchGroups.length) return;
+    const searchMatch = !searchQuery || componentMatch || searchGroups.length > 0;
     const selectedGroups = searchGroups.map(group => filterGroup(group, false, !!sel[categoryDimension].size))
       .filter(group => group.length);
     const categoryMatch = !sel[categoryDimension].size || selectedGroups.length > 0;
     const { matches, failedCount } = _filterMatchState(assetDimensions, dimension =>
-      !sel[dimension].size || values[dimension].some(value => sel[dimension].has(value)));
-    if (!failedCount) searchGroups.forEach(group => categoryGroups.add(group));
-    if (!failedCount && categoryMatch) {
+      !sel[dimension].size || (dimension === 'space' ? values : groupValues)[dimension]
+        .some(value => sel[dimension].has(value)));
+    if (searchMatch && !failedCount) searchGroups.forEach(group => categoryGroups.add(group));
+    if (searchMatch && !failedCount && categoryMatch) {
       entries.push({
         componentKey, docGroups:selectedGroups,
         valuesByDimension:Object.fromEntries(dimensions.map(dimension => [
-          dimension, values[dimension].map(value => displayNames[dimension].get(value) || value),
+          dimension, groupValues[dimension].map(value => displayNames[dimension].get(value) || value),
         ])),
       });
     }
-    if (!categoryMatch) return;
     assetDimensions.forEach((dimension, index) => {
-      if (failedCount > Number(!matches[index])) return;
-      values[dimension].forEach(value => {
+      let eligible = searchMatch && categoryMatch && failedCount <= Number(!matches[index]);
+      if (dimension === 'space' && sel.space.size) {
+        const alternativeGroups = allGroups.map(group =>
+          filterGroup(group, !!searchQuery && !componentMatch, false)).filter(group => group.length);
+        const alternativeSearch = !searchQuery || componentMatch || alternativeGroups.length > 0;
+        const alternativeCategory = !sel[categoryDimension].size || alternativeGroups.some(group =>
+          filterGroup(group, false, true).length);
+        eligible = alternativeSearch && alternativeCategory && assetDimensions.every(other =>
+          other === 'space' || !sel[other].size || values[other].some(value => sel[other].has(value)));
+      }
+      if (!eligible) return;
+      (dimension === 'space' ? values : groupValues)[dimension].forEach(value => {
         if (!countSets[dimension][value]) countSets[dimension][value] = new Set();
         countSets[dimension][value].add(identity);
       });
@@ -155,25 +174,35 @@ function _documentViewEntries(counts) {
     const values = Object.fromEntries(COBIE_FILTER_DIMENSIONS.map(filter =>
       [filter.dimension, _componentFilterValues(component, filter)]));
     values[categoryDimension] = [];
+    const groupValues = sel.space?.size
+      ? Object.fromEntries(COBIE_FILTER_DIMENSIONS.map(filter =>
+        [filter.dimension, filter.dimension === categoryDimension ? [] : _componentFilterValues(component, filter, true)]))
+      : values;
     const related = new Set();
+    const visibleRelated = new Set();
     COBIE_FILTER_DIMENSIONS.forEach(filter => {
       if (!filter.contextProperty || filter.dimension === categoryDimension) return;
       values[filter.dimension].forEach(name => {
         const group = links.get(_scopeKey(component._facility, filter.dimension + '::' + name));
         if (group) related.add(group);
       });
+      groupValues[filter.dimension].forEach(name => {
+        const group = links.get(_scopeKey(component._facility, filter.dimension + '::' + name));
+        if (group) visibleRelated.add(group);
+      });
     });
     const componentDocs = links.get(_scopeKey(component._facility, 'component::' + _cobieEntityIdentity('component', component)));
-    if (componentDocs) related.add(componentDocs);
+    if (componentDocs) { related.add(componentDocs); visibleRelated.add(componentDocs); }
     related.forEach(group => attached.add(group));
-    addCandidate(values, componentKey, [...related], componentKey);
+    addCandidate(values, groupValues, componentKey, [...visibleRelated], componentKey, [...related]);
   });
   links.forEach(group => {
     if (attached.has(group)) return;
     group.forEach(context => {
       const values = Object.fromEntries(COBIE_FILTER_DIMENSIONS.map(filter =>
         [filter.dimension, filter.contextProperty ? [...context[filter.contextProperty]] : []]));
-      addCandidate(values, '', [[context]], context.identity);
+      const groupValues = { ...values, space:_selectedSpaceValues(values.space) };
+      addCandidate(values, groupValues, '', [[context]], context.identity);
     });
   });
   categoryGroups.forEach(group => group.forEach(context => {
@@ -204,14 +233,23 @@ function applyFilters() {
 
     const valuesByDimension = Object.fromEntries(COBIE_FILTER_DIMENSIONS
       .map(filter => [filter.dimension, _componentFilterValues(comp, filter)]));
+    const scopedValues = sel.space?.size
+      ? Object.fromEntries(COBIE_FILTER_DIMENSIONS.map(filter => [filter.dimension,
+        filter.throughField === 'Space' ? _componentFilterValues(comp, filter, true) : valuesByDimension[filter.dimension]]))
+      : valuesByDimension;
     const { matches, failedCount } = _filterMatchState(dimensions, dimension =>
-      !sel[dimension].size || valuesByDimension[dimension].some(value => sel[dimension].has(value)));
+      !sel[dimension].size || scopedValues[dimension].some(value => sel[dimension].has(value)));
 
     if (!failedCount) comps.push(comp);
 
     dimensions.forEach((dimension, index) => {
-      if (failedCount > Number(!matches[index])) return;
-      valuesByDimension[dimension].forEach(value => { c[dimension][value] = (c[dimension][value] || 0) + 1; });
+      const eligible = dimension === 'space' && sel.space.size
+        ? dimensions.every(other => other === 'space' || !sel[other].size ||
+          valuesByDimension[other].some(value => sel[other].has(value)))
+        : failedCount <= Number(!matches[index]);
+      if (!eligible) return;
+      (dimension === 'space' ? valuesByDimension : scopedValues)[dimension]
+        .forEach(value => { c[dimension][value] = (c[dimension][value] || 0) + 1; });
     });
   });
 

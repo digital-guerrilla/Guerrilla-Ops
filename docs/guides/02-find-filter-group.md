@@ -35,6 +35,9 @@ close it. Switching or closing drawers preserves selections and panel searches.
 
 Select an item to add it to the active filter. Select it again, or remove its coloured pill, to clear it. Closed tabs show their selected-item counts.
 
+When a component belongs to several Spaces, selecting a Space shows it only
+under the selected Space. Select multiple Spaces to include each of them.
+
 The number beside an item is a cross-filter count. It shows what would remain under the other active selections. In Document View, asset counts include related components and separately linked documents without a related component; Document Category counts represent unique documents.
 
 ### Search inside one panel

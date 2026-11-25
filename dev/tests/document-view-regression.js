@@ -77,6 +77,7 @@ function runDocumentViewRegression({ assert, context, fs, path, javascriptDir, l
     row(name, facility, { SheetName:sheet, RowName:linkedName, Directory:directory, Category:'PM_70' });
   context.db.documents = [
     doc('Room Manual', 'Facility A', 'Space', 'Room 1'),
+    doc('Room 2 Manual', 'Facility A', 'Space', 'Room 2'),
     doc('Pump Manual', 'Facility A', 'Type', 'Pump', 'shared'),
     doc('Pump Manual', 'Facility A', 'Component', 'Pump 1', 'shared'),
     doc('Heating Manual', 'Facility A', 'System', 'Heating'),
@@ -133,10 +134,32 @@ function runDocumentViewRegression({ assert, context, fs, path, javascriptDir, l
   assert(roomTree.body.textContent.includes('Room Manual') && !roomTree.body.textContent.includes('Pump Manual'),
     'a Space as the lowest group must show only directly attached Space documents');
   const categoryTree = tree(['space', 'doccat']);
-  assert(categoryTree.body.textContent.includes('Room Manual') && categoryTree.body.textContent.includes('Pump Manual') &&
-    categoryTree.body.textContent.includes('Heating Manual'), 'a final Document Category must show related documents at all levels');
-  assert.strictEqual(categoryTree.querySelectorAll('.document-result-card').length, 4,
-    'category grouping must deduplicate repeated component paths and logical document links');
+  assert(categoryTree.body.textContent.includes('Room Manual') && !categoryTree.body.textContent.includes('Pump Manual') &&
+    !categoryTree.body.textContent.includes('Heating Manual') && !categoryTree.body.textContent.includes('Room 2 Manual'),
+  'Space -> Document Category must show only documents attached to the parent Space');
+  assert.strictEqual(categoryTree.querySelectorAll('.document-result-card').length, 1);
+  assert.strictEqual(categoryTree.querySelector('.grp-cat-space .grp-cnt').textContent, '1',
+    'parent counts must reflect the documents below the Document Category');
+  const typeCategoryTree = tree(['space', 'type', 'doccat']);
+  const pumpCategory = groups(typeCategoryTree, 'type').find(header => header.querySelector('.grp-name').textContent.includes('Pump'));
+  const fanCategory = groups(typeCategoryTree, 'type').find(header => header.querySelector('.grp-name').textContent.includes('Fan'));
+  assert(pumpCategory.nextElementSibling.textContent.includes('Pump Manual') &&
+    !pumpCategory.nextElementSibling.textContent.includes('Room Manual') &&
+    !pumpCategory.nextElementSibling.textContent.includes('Heating Manual'),
+  'nested Type -> Document Category must show only Type documents in the parent Space');
+  assert.strictEqual(fanCategory.nextElementSibling.querySelectorAll('.document-result-card').length, 0,
+    'an asset with no directly attached documents must not inherit another level’s categories');
+  const systemCategoryTree = tree(['space', 'system', 'doccat']);
+  const heatingCategory = groups(systemCategoryTree, 'system').find(header => header.querySelector('.grp-name').textContent.includes('Heating'));
+  assert(heatingCategory.nextElementSibling.textContent.includes('Heating Manual') &&
+    !heatingCategory.nextElementSibling.textContent.includes('Backup Manual'),
+  'Document Category must distinguish different Systems sharing a component');
+  assert.strictEqual(new Set(context._documentEntriesForLeaf(entries, ['space', 'type', 'doccat'])
+    .map(entry => context._docUniqueKey(entry.doc))).size, 1,
+  'the result count must include only documents shown below the final asset group');
+  const categoryOnlyTree = tree(['doccat']);
+  assert.strictEqual(categoryOnlyTree.querySelectorAll('.document-result-card').length, 4,
+    'Document Category on its own must continue showing all related documents without duplicates');
   const categoryFirstTree = tree(['doccat', 'type']);
   const categoryFirstCards = [...categoryFirstTree.querySelectorAll('.document-result-card')]
     .map(card => card.textContent);
@@ -179,6 +202,73 @@ function runDocumentViewRegression({ assert, context, fs, path, javascriptDir, l
   ) + '</body></html>').document;
   assert.strictEqual(groups(lazyTree, 'type').length, 2,
     'lazy expansion must preserve document-free related groups');
+  vm.runInContext('allExpanded = false; groupExpandedState.clear(); pendingGroups = {}', context);
+  context.groupDocsNested(entries, ['space', 'doccat']);
+  const categoryPendingSpace = vm.runInContext('Object.values(pendingGroups)[0]', context);
+  vm.runInContext('allExpanded = true', context);
+  const lazyCategoryTree = parseHTML('<html><body>' + context.groupDocsNested(
+    categoryPendingSpace.docEntries, categoryPendingSpace.dims, categoryPendingSpace.depth, categoryPendingSpace.parentPath,
+  ) + '</body></html>').document;
+  assert(lazyCategoryTree.body.textContent.includes('Room Manual') &&
+    !lazyCategoryTree.body.textContent.includes('Pump Manual'),
+  'lazy expansion must preserve the parent Space restriction for Document Category');
+
+  context.db.components[0].Space = 'Room 1, Room 2';
+  context.db.spaces[1].FloorName = 'Level 2';
+  context.db.floors.push(row('Level 2', 'Facility A'));
+  context.db.documents.push(
+    doc('Level 1 Manual', 'Facility A', 'Floor', 'Level 1'),
+    doc('Level 2 Manual', 'Facility A', 'Floor', 'Level 2'),
+  );
+  context.buildIdx();
+  context.sel.space.add('room 1');
+  const sharedComponent = context.db.components[0];
+  assert.deepStrictEqual([...context.buildGroupMap([sharedComponent], 'space').keys()], ['Room 1'],
+    'Asset view must not group a shared component under an unselected Space');
+  assert.deepStrictEqual([...context.buildGroupMap([sharedComponent], 'floor').keys()], ['Level 1'],
+    'Asset view must derive Floor groups from the selected Space');
+  const sharedCard = context.card(sharedComponent);
+  assert(sharedCard.includes('Room 1') && !sharedCard.includes('Room 2'),
+    'Asset cards must only display selected Spaces while the Space filter is active');
+  const sharedCounts = {};
+  const sharedEntries = context._documentViewEntries(sharedCounts);
+  const sharedTree = parseHTML('<html><body>' + context.groupDocsNested(sharedEntries, ['space', 'type']) + '</body></html>').document;
+  assert.deepStrictEqual(groups(sharedTree, 'space').map(header => header.querySelector('.grp-name').textContent), ['Room 1'],
+    'Document view must not show unselected Space groups for shared components');
+  const sharedDocuments = context._documentEntriesForLeaf(sharedEntries, []).map(entry => entry.doc.Name);
+  assert(sharedDocuments.includes('Room Manual') && sharedDocuments.includes('Level 1 Manual') &&
+    sharedDocuments.includes('Pump Manual') && !sharedDocuments.includes('Room 2 Manual') &&
+    !sharedDocuments.includes('Level 2 Manual'),
+  'Space filtering must retain shared asset documents but exclude other Spaces and their Floor documents');
+  assert(sharedCounts.space['room 2'] > 0,
+    'Space cross-filter counts must still allow selecting another Space');
+  context.sel.floor.add('level 2');
+  context.sel.doccat.add('pm_70');
+  const conflictingCounts = {};
+  const conflictingEntries = context._documentViewEntries(conflictingCounts);
+  assert.strictEqual(conflictingEntries.length, 0,
+    'a Floor selected through another Space must not match the selected Space');
+  assert(conflictingCounts.space['room 2'] > 0,
+    'Space cross-counts must ignore the current Space selection, including with a Document Category selected');
+  context.sel.floor.clear();
+  context.sel.doccat.clear();
+  context.sel.space.add('room 2');
+  const bothSpaces = context._documentViewEntries({});
+  const bothSpaceTree = parseHTML('<html><body>' + context.groupDocsNested(bothSpaces, ['space']) + '</body></html>').document;
+  assert.deepStrictEqual(groups(bothSpaceTree, 'space').map(header => header.querySelector('.grp-name').textContent).sort(),
+    ['Room 1', 'Room 2'], 'multiple selected Spaces must all remain visible');
+  const bothDocuments = context._documentEntriesForLeaf(bothSpaces, []).map(entry => entry.doc.Name);
+  assert(bothDocuments.includes('Room 2 Manual') && bothDocuments.includes('Level 2 Manual'),
+    'documents for each selected Space and its Floor must remain available');
+  context.sel.space.delete('room 1');
+  const secondRoomDocuments = context._documentEntriesForLeaf(context._documentViewEntries({}), [])
+    .map(entry => entry.doc.Name);
+  assert(secondRoomDocuments.includes('Room 2 Manual') && secondRoomDocuments.includes('Level 2 Manual') &&
+    !secondRoomDocuments.includes('Room Manual') && !secondRoomDocuments.includes('Level 1 Manual'),
+  'filtering the other Space must exclude documents belonging only to the first Space and Floor');
+  context.sel.space.clear();
+  assert.deepStrictEqual([...context.buildGroupMap([sharedComponent], 'space').keys()], ['Room 1', 'Room 2'],
+    'clearing the Space filter must restore all component Space groups');
 
   Object.values(context.sel).forEach(values => values.clear());
   context.db.components = Array.from({ length:2000 }, (_, index) =>

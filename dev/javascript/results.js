@@ -98,7 +98,7 @@ function buildGroupMap(comps, dim) {
   const names = idx[filter?.listIndex] || [];
   const namesByKey = new Map(names.map(name => [name.toLowerCase(), name]));
   comps.forEach(component => {
-    const values = _componentFilterValues(component, filter);
+    const values = _componentFilterValues(component, filter, true);
     const sourceValue = filter?.valueField === '_facility'
       ? String(component._facility || '').trim()
       : filter?.valueField
@@ -238,7 +238,7 @@ function toggleResultHighlight(key) {
 function card(c) {
   const name = f(c,'Name');
   const tn   = _cobieField(c, 'typeName');
-  const spaces = _cobieReferenceValues('component', c, 'Space');
+  const spaces = _selectedSpaceValues(_cobieReferenceValues('component', c, 'Space'));
   const desc = f(c,'Description');
   const sn   = f(c,'SerialNumber','Serial Number');
   const tag  = f(c,'TagNumber','Tag Number');
