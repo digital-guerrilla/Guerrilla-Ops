@@ -26,8 +26,9 @@ for the selectable floor-plan overlay.
 
 The viewer sits to the left of the result hierarchy, beside the Plan viewer.
 
-- Select the vertical **3D** edge control to collapse or reopen the viewer.
-- On a wide desktop, drag the panel's right edge to change its width; drag right to widen it.
+- Select the **3D** header above the model to collapse or reopen the viewer.
+- When collapsed, the panel uses no column width. Use **3D** at the right of the Asset/Document/QA tab row to show or hide it.
+- Drag the right border when another panel is beside the viewer, or its bottom border when another panel is below it. Focus the border and use Left/Right arrows for width or Up/Down arrows for height. Resized layouts are saved in this browser.
 - Clear restrictive filters if the panel says **No coordinate data available for the current view.**
 
 The panel is hidden when the loaded workbooks contain no Coordinate rows.

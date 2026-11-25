@@ -1,4 +1,4 @@
-- CRITICAL: Never read or request entire files if you only need a specific function or block. 
+- CRITICAL: Never read or request entire files if you only need a specific function or block.
 - Do not read, grep, or index build directories (e.g., `dist/`, `build/`), `node_modules`, or log files.
 - If you need file structure information, always use the skeleton or directory tree first rather than reading full source files.
 - Stop reading git history or extensive `git log` outputs unless explicitly commanded.

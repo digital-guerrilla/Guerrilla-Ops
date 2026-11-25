@@ -1,4 +1,8 @@
 /* ── Right-side filter drawers and tab rail ──────────────────── */
+#content:has(#btn-qa.active) #filter-tabs,
+#content:has(#btn-qa.active) #filter-bar {
+  display: none;
+}
 #filter-bar {
   position: absolute; inset: 0 var(--filter-rail-width) 0 auto;
   width: min(500px, calc(100% - var(--filter-rail-width)));
@@ -6,30 +10,26 @@
 }
 #filter-tabs {
   flex: 0 0 var(--filter-rail-width); width: var(--filter-rail-width); min-width: 0; min-height: 0;
+  position: relative; left: 1px;
   display: flex; flex-direction: column;
   container: filter-rail / size;
-  background: var(--navy); color: var(--on-dark);
-  border: 1px solid var(--border); border-radius: 0 0 8px 0;
-}
-.filter-tabs-title {
-  display: flex; align-items: center; justify-content: center; gap: .25rem;
-  padding: .45rem .1rem; font-size: .65rem; font-weight: 700; flex: 0 0 auto;
+  background: transparent; color: var(--on-dark);
+  border: 0; border-radius: 8px 0 0 8px;
 }
 #filter-tabs #group-sortable {
   display: flex; flex-direction: column; gap: .3rem;
-  list-style: none; padding: .3rem; margin: 0;
+  list-style: none; padding: .3rem 0 .3rem .3rem; margin: 0;
   flex: 1; overflow: hidden; min-height: 0;
 }
 @container filter-rail (max-height: 180px) {
-  .filter-tabs-title { display: none; }
-  #filter-tabs #group-sortable { gap: .1rem; padding: .1rem; }
+  #filter-tabs #group-sortable { gap: .1rem; padding: .1rem 0 .1rem .1rem; }
 }
 #filter-tabs .filter-tab,
 .filter-tab-fallback.filter-tab {
   flex: 1 1 0; min-height: 0; display: flex; flex-direction: column;
   container-type: size;
   padding: 0; margin: 0; white-space: normal; position: relative;
-  border: 1px solid var(--tab-text); border-radius: 5px;
+  border: 1px solid var(--tab-text); border-radius: 5px 0 0 5px;
   background: var(--tab-bg); color: var(--tab-text);
   font-size: .68rem;
   transition: background .12s, border-color .12s, color .12s;
@@ -43,21 +43,28 @@
 }
 .filter-tab-trigger { flex: 1; min-height: 0; flex-direction: column; gap: .2rem; font-weight: 700; line-height: 1.15; cursor: pointer; touch-action: none; }
 .filter-tab-icon { font-size: 1.3rem; line-height: 1; }
-.filter-tab-grip { flex: 0 0 1.1rem; height: 1.1rem; padding: 0; cursor: grab; touch-action: none; }
+.filter-tab-grip {
+  flex: 0 0 auto; padding: .15rem .1rem;
+  font-size: .6rem; font-weight: 700; line-height: 1.1;
+  overflow-wrap: anywhere; cursor: grab; touch-action: none;
+}
 .filter-tab-grip:active { cursor: grabbing; }
+.filter-tab-controls {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: 3px;
+  flex: 0 0 1.2rem; min-width: 0; padding: 0 2px 0 6px;
+}
 .filter-tab-group {
-  display: flex; align-items: center; justify-content: center; gap: .15rem;
-  flex: 0 0 1.2rem; height: 1.2rem; padding: 0; font-size: .59rem; cursor: pointer;
+  grid-column: 2; display: flex; align-items: center;
+  height: 1.2rem; margin: 0; cursor: pointer;
 }
 .filter-tab-group input { width: .85rem; height: .85rem; margin: 0; accent-color: var(--brand-dark); }
-.filter-tab-count { position: absolute; top: .1rem; right: .1rem; font-size: .62rem; border-radius: 8px; padding: .05rem .25rem; background: var(--navy); color: var(--on-dark); }
+.filter-tab-count { min-width: 0; max-width: 100%; justify-self: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .55rem; line-height: 1rem; border-radius: 8px; padding: 0 .1rem; background: var(--navy); color: var(--on-dark); }
 @container (max-height: 70px) {
-  .filter-tab-grip { display: none; }
-  .filter-tab-trigger { padding: 0 1.1rem 0 0; }
+  .filter-tab-trigger { padding: 0; }
   .filter-tab-icon { font-size: clamp(.5rem, 50cqh, 1.3rem); }
-  .filter-tab-group { position: absolute; top: 0; right: 0; bottom: 0; width: 1.1rem; height: auto; }
   .filter-tab-group input { width: clamp(8px, 50cqh, 13px); height: clamp(8px, 50cqh, 13px); }
-  .filter-tab-count { top: 0; left: 0; right: auto; font-size: .5rem; line-height: 1; padding: 0 .1rem; }
+  .filter-tab-count { font-size: .5rem; padding: 0 .1rem; }
 }
 .filter-tab-ghost { opacity: .4; }
 body > .filter-tab-fallback.filter-tab {

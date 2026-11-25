@@ -176,9 +176,9 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: .45rem;
-  min-height: 30px;
-  padding: .38rem .85rem;
+  gap: .25rem;
+  min-height: 24px;
+  padding: .15rem .5rem;
   background: color-mix(in srgb, var(--surf), var(--brand-dark) 6%);
   border-top: 1px solid color-mix(in srgb, var(--brand-dark), white 74%);
   color: var(--text-muted);
